@@ -1,0 +1,50 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Environment files
+.env
+.env.local
+.venv/
+venv/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs & runtime files
+logs/
+*.log
+
+# Coverage / testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic migrations cache
+alembic/versions/__pycache__/
+
+# Local data & uploads
+uploads/
+tmp/
+data/
+data/data/
+
+# Docker
+.docker/
+
+# Reports
+coverage.xml
+pytest.xml
+
+
+
+
+

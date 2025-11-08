@@ -1,0 +1,513 @@
+
+# ========================================
+# PRODUCTION DEPLOYMENT COMMANDS
+# ========================================
+
+# === Initial Server Setup ===
+# Run initial server setup (as root)
+sudo ./setup_production.sh
+
+# === Automated Deployment ===
+# Run automated deployment (as appointmentbackend user)
+sudo -u appointmentbackend ./deploy.sh
+
+# === Uvicorn Service Management (ASGI) ===
+# Check Uvicorn status
+sudo systemctl status uvicorn.service
+
+# Restart Uvicorn
+sudo systemctl restart uvicorn.service
+
+# Stop Uvicorn
+sudo systemctl stop uvicorn.service
+
+# Start Uvicorn
+sudo systemctl start uvicorn.service
+
+# Reload Uvicorn (graceful)
+sudo systemctl reload uvicorn.service
+
+# Enable Uvicorn on boot
+sudo systemctl enable uvicorn.service
+
+# Disable Uvicorn on boot
+sudo systemctl disable uvicorn.service
+
+# === Nginx Management ===
+# Check Nginx status
+sudo systemctl status nginx
+
+# Restart Nginx
+sudo systemctl restart nginx
+
+# Reload Nginx configuration
+sudo systemctl reload nginx
+
+# Test Nginx configuration
+sudo nginx -t
+
+# === Log Viewing ===
+# View Uvicorn logs (real-time)
+sudo journalctl -u uvicorn.service -f
+
+# View Uvicorn logs (last 100 lines)
+sudo journalctl -u uvicorn.service -n 100 --no-pager
+
+# View Uvicorn access logs (using same log path as Gunicorn)
+sudo tail -f /var/log/gunicorn/access.log
+
+# View Uvicorn error logs (using same log path as Gunicorn)
+sudo tail -f /var/log/gunicorn/error.log
+
+# View Django application logs
+sudo tail -f /var/log/appointmentbackend/django.log
+
+# View Nginx access logs
+sudo tail -f /var/log/nginx/appointmentbackend_access.log
+
+# View Nginx error logs
+sudo tail -f /var/log/nginx/appointmentbackend_error.log
+
+# === Manual Uvicorn Testing (ASGI) ===
+# Activate virtual environment
+source /home/ubuntu/appointmentbackend/venv/bin/activate
+
+# Test Uvicorn configuration (via Gunicorn with UvicornWorker)
+cd /home/appointmentbackend
+gunicorn --check-config -c uvicorn_config.py appointmentbackend.asgi:application
+
+# Run Uvicorn manually (for testing via Gunicorn with UvicornWorker)
+gunicorn -c uvicorn_config.py appointmentbackend.asgi:application
+
+# Run Uvicorn with additional workers (testing)
+gunicorn -w 4 -c uvicorn_config.py appointmentbackend.asgi:application
+
+# Alternative: Run Uvicorn directly (for development/testing)
+# uvicorn appointmentbackend.asgi:application --host 0.0.0.0 --port 8000
+
+# === Database Management ===
+# Access Django shell
+sudo -u appointmentbackend /home/ubuntu/appointmentbackend/venv/bin/python manage.py shell
+
+# Run migrations
+sudo -u appointmentbackend /home/ubuntu/appointmentbackend/venv/bin/python manage.py migrate
+
+# Create migrations
+sudo -u appointmentbackend /home/ubuntu/appointmentbackend/venv/bin/python manage.py makemigrations
+
+# Show migrations status
+sudo -u appointmentbackend /home/ubuntu/appointmentbackend/venv/bin/python manage.py showmigrations
+
+# Create superuser
+sudo -u appointmentbackend /home/ubuntu/appointmentbackend/venv/bin/python manage.py createsuperuser
+
+# Collect static files
+sudo -u appointmentbackend /home/ubuntu/appointmentbackend/venv/bin/python manage.py collectstatic --noinput
+
+# === Health Checks ===
+# Check health endpoint (local)
+curl http://localhost/api/health/
+
+# Check health endpoint (via domain)
+curl https://yourdomain.com/api/health/
+
+# === Troubleshooting Commands ===
+# ========================================
+
+# === Socket Troubleshooting ===
+# Check if socket exists
+ls -la /run/gunicorn/appointmentbackend.sock
+
+# Check socket permissions and ownership
+stat /run/gunicorn/appointmentbackend.sock
+
+# Fix socket permissions if needed (if socket exists but has wrong permissions)
+sudo chown appointmentbackend:appointmentbackend /run/gunicorn/appointmentbackend.sock
+sudo chmod 660 /run/gunicorn/appointmentbackend.sock
+
+# Test socket connectivity (as appointmentbackend user)
+sudo -u appointmentbackend curl --unix-socket /run/gunicorn/appointmentbackend.sock http://localhost/
+
+# Check socket directory permissions
+ls -la /run/gunicorn/
+sudo chown appointmentbackend:appointmentbackend /run/gunicorn
+sudo chmod 755 /run/gunicorn
+
+# === 502 Bad Gateway Troubleshooting ===
+# Check if Uvicorn service is running
+sudo systemctl status uvicorn.service
+
+# Check Uvicorn service logs
+sudo journalctl -u uvicorn.service -n 100 --no-pager
+
+# Check socket permissions (common cause of 502)
+ls -la /run/gunicorn/appointmentbackend.sock
+
+# Check Nginx error logs for 502 errors
+sudo tail -f /var/log/nginx/appointmentbackend_error.log | grep 502
+
+# Verify socket is accessible by Nginx
+# If Nginx runs as www-data, ensure www-data can access socket
+# Option 1: Add www-data to appointmentbackend group
+sudo usermod -a -G appointmentbackend www-data
+# Then restart Nginx
+sudo systemctl restart nginx
+
+# Option 2: Change socket permissions (less secure)
+sudo chmod 666 /run/gunicorn/appointmentbackend.sock
+
+# === Service Won't Start Troubleshooting ===
+# Check service status with details
+sudo systemctl status uvicorn.service -l
+
+# Check recent logs for errors
+sudo journalctl -u uvicorn.service -n 50 --no-pager
+
+# Verify ASGI application path is correct
+cd /home/appointmentbackend
+source /home/ubuntu/appointmentbackend/venv/bin/activate
+python -c "from appointmentbackend.asgi import application; print(application)"
+
+# Test Gunicorn configuration manually
+gunicorn --check-config -c uvicorn_config.py appointmentbackend.asgi:application
+
+# Run Gunicorn manually (for testing)
+cd /home/appointmentbackend
+source /home/ubuntu/appointmentbackend/venv/bin/activate
+gunicorn -c uvicorn_config.py appointmentbackend.asgi:application
+
+# Run Uvicorn directly (for development/testing, bypasses Gunicorn)
+uvicorn appointmentbackend.asgi:application --host 0.0.0.0 --port 8000
+
+# Check if virtual environment is correct
+ls -la /home/ubuntu/appointmentbackend/venv/bin/gunicorn
+
+# Verify Python dependencies are installed
+/home/ubuntu/appointmentbackend/venv/bin/pip list | grep -E "(gunicorn|uvicorn|django)"
+
+# === Static Files Not Loading ===
+# Recollect static files
+cd /home/appointmentbackend
+source /home/ubuntu/appointmentbackend/venv/bin/activate
+python manage.py collectstatic --no-input --clear
+
+# Check static files directory permissions
+ls -la /home/ubuntu/appointmentbackend/static/
+sudo chown -R appointmentbackend:appointmentbackend /home/ubuntu/appointmentbackend/static/
+
+# Verify Nginx static file location configuration
+sudo nginx -T | grep -A 5 "location /static/"
+
+# Test static file access directly
+curl http://localhost/static/admin/css/base.css
+
+# === Performance and Monitoring ===
+# Check current CPU count (for worker calculation)
+nproc
+
+# Check current worker count (from process list)
+ps aux | grep gunicorn | grep -v grep | wc -l
+
+# Monitor worker processes
+ps aux | grep "[g]unicorn"
+
+# Check memory usage
+ps aux | grep "[g]unicorn" | awk '{sum+=$6} END {print "Total RSS: " sum/1024 " MB"}'
+
+# Reload workers gracefully (HUP signal)
+sudo systemctl kill -s HUP uvicorn.service
+
+# === Systemd Socket Management ===
+# Check socket status
+sudo systemctl status gunicorn.socket
+
+# Start socket manually
+sudo systemctl start gunicorn.socket
+
+# Stop socket
+sudo systemctl stop gunicorn.socket
+
+# Restart socket
+sudo systemctl restart gunicorn.socket
+
+# === Configuration Verification ===
+# Test Nginx configuration
+sudo nginx -t
+
+# Test Gunicorn configuration
+cd /home/appointmentbackend
+source /home/ubuntu/appointmentbackend/venv/bin/activate
+gunicorn --check-config -c uvicorn_config.py appointmentbackend.asgi:application
+# Option 1: Uvicorn with auto-reload (recommended for dev)
+uvicorn appointmentbackend.asgi:application --host 0.0.0.0 --port 8000 --reload
+
+
+# Stop the current server (Ctrl+C), then restart:
+python -m uvicorn appointmentbackend.asgi:application --worker-class uvicorn.workers.UvicornWorker --workers 4 --timeout 120 --host 0.0.0.0 --port 8000 --reload --log-level info
+
+python -m uvicorn appointmentbackend.asgi:application --host 0.0.0.0 --port 8000 --reload
+
+gunicorn appointmentbackend.asgi:application \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --workers 4 \
+    --bind 0.0.0.0:8000 \
+    --timeout 120 \
+    --log-level info
+
+uvicorn appointmentbackend.asgi:application \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 4 \
+    --log-level info
+
+# Option 2: Gunicorn with UvicornWorker (local)
+gunicorn appointmentbackend.asgi:application \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --workers 2 \
+    --bind 0.0.0.0:8000 \
+    --reload
+# Verify environment variables are loaded
+sudo systemctl show uvicorn.service | grep Environment
+
+# Check environment file
+sudo -u appointmentbackend cat /home/ubuntu/appointmentbackend/.env
+
+# === Database Connection Issues ===
+# Test database connection (from Django)
+cd /home/appointmentbackend
+source /home/ubuntu/appointmentbackend/venv/bin/activate
+python manage.py dbshell
+
+# Test database connection (from shell)
+# Get credentials from .env file first
+source /home/ubuntu/appointmentbackend/.env
+psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+
+# === Log File Locations ===
+# Uvicorn/Gunicorn logs
+/var/log/gunicorn/access.log
+/var/log/gunicorn/error.log
+/var/log/gunicorn/stdout.log
+/var/log/gunicorn/stderr.log
+
+# Django application logs
+/var/log/appointmentbackend/django.log
+
+# Nginx logs
+/var/log/nginx/appointmentbackend_access.log
+/var/log/nginx/appointmentbackend_error.log
+
+# Systemd journal logs
+sudo journalctl -u uvicorn.service
+sudo journalctl -u gunicorn.socket
+sudo journalctl -u nginx
+
+# ========================================
+# DEVELOPMENT COMMANDS (Windows/Local)
+# ========================================
+
+# === Virtual Environment Setup ===
+# Create virtual environment (Windows)
+python3 -m venv venv
+
+# Activate virtual environment (Windows)
+venv\Scripts\activate
+
+# Activate virtual environment (Linux/Mac)
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Upgrade pip
+pip install --upgrade pip setuptools wheel
+
+# === Django Management Commands ===
+# Run development server
+python -m uvicorn appointmentbackend.asgi:application --host 0.0.0.0 --port 8000 --reload
+python gunicorn appointmentbackend.asgi:application -c uvicorn_config.py
+
+
+python manage.py makemigrations
+python manage.py migrate
+python -m uvicorn appointmentbackend.asgi:application --host 0.0.0.0 --port 8000 --reload
+
+
+python manage.py runserver
+
+
+python tests/test_all_apis.py --base-url http://107.21.188.21 --admin-username durgas --admin-password durgas
+
+
+
+# Run development server on specific port
+python manage.py runserver 8000
+sudo -u appointmentbackend bash -c "cd /home/appointmentbackend && source venv/bin/activate && python manage.py collectstatic --noinput
+
+# Run development server on specific host and port
+python manage.py runserver 0.0.0.0:8000
+
+# Check Django configuration
+python manage.py check
+
+# Show migrations status
+python manage.py showmigrations
+
+# Create migrations
+python manage.py makemigrations
+
+# Create migrations for specific app
+python manage.py makemigrations contacts
+
+# Apply migrations
+python manage.py migrate
+
+# Create superuser
+python manage.py createsuperuser
+
+# Collect static files
+python manage.py collectstatic --noinput
+
+# Django shell
+python manage.py shell
+
+# Database shell (if using PostgreSQL)
+python manage.py dbshell
+
+# === Testing ===
+# Run all tests
+pytest tests/ -v
+
+# Run all tests with coverage
+pytest tests/ --cov=appointmentbackend --cov=contacts --cov-report=html
+
+# Run unit tests only
+pytest tests/unit/ -v
+
+# Run contacts unit tests
+pytest tests/unit/contacts/ -v
+
+# Run integration tests
+pytest tests/integration/ -v
+
+# Run tests with output to file
+pytest tests/ -v > testresult.txt
+
+# Run specific test file
+pytest tests/unit/contacts/test_contact_models.py -v
+
+# Run specific test
+pytest tests/unit/contacts/test_contact_models.py::TestContactModel::test_contact_creation -v
+
+# === Code Quality ===
+# Clean Python cache files (Windows)
+python -Bc "import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]"
+python -Bc "import pathlib; [p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')]"
+
+# Clean Python cache files (Linux/Mac)
+find . -type d -name __pycache__ -exec rm -r {} +
+find . -type f -name "*.pyc" -delete
+find . -type f -name "*.pyo" -delete
+
+# === Celery (Async Task Queue) ===
+# Start Celery worker (development)
+celery -A appointmentbackend worker -l info
+
+# Start Celery worker with autoreload
+celery -A appointmentbackend worker -l info --autoreload
+
+# Start Celery beat (scheduled tasks)
+celery -A appointmentbackend beat -l info
+
+# === Environment Configuration ===
+# Copy environment sample to .env
+copy env.sample .env
+
+# Edit .env file (Windows - using notepad)
+notepad .env
+
+# Edit .env file (Linux/Mac)
+nano .env
+# or
+vim .env
+
+# ========================================
+# GIT COMMANDS
+# ========================================
+
+git init
+git add .
+git commit -m "05-11-2025"
+git remote add origin https://github.com/thekoushikdurgas/appointmentbackend.git
+git branch -M main
+git push -u origin main -f
+
+# Initialize git repository
+git init
+
+
+git stash
+
+
+# Add remote repository
+git remote add origin https://github.com/thekoushikdurgas/appointmentbackend.git
+
+# Set branch to main
+git branch -M main
+
+# Configure git user
+git config --global user.email "koushik.btech.cse.19@nitap.ac.in"
+git config --global user.name "thekoushikdurgas"
+
+# Add all files
+git add .
+
+# Commit changes
+git commit -m "Your commit message here"
+
+# Push to remote (force if needed)
+git push -u origin main -f
+
+# Pull latest changes
+git pull origin main
+
+# Check git status
+git status
+
+# ========================================
+# QUICK REFERENCE
+# ========================================
+
+# Project Structure:
+# - appointmentbackend/          # Main Django project
+#   - asgi.py               # ASGI application entry point
+#   - wsgi.py               # WSGI application entry point (legacy)
+#   - settings.py           # Django settings
+# - contacts/               # Contacts app
+# - tests/                  # Test suite
+#   - unit/                 # Unit tests
+#   - integration/          # Integration tests
+# - manage.py              # Django management script
+# - requirements.txt       # Python dependencies
+# - uvicorn_config.py      # Gunicorn config with UvicornWorker
+# - gunicorn_config.py     # Legacy WSGI config
+# - setup_production.sh    # Production setup script
+# - deploy.sh              # Deployment script
+
+# Common Workflows:
+
+# 1. Start development:
+#    venv\Scripts\activate
+#    python manage.py migrate
+#    python manage.py runserver
+
+# 2. Make changes and test:
+#    python manage.py makemigrations
+#    python manage.py migrate
+#    pytest tests/ -v
+
+# 3. Deploy to production:
+#    sudo ./setup_production.sh
+#    sudo -u appointmentbackend ./deploy.sh
+#    sudo systemctl restart uvicorn.service
+#    sudo systemctl restart nginx
