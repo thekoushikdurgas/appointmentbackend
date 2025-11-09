@@ -1,3 +1,5 @@
+"""Celery task definitions and helpers for batched contact imports."""
+
 from __future__ import annotations
 
 import asyncio
@@ -12,19 +14,23 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.logging import get_logger, log_function_call
+from app.db.session import AsyncSessionLocal
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
 from app.models.imports import ContactImportError, ContactImportJob, ImportJobStatus
 from app.services.import_service import ImportService
 from app.tasks.celery_app import celery_app
-from app.db.session import AsyncSessionLocal
 
 
 settings = get_settings()
 import_service = ImportService()
+logger = get_logger(__name__)
 
 
+@log_function_call(logger=logger, log_arguments=True, log_result=True)
 def _parse_int(value: Optional[str]) -> Optional[int]:
+    """Parse a numeric string into an integer, tolerating commas and empty values."""
     if value is None:
         return None
     value = value.strip()
@@ -36,30 +42,40 @@ def _parse_int(value: Optional[str]) -> Optional[int]:
         return None
 
 
+@log_function_call(logger=logger, log_arguments=True, log_result=True)
 def _parse_list(value: Optional[str]) -> List[str]:
+    """Split a comma-delimited string into a list of trimmed items."""
     if not value:
         return []
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+@log_function_call(logger=logger, log_arguments=True, log_result=True)
 def _parse_text(value: Optional[str]) -> Optional[str]:
+    """Return a stripped string or None when blank."""
     if value is None:
         return None
     value = value.strip()
     return value or None
 
 
+@log_function_call(logger=logger, log_arguments=False, log_result=True)
 def _company_uuid(row: Dict[str, str]) -> str:
+    """Generate a deterministic UUID for a company row."""
     key = f"{row.get('company','')}{row.get('company_linkedin_url','')}{row.get('company_name_for_emails','')}"
     return str(uuid5(NAMESPACE_URL, key))
 
 
+@log_function_call(logger=logger, log_arguments=False, log_result=True)
 def _contact_uuid(row: Dict[str, str], company_uuid: str) -> str:
+    """Generate a deterministic UUID for a contact row scoped to a company."""
     key = f"{row.get('first_name','')}{row.get('last_name','')}{row.get('email','')}{company_uuid}"
     return str(uuid5(NAMESPACE_URL, key))
 
 
+@log_function_call(logger=logger)
 async def _upsert_company(session: AsyncSession, row: Dict[str, str], now: datetime) -> str:
+    """Insert or update a company and metadata, returning the company UUID."""
     uuid = _company_uuid(row)
     industries = _parse_list(row.get("industry"))
     keywords = _parse_list(row.get("keywords"))
@@ -143,15 +159,18 @@ async def _upsert_company(session: AsyncSession, row: Dict[str, str], now: datet
         set_=meta_update,
     )
     await session.execute(meta_stmt)
+    logger.debug("Upserted company: uuid=%s", uuid)
     return uuid
 
 
+@log_function_call(logger=logger)
 async def _upsert_contact(
     session: AsyncSession,
     row: Dict[str, str],
     company_uuid: str,
     now: datetime,
 ) -> None:
+    """Insert or update a contact and corresponding metadata."""
     contact_uuid = _contact_uuid(row, company_uuid)
     departments = _parse_list(row.get("departments"))
 
@@ -220,12 +239,17 @@ async def _upsert_contact(
         set_=contact_meta_update,
     )
     await session.execute(contact_meta_stmt)
+    logger.debug("Upserted contact: uuid=%s company_uuid=%s", contact_uuid, company_uuid)
 
 
+@log_function_call(logger=logger, log_arguments=True)
 async def _process_csv(job_id: str, file_path: str) -> None:
+    """Read a CSV, enqueue upserts, and update import job progress metrics."""
+    logger.info("Starting contacts import processing: job_id=%s file_path=%s", job_id, file_path)
     async with AsyncSessionLocal() as session:
         job: Optional[ContactImportJob] = await import_service.job_repository.get_by_job_id(session, job_id)
         if not job:
+            logger.warning("Import job not found during processing: job_id=%s", job_id)
             return
 
         await import_service.set_status(session, job_id, status=ImportJobStatus.processing, message="Processing CSV")
@@ -244,6 +268,7 @@ async def _process_csv(job_id: str, file_path: str) -> None:
                         company_uuid = await _upsert_company(session, row, now)
                         await _upsert_contact(session, row, company_uuid, now)
                     except Exception as exc:  # noqa: BLE001
+                        logger.exception("Failed to process row: job_id=%s row_number=%d", job_id, row_number)
                         error = ContactImportError(
                             job_id=job.id,
                             row_number=row_number,
@@ -261,6 +286,12 @@ async def _process_csv(job_id: str, file_path: str) -> None:
                             await import_service.add_errors(session, job.id, errors)
                             error_total += error_batch
                             errors.clear()
+                        logger.debug(
+                            "Committed batch progress: job_id=%s processed=%d errors=%d",
+                            job_id,
+                            processed,
+                            error_total,
+                        )
                         await import_service.increment_progress(
                             session,
                             job_id,
@@ -292,6 +323,12 @@ async def _process_csv(job_id: str, file_path: str) -> None:
                 total_rows=processed,
                 message=f"Processed {processed} rows",
             )
+            logger.info(
+                "Completed contacts import: job_id=%s processed=%d errors=%d",
+                job_id,
+                processed,
+                error_total,
+            )
         except Exception as exc:  # noqa: BLE001
             await session.rollback()
             await import_service.set_status(
@@ -301,12 +338,17 @@ async def _process_csv(job_id: str, file_path: str) -> None:
                 total_rows=processed,
                 message=f"Failed with error: {exc}",
             )
+            logger.exception("Contacts import failed: job_id=%s processed=%d", job_id, processed)
             raise
         finally:
             await session.commit()
+            logger.debug("Finished import job cleanup: job_id=%s", job_id)
 
 
 @celery_app.task(name="contacts.process_import")
 def process_contacts_import(job_id: str, file_path: str) -> None:
+    """Celery entrypoint for processing contacts imports."""
+    logger.info("Celery task started: job_id=%s file_path=%s", job_id, file_path)
     asyncio.run(_process_csv(job_id, file_path))
+    logger.info("Celery task finished: job_id=%s", job_id)
 

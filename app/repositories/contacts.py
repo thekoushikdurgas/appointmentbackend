@@ -1,3 +1,5 @@
+"""Repository providing contact-specific query utilities."""
+
 from __future__ import annotations
 
 from typing import Any, Iterable, Optional, Sequence
@@ -6,6 +8,7 @@ from sqlalchemy import Select, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from app.core.logging import get_logger
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
 from app.repositories.base import AsyncRepository
@@ -17,12 +20,21 @@ from app.utils.query import (
     apply_search,
 )
 
+logger = get_logger(__name__)
+
 
 class ContactRepository(AsyncRepository[Contact]):
+    """Data access helpers for contact-centric queries."""
+
     def __init__(self) -> None:
+        """Initialize the repository for the Contact model."""
+        logger.debug("Entering ContactRepository.__init__")
         super().__init__(Contact)
+        logger.debug("Exiting ContactRepository.__init__")
 
     def base_query(self) -> tuple[Select, Company, ContactMetadata, CompanyMetadata]:
+        """Construct the base query with joins to related company and metadata tables."""
+        logger.debug("Entering ContactRepository.base_query")
         company_alias = aliased(Company, name="company")
         contact_meta_alias = aliased(ContactMetadata, name="contact_metadata")
         company_meta_alias = aliased(CompanyMetadata, name="company_metadata")
@@ -34,6 +46,7 @@ class ContactRepository(AsyncRepository[Contact]):
             .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
             .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
         )
+        logger.debug("Exiting ContactRepository.base_query")
         return stmt, company_alias, contact_meta_alias, company_meta_alias
 
     def apply_filters(
@@ -44,6 +57,11 @@ class ContactRepository(AsyncRepository[Contact]):
         company_meta: CompanyMetadata | None = None,
         contact_meta: ContactMetadata | None = None,
     ) -> Select:
+        """Apply filter parameters to the given SQLAlchemy statement."""
+        logger.debug(
+            "Entering ContactRepository.apply_filters filters=%s",
+            sorted(filters.model_dump(exclude_none=True).keys()),
+        )
         stmt = apply_ilike_filter(stmt, Contact.first_name, filters.first_name)
         stmt = apply_ilike_filter(stmt, Contact.last_name, filters.last_name)
         stmt = apply_ilike_filter(stmt, Contact.email, filters.email)
@@ -111,6 +129,7 @@ class ContactRepository(AsyncRepository[Contact]):
         if filters.updated_at_before is not None:
             stmt = stmt.where(Contact.updated_at <= filters.updated_at_before)
 
+        logger.debug("Exiting ContactRepository.apply_filters")
         return stmt
 
     def apply_search_terms(
@@ -119,7 +138,13 @@ class ContactRepository(AsyncRepository[Contact]):
         search: Optional[str],
         company: Company,
     ) -> Select:
+        """Apply case-insensitive search across selected text columns."""
+        logger.debug(
+            "Entering ContactRepository.apply_search_terms search_present=%s",
+            bool(search),
+        )
         if not search:
+            logger.debug("Exiting ContactRepository.apply_search_terms (no search provided)")
             return stmt
         columns: Iterable = [
             Contact.first_name,
@@ -136,7 +161,9 @@ class ContactRepository(AsyncRepository[Contact]):
             func.array_to_string(company.industries, ","),
             func.array_to_string(company.keywords, ","),
         ]
-        return apply_search(stmt, search, columns)
+        stmt = apply_search(stmt, search, columns)
+        logger.debug("Exiting ContactRepository.apply_search_terms")
+        return stmt
 
     async def list_contacts(
         self,
@@ -145,6 +172,15 @@ class ContactRepository(AsyncRepository[Contact]):
         limit: int,
         offset: int,
     ) -> Sequence[tuple[Contact, Company, ContactMetadata, CompanyMetadata]]:
+        """Return contacts with associated company and metadata rows."""
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Listing contacts: limit=%d offset=%d ordering=%s filters=%s",
+            limit,
+            offset,
+            filters.ordering,
+            active_filter_keys,
+        )
         stmt, company_alias, contact_meta_alias, company_meta_alias = self.base_query()
         stmt = self.apply_filters(stmt, filters, company_alias, company_meta_alias, contact_meta_alias)
         stmt = self.apply_search_terms(stmt, filters.search, company_alias)
@@ -163,13 +199,33 @@ class ContactRepository(AsyncRepository[Contact]):
         stmt = apply_ordering(stmt, filters.ordering, ordering_map)
         stmt = stmt.limit(limit).offset(offset)
         result = await session.execute(stmt)
-        return result.fetchall()
+        rows = result.fetchall()
+        logger.debug("Retrieved %d contacts from repository query", len(rows))
+        return rows
+
+    async def create_contact(self, session: AsyncSession, data: dict[str, Any]) -> Contact:
+        """Persist a new contact record."""
+        logger.debug("Creating contact with fields: %s", sorted(data.keys()))
+        contact = Contact(**data)
+        bind = session.get_bind()
+        if bind is not None and bind.dialect.name == "sqlite":
+            result = await session.execute(select(func.max(Contact.id)))
+            next_id = (result.scalar_one_or_none() or 0) + 1
+            contact.id = next_id
+        session.add(contact)
+        await session.flush()
+        await session.refresh(contact)
+        logger.debug("Created contact: id=%s uuid=%s", contact.id, contact.uuid)
+        return contact
 
     async def count_contacts(
         self,
         session: AsyncSession,
         filters: ContactFilterParams,
     ) -> int:
+        """Count contacts that match the supplied filters."""
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug("Counting contacts with filters=%s", active_filter_keys)
         company_alias = aliased(Company, name="company_for_count")
         stmt = select(func.count(Contact.id)).select_from(Contact).outerjoin(
             company_alias, Contact.company_id == company_alias.uuid
@@ -177,7 +233,9 @@ class ContactRepository(AsyncRepository[Contact]):
         stmt = self.apply_filters(stmt, filters, company_alias)
         stmt = self.apply_search_terms(stmt, filters.search, company_alias)
         result = await session.execute(stmt)
-        return result.scalar_one()
+        total = result.scalar_one()
+        logger.debug("Counted contacts total=%d", total)
+        return total
 
     async def list_attribute_values(
         self,
@@ -186,6 +244,15 @@ class ContactRepository(AsyncRepository[Contact]):
         filters: ContactFilterParams,
         params: AttributeListParams,
     ) -> list[str]:
+        """Return attribute values for autocomplete/dropdown endpoints."""
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Listing attribute values: limit=%d offset=%d ordering=%s filters=%s",
+            params.limit,
+            params.offset,
+            params.ordering,
+            active_filter_keys,
+        )
         stmt = select(distinct(column)).select_from(Contact)
         company_alias = aliased(Company, name="company_attribute")
         contact_meta_alias = aliased(ContactMetadata, name="contact_meta_attribute")
@@ -210,15 +277,25 @@ class ContactRepository(AsyncRepository[Contact]):
         )
         stmt = stmt.limit(params.limit).offset(params.offset)
         result = await session.execute(stmt)
-        return [value for (value,) in result.fetchall() if value]
+        values = [value for (value,) in result.fetchall() if value]
+        logger.debug("Retrieved %d attribute values", len(values))
+        return values
 
     async def get_contact_with_relations(
         self,
         session: AsyncSession,
         contact_id: int,
     ) -> Optional[tuple[Contact, Company, ContactMetadata, CompanyMetadata]]:
+        """Fetch a contact and its related company metadata."""
+        logger.debug("Getting contact with relations: contact_id=%d", contact_id)
         stmt, _, _, _ = self.base_query()
         stmt = stmt.where(Contact.id == contact_id)
         result = await session.execute(stmt)
-        return result.first()
+        row = result.first()
+        logger.debug(
+            "Contact with relations %sfound for contact_id=%d",
+            "" if row else "not ",
+            contact_id,
+        )
+        return row
 

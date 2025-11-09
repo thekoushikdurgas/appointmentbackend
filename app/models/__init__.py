@@ -1,3 +1,5 @@
+"""Expose SQLAlchemy models for metadata generation and Alembic discovery."""
+
 from app.db.base import Base  # noqa: F401
 
 # Import models so Alembic can detect them.

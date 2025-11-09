@@ -1,3 +1,5 @@
+"""SQLAlchemy declarative base import and auto-discovery hooks."""
+
 from sqlalchemy.orm import DeclarativeBase
 
 

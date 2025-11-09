@@ -1,3 +1,5 @@
+"""SQLAlchemy models and enums describing contact import jobs and errors."""
+
 from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
@@ -9,6 +11,8 @@ from app.db.base import Base
 
 
 class ImportJobStatus(str, PyEnum):
+    """Enumerates the possible lifecycle states of an import job."""
+
     pending = "pending"
     processing = "processing"
     completed = "completed"
@@ -16,6 +20,8 @@ class ImportJobStatus(str, PyEnum):
 
 
 class ContactImportJob(Base):
+    """Represents a CSV import job tracked by the system."""
+
     __tablename__ = "contact_import_jobs"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -45,6 +51,8 @@ class ContactImportJob(Base):
 
 
 class ContactImportError(Base):
+    """Records a row-level import error for post-processing and debugging."""
+
     __tablename__ = "contact_import_errors"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

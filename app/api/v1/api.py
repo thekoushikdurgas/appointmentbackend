@@ -1,3 +1,5 @@
+"""Aggregate API routers for version 1 endpoints."""
+
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import contacts, imports, root

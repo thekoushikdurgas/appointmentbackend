@@ -1,12 +1,16 @@
+"""Pydantic schemas for contact import job tracking and error reporting."""
+
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.imports import ImportJobStatus
 
 
 class ImportJobBase(BaseModel):
+    """Shared fields describing a contact import job."""
+
     job_id: str
     file_name: str
     status: ImportJobStatus
@@ -22,10 +26,14 @@ class ImportJobBase(BaseModel):
 
 
 class ImportJobDetail(ImportJobBase):
+    """Detailed import job information that includes file storage paths."""
+
     file_path: Optional[str] = None
 
 
 class ImportErrorRecord(BaseModel):
+    """Represents a single row-level import error."""
+
     row_number: int
     error_message: str
     payload: Optional[str] = None
@@ -34,5 +42,7 @@ class ImportErrorRecord(BaseModel):
 
 
 class ImportJobWithErrors(ImportJobDetail):
-    errors: List[ImportErrorRecord] = []
+    """Import job payload that embeds error records."""
+
+    errors: List[ImportErrorRecord] = Field(default_factory=list)
 

@@ -1,29 +1,33 @@
+"""SQLAlchemy models describing company entities and metadata."""
+
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.types import StringList
 
 if TYPE_CHECKING:  # pragma: no cover
     from app.models.contacts import Contact
 
 
 class Company(Base):
+    """Represents a company record enriched with metadata and relationships."""
+
     __tablename__ = "companies"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     uuid: Mapped[str] = mapped_column(Text, unique=True, index=True)
     name: Mapped[Optional[str]] = mapped_column(Text, index=True)
     employees_count: Mapped[Optional[int]] = mapped_column(BigInteger)
-    industries: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
-    keywords: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
+    industries: Mapped[Optional[list[str]]] = mapped_column(StringList())
+    keywords: Mapped[Optional[list[str]]] = mapped_column(StringList())
     address: Mapped[Optional[str]] = mapped_column(Text)
     annual_revenue: Mapped[Optional[int]] = mapped_column(BigInteger)
     total_funding: Mapped[Optional[int]] = mapped_column(BigInteger)
-    technologies: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
+    technologies: Mapped[Optional[list[str]]] = mapped_column(StringList())
     text_search: Mapped[Optional[str]] = mapped_column(Text, index=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -37,7 +41,7 @@ class Company(Base):
     contacts: Mapped[list["Contact"]] = relationship(
         "Contact",
         back_populates="company",
-        primaryjoin="Company.uuid == foreign(Contact.company_uuid)",
+        primaryjoin="Company.uuid == foreign(Contact.company_id)",
     )
 
     __table_args__ = (
@@ -82,6 +86,8 @@ class Company(Base):
 
 
 class CompanyMetadata(Base):
+    """Detailed metadata associated with a company."""
+
     __tablename__ = "companies_metadata"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

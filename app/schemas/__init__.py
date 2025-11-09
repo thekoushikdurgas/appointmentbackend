@@ -1,3 +1,5 @@
+"""Aggregate schema exports for convenient imports across the application."""
+
 from .common import CountResponse, CursorPage, MessageResponse, PaginationParams, TimestampedModel  # noqa: F401
 from .companies import (  # noqa: F401
     CompanyBase,
@@ -8,6 +10,7 @@ from .companies import (  # noqa: F401
 )
 from .contacts import (  # noqa: F401
     ContactBase,
+    ContactCreate,
     ContactDB,
     ContactDetail,
     ContactListItem,

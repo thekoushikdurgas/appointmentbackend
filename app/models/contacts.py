@@ -1,3 +1,5 @@
+"""SQLAlchemy models representing contacts and their enriched metadata."""
+
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
@@ -10,16 +12,18 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.types import StringList
 
 if TYPE_CHECKING:  # pragma: no cover
     from app.models.companies import Company
 
 
 class Contact(Base):
+    """Represents an individual contact that can be queried through the API."""
+
     __tablename__ = "contacts"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -31,7 +35,7 @@ class Contact(Base):
     )
     email: Mapped[Optional[str]] = mapped_column(Text, index=True)
     title: Mapped[Optional[str]] = mapped_column(Text, index=True)
-    departments: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
+    departments: Mapped[Optional[list[str]]] = mapped_column(StringList())
     mobile_phone: Mapped[Optional[str]] = mapped_column(Text, index=True)
     email_status: Mapped[Optional[str]] = mapped_column(Text, index=True)
     text_search: Mapped[Optional[str]] = mapped_column(Text)
@@ -95,6 +99,8 @@ class Contact(Base):
 
 
 class ContactMetadata(Base):
+    """Detailed metadata sourced from enrichment providers for contacts."""
+
     __tablename__ = "contacts_metadata"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

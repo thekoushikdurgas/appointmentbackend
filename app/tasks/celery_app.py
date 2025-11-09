@@ -1,8 +1,12 @@
+"""Celery application instance shared across background task modules."""
+
 from celery import Celery
 
 from app.core.config import get_settings
+from app.core.logging import get_logger
 
 settings = get_settings()
+logger = get_logger(__name__)
 
 celery_app = Celery(
     "appointment360",
@@ -22,4 +26,5 @@ celery_app.conf.update(
 
 # Auto-discover tasks
 celery_app.autodiscover_tasks(["app.tasks"])
+logger.debug("Configured Celery app for project tasks")
 

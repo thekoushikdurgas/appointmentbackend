@@ -1,3 +1,5 @@
+"""Pydantic schemas describing contact entities and related metadata."""
+
 from datetime import datetime
 from typing import Optional
 
@@ -8,6 +10,8 @@ from app.schemas.metadata import ContactMetadataOut
 
 
 class ContactBase(BaseModel):
+    """Shared fields for contact resources."""
+
     uuid: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -23,13 +27,33 @@ class ContactBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ContactCreate(BaseModel):
+    """Payload for creating a new contact."""
+
+    uuid: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    company_id: Optional[str] = Field(None, description="UUID of the related company")
+    email: Optional[str] = None
+    title: Optional[str] = None
+    departments: Optional[list[str]] = None
+    mobile_phone: Optional[str] = None
+    email_status: Optional[str] = None
+    text_search: Optional[str] = Field(None, description="Free-form search text, e.g., location")
+    seniority: Optional[str] = None
+
+
 class ContactDB(ContactBase):
+    """Database representation of a contact record."""
+
     id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
 
 class ContactListItem(BaseModel):
+    """Flattened contact representation used for list endpoints."""
+
     id: int
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -75,6 +99,8 @@ class ContactListItem(BaseModel):
 
 
 class ContactDetail(ContactListItem):
+    """Contact list item augmented with nested company and metadata objects."""
+
     company_detail: Optional[CompanySummary] = None
     metadata: Optional[ContactMetadataOut] = None
 

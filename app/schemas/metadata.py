@@ -1,9 +1,13 @@
+"""Metadata schemas shared across contact and company responses."""
+
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
 
 class ContactMetadataOut(BaseModel):
+    """Expose enriched metadata fields linked to a contact."""
+
     uuid: str
     linkedin_url: Optional[str] = None
     facebook_url: Optional[str] = None

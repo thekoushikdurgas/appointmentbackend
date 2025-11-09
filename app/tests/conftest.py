@@ -2,12 +2,16 @@ import asyncio
 from collections.abc import AsyncGenerator
 
 import pytest
-from httpx import AsyncClient
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.main import app
 from app.db.base import Base
 from app.db.session import get_db
+from app.models.companies import Company, CompanyMetadata
+from app.models.contacts import Contact, ContactMetadata
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -22,7 +26,7 @@ def event_loop() -> asyncio.AbstractEventLoop:
     loop.close()
 
 
-@pytest.fixture(autouse=True, scope="session")
+@pytest_asyncio.fixture(autouse=True, scope="session")
 async def prepare_database() -> AsyncGenerator[None, None]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -31,13 +35,25 @@ async def prepare_database() -> AsyncGenerator[None, None]:
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with TestingSessionLocal() as session:
         yield session
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
+async def clean_database(db_session: AsyncSession) -> AsyncGenerator[None, None]:
+    tables = (ContactMetadata, Contact, CompanyMetadata, Company)
+    for table in tables:
+        await db_session.execute(delete(table))
+    await db_session.commit()
+    yield
+    for table in tables:
+        await db_session.execute(delete(table))
+    await db_session.commit()
+
+
+@pytest_asyncio.fixture(autouse=True)
 async def override_get_db(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     async def _get_test_db():
         yield db_session
@@ -47,8 +63,9 @@ async def override_get_db(db_session: AsyncSession) -> AsyncGenerator[None, None
     app.dependency_overrides.pop(get_db, None)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
-    async with AsyncClient(app=app, base_url="http://testserver") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
 

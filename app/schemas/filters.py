@@ -1,3 +1,5 @@
+"""Filter parameter schemas supporting contact metadata queries."""
+
 from datetime import datetime
 from typing import Optional
 
@@ -5,6 +7,8 @@ from pydantic import BaseModel, Field
 
 
 class ContactFilterParams(BaseModel):
+    """Full set of filterable fields accepted by the contacts endpoints."""
+
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[str] = None
@@ -42,6 +46,8 @@ class ContactFilterParams(BaseModel):
 
 
 class AttributeListParams(BaseModel):
+    """Filters for attribute list endpoints (departments, etc.)."""
+
     search: Optional[str] = None
     distinct: bool = False
     limit: int = 25
@@ -50,6 +56,8 @@ class AttributeListParams(BaseModel):
 
 
 class CountParams(BaseModel):
+    """Parameters for count aggregation requests."""
+
     search: Optional[str] = None
     distinct: bool = False
 
