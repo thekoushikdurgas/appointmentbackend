@@ -43,18 +43,41 @@ async def upload_contacts_import(
     session: AsyncSession = Depends(get_db),
 ) -> ImportJobDetail:
     """Accept a CSV upload, persist job metadata, and enqueue background processing."""
-    logger.info("Received contacts import upload request: filename=%s content_type=%s", file.filename, file.content_type)
+    logger.info(
+        "Received contacts import upload request: filename=%s content_type=%s",
+        file.filename,
+        file.content_type,
+    )
     if not file.filename:
         logger.warning("Upload rejected: missing filename")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File name is required")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File name is required")
 
     upload_dir = Path(settings.UPLOAD_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        upload_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.exception("Failed to prepare upload directory: dir=%s", upload_dir)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to prepare upload directory",
+        ) from exc
     temp_filename = f"{uuid.uuid4()}_{file.filename}"
     temp_path = upload_dir / temp_filename
 
-    with temp_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        with temp_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(
+            "Failed to persist uploaded file: original=%s temp_path=%s",
+            file.filename,
+            temp_path,
+        )
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to store uploaded file",
+        ) from exc
     logger.debug("Persisted uploaded file to temporary path: temp_path=%s", temp_path)
 
     file_size = temp_path.stat().st_size
@@ -64,16 +87,47 @@ async def upload_contacts_import(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
 
     job_id = uuid.uuid4().hex
-    job = await service.create_job(
-        session,
-        job_id=job_id,
-        file_name=file.filename,
-        file_path=str(temp_path),
-        total_rows=0,
-    )
+    try:
+        job = await service.create_job(
+            session,
+            job_id=job_id,
+            file_name=file.filename,
+            file_path=str(temp_path),
+            total_rows=0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to create import job record: job_id=%s", job_id)
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create import job",
+        ) from exc
 
-    # Celery task scheduling will be wired in Step 9.
-    process_contacts_import.delay(job.job_id, str(temp_path))
+    try:
+        process_contacts_import.delay(job.job_id, str(temp_path))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to enqueue import job: job_id=%s", job.job_id)
+        temp_path.unlink(missing_ok=True)
+        try:
+            await service.set_status(
+                session,
+                job.job_id,
+                status=ImportJobStatus.failed,
+                message="Failed to enqueue background import task",
+            )
+        except Exception as status_exc:  # noqa: BLE001
+            logger.exception(
+                "Failed to mark import job as failed after enqueue error: job_id=%s",
+                job.job_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to enqueue import job",
+            ) from status_exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to enqueue import job",
+        ) from exc
     logger.info(
         "Enqueued contacts import: job_id=%s filename=%s stored_path=%s size_bytes=%d",
         job.job_id,

@@ -53,6 +53,16 @@ async def resolve_contact_filters(request: Request) -> ContactFilterParams:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
 
 
+async def resolve_attribute_params(request: Request) -> AttributeListParams:
+    """Parse attribute list query parameters without triggering raw bool coercion errors."""
+    try:
+        return AttributeListParams.model_validate(dict(request.query_params))
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 def _resolve_pagination(
     filters: ContactFilterParams,
@@ -81,14 +91,26 @@ async def list_contacts(
     session: AsyncSession = Depends(get_db),
 ) -> CursorPage[ContactListItem]:
     """Return a paginated list of contacts."""
-    if "/contacts//" in request.url.path:
+    raw_path = request.scope.get("raw_path")
+    if isinstance(raw_path, (bytes, bytearray)):
+        raw_path_text = raw_path.decode("latin-1", errors="ignore")
+    else:
+        raw_path_text = str(raw_path) if raw_path is not None else request.url.path
+    if "/contacts//" in raw_path_text:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     page_limit = _resolve_pagination(filters, limit)
     use_cursor = False
     resolved_offset = offset or 0
     cursor_token = cursor or filters.cursor
     if cursor_token:
-        resolved_offset = decode_offset_cursor(cursor_token)
+        try:
+            resolved_offset = decode_offset_cursor(cursor_token)
+        except ValueError as exc:
+            logger.warning("Invalid cursor token supplied: token=%s error=%s", cursor_token, exc)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid cursor value",
+            ) from exc
         use_cursor = True
 
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
@@ -192,13 +214,16 @@ async def count_contacts(
     return count
 
 
-@router.post("/", response_model=ContactDetail, status_code=status.HTTP_403_FORBIDDEN)
+@router.post("/", response_model=ContactDetail, status_code=status.HTTP_201_CREATED)
 async def create_contact(
     payload: ContactCreate,
     session: AsyncSession = Depends(get_db),
 ) -> ContactDetail:
     """Create a new contact with optional fields."""
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Contact creation is disabled")
+    logger.info("Creating contact via API")
+    contact = await service.create_contact(session, payload)
+    logger.info("Created contact via API: contact_id=%d", contact.id)
+    return contact
 
 
 async def _attribute_endpoint(
@@ -221,6 +246,27 @@ async def _attribute_endpoint(
             attribute_label,
             params.limit,
             params.offset,
+        )
+
+    if params.limit is not None and params.limit <= 0:
+        logger.warning(
+            "Attribute list rejected due to non-positive limit: attribute=%s limit=%d",
+            attribute_label,
+            params.limit,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="limit must be a positive integer",
+        )
+    if params.offset is not None and params.offset < 0:
+        logger.warning(
+            "Attribute list rejected due to negative offset: attribute=%s offset=%d",
+            attribute_label,
+            params.offset,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="offset must be zero or greater",
         )
 
     logger.info(
@@ -265,7 +311,7 @@ async def _attribute_endpoint(
 @router.get("/title/", response_model=List[str])
 async def list_titles(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return contact titles filtered by the supplied parameters."""
@@ -281,7 +327,7 @@ async def list_titles(
 @router.get("/company/", response_model=List[str])
 async def list_companies(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return company names for contacts matching the filters."""
@@ -297,7 +343,7 @@ async def list_companies(
 @router.get("/industry/", response_model=List[str])
 async def list_industries(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     separated: bool = Query(False),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
@@ -335,7 +381,7 @@ async def list_industries(
 @router.get("/keywords/", response_model=List[str])
 async def list_keywords(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     separated: bool = Query(False),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
@@ -373,7 +419,7 @@ async def list_keywords(
 @router.get("/technologies/", response_model=List[str])
 async def list_technologies(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     separated: bool = Query(False),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
@@ -411,7 +457,7 @@ async def list_technologies(
 @router.get("/company_address/", response_model=List[str])
 async def list_company_addresses(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return company address text sourced from the text search column."""
@@ -427,7 +473,7 @@ async def list_company_addresses(
 @router.get("/contact_address/", response_model=List[str])
 async def list_contact_addresses(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return contact address text sourced from the text search column."""
@@ -443,7 +489,7 @@ async def list_contact_addresses(
 @router.get("/city/", response_model=List[str])
 async def list_contact_cities(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return distinct contact city values."""
@@ -459,7 +505,7 @@ async def list_contact_cities(
 @router.get("/state/", response_model=List[str])
 async def list_contact_states(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return distinct contact state values."""
@@ -475,7 +521,7 @@ async def list_contact_states(
 @router.get("/country/", response_model=List[str])
 async def list_contact_countries(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return distinct contact country values."""
@@ -491,7 +537,7 @@ async def list_contact_countries(
 @router.get("/company_city/", response_model=List[str])
 async def list_company_cities(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return distinct company city values."""
@@ -507,7 +553,7 @@ async def list_company_cities(
 @router.get("/company_state/", response_model=List[str])
 async def list_company_states(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return distinct company state values."""
@@ -523,7 +569,7 @@ async def list_company_states(
 @router.get("/company_country/", response_model=List[str])
 async def list_company_countries(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(),
+    params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return distinct company country values."""
@@ -536,25 +582,21 @@ async def list_company_countries(
     )
 
 
-@router.get("/{contact_id}/", response_model=ContactDetail)
+@router.get("/{contact_id:int}/", response_model=ContactDetail)
 async def retrieve_contact_with_trailing_slash(
-    contact_id: str,
+    contact_id: int,
     session: AsyncSession = Depends(get_db),
 ) -> ContactDetail:
-    """Retrieve a single contact by primary key, accepting both integer and string path segments."""
-    try:
-        parsed_contact_id = int(contact_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found") from exc
-    logger.info("Retrieving contact detail: contact_id=%d", parsed_contact_id)
-    contact = await service.get_contact(session, parsed_contact_id)
-    logger.info("Retrieved contact detail: contact_id=%d", parsed_contact_id)
+    """Retrieve a single contact by primary key."""
+    logger.info("Retrieving contact detail: contact_id=%d", contact_id)
+    contact = await service.get_contact(session, contact_id)
+    logger.info("Retrieved contact detail: contact_id=%d", contact_id)
     return contact
 
 
-@router.get("/{contact_id}", include_in_schema=False)
+@router.get("/{contact_id:int}", include_in_schema=False)
 async def retrieve_contact_without_trailing_slash(
-    contact_id: str,
+    contact_id: int,
     session: AsyncSession = Depends(get_db),
 ) -> ContactDetail:
     """Retrieve a single contact by primary key."""

@@ -294,7 +294,12 @@ def api_request_factory(
         allow_timeout: bool = False,
         request_context: Optional[pytest.FixtureRequest] = None,
     ) -> requests.Response:
-        url = urljoin(f"{api_base_url}/", endpoint.lstrip("/"))
+        if endpoint.startswith(("http://", "https://")):
+            url = endpoint
+        else:
+            base = api_base_url.rstrip("/")
+            suffix = endpoint if endpoint.startswith("/") else f"/{endpoint}"
+            url = f"{base}{suffix}"
         request_headers = {"X-Request-Id": f"pytest-{int(time.time() * 1000)}"}
         if headers:
             request_headers.update(headers)
