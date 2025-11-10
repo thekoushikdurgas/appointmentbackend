@@ -117,3 +117,13 @@ class CompanyMetadata(Base):
         primaryjoin="foreign(CompanyMetadata.uuid) == Company.uuid",
     )
 
+    __table_args__ = (
+        Index(
+            "idx_companies_metadata_company_name_for_emails",
+            "company_name_for_emails",
+        ),
+        Index("idx_companies_metadata_city", "city"),
+        Index("idx_companies_metadata_state", "state"),
+        Index("idx_companies_metadata_country", "country"),
+    )
+

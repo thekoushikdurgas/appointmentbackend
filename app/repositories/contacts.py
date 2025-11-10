@@ -428,15 +428,31 @@ class ContactRepository(AsyncRepository[Contact]):
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         logger.debug("Counting contacts with filters=%s", active_filter_keys)
         company_alias = aliased(Company, name="company_for_count")
-        stmt = select(func.count(Contact.id)).select_from(Contact).outerjoin(
-            company_alias, Contact.company_id == company_alias.uuid
+        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata_for_count")
+        company_meta_alias = aliased(CompanyMetadata, name="company_metadata_for_count")
+
+        stmt = (
+            select(func.count(Contact.id))
+            .select_from(Contact)
+            .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+            .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
         )
         dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
-        stmt = self.apply_filters(stmt, filters, company_alias, dialect_name=dialect_name)
+        stmt = self.apply_filters(
+            stmt,
+            filters,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
         stmt = self.apply_search_terms(
             stmt,
             filters.search,
             company_alias,
+            company_meta_alias,
+            contact_meta_alias,
             dialect_name=dialect_name,
         )
         result = await session.execute(stmt)

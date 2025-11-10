@@ -147,7 +147,7 @@ class ContactsService:
         try:
             rows = await self.repository.list_contacts(session, filters, limit, offset)
         except ValueError as exc:
-            self.logger.warning("List contacts request rejected: %s", exc)
+            self.logger.info("List contacts request rejected: %s", exc)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         self.logger.debug("Repository returned %d rows for contact list", len(rows))
 
@@ -211,7 +211,7 @@ class ContactsService:
         self.logger.info("Service retrieving contact: contact_id=%d", contact_id)
         row = await self.repository.get_contact_with_relations(session, contact_id)
         if not row:
-            self.logger.warning("Contact not found: contact_id=%d", contact_id)
+            self.logger.info("Contact not found: contact_id=%d", contact_id)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
         contact, company, contact_meta, company_meta = row
         item = self._hydrate_contact(contact, company, contact_meta, company_meta)

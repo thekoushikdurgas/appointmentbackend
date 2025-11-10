@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Iterable, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import ValidationError
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +24,19 @@ settings = get_settings()
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
 service = ContactsService()
 logger = get_logger(__name__)
+
+
+async def require_contacts_write_key(
+    contacts_write_key: Optional[str] = Header(None, alias="X-Contacts-Write-Key"),
+) -> None:
+    """Ensure write requests include the configured authorization key."""
+    configured_key = (settings.CONTACTS_WRITE_KEY or "").strip()
+    if not configured_key:
+        logger.warning("Contacts write key is not configured; denying write access.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if contacts_write_key != configured_key:
+        logger.info("Contacts write key mismatch; denying request.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
 async def resolve_contact_filters(request: Request) -> ContactFilterParams:
@@ -112,6 +125,8 @@ async def list_contacts(
                 detail="Invalid cursor value",
             ) from exc
         use_cursor = True
+    elif filters.page is not None:
+        resolved_offset = (filters.page - 1) * page_limit
 
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
     logger.info(
@@ -217,6 +232,7 @@ async def count_contacts(
 @router.post("/", response_model=ContactDetail, status_code=status.HTTP_201_CREATED)
 async def create_contact(
     payload: ContactCreate,
+    _: None = Depends(require_contacts_write_key),
     session: AsyncSession = Depends(get_db),
 ) -> ContactDetail:
     """Create a new contact with optional fields."""

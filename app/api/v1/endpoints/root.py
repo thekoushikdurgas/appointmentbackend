@@ -24,3 +24,16 @@ async def root() -> dict[str, str]:
     logger.debug("Root endpoint payload prepared: docs=%s", payload["docs"])
     return payload
 
+
+@router.get("/health/")
+@log_function_call(logger=logger, log_result=True)
+async def health() -> dict[str, str]:
+    """Return a lightweight health payload for the versioned API."""
+    settings = get_settings()
+    payload = {"status": "healthy", "environment": settings.ENVIRONMENT}
+    logger.info(
+        "Health endpoint requested: status=%s environment=%s",
+        payload["status"],
+        payload["environment"],
+    )
+    return payload

@@ -1039,6 +1039,51 @@ async def test_contacts_count_accepts_company_filters(async_client):
 
 
 @pytest.mark.asyncio
+async def test_contacts_count_honors_metadata_filters(async_client, db_session):
+    usa_company = await create_company(
+        db_session,
+        name="USA Corp",
+        metadata_overrides={"country": "USA"},
+    )
+    canada_company = await create_company(
+        db_session,
+        name="Canada Corp",
+        metadata_overrides={"country": "Canada"},
+    )
+
+    await create_contact(
+        db_session,
+        company=usa_company,
+        first_name="Austin Contact",
+        email="austin@example.com",
+        metadata_overrides={"city": "Austin"},
+    )
+    await create_contact(
+        db_session,
+        company=canada_company,
+        first_name="Toronto Contact",
+        email="toronto@example.com",
+        metadata_overrides={"city": "Toronto"},
+    )
+
+    usa_response = await async_client.get("/api/v1/contacts/count/", params={"company_country": "USA"})
+    assert usa_response.status_code == 200
+    assert usa_response.json()["count"] == 1
+
+    canada_response = await async_client.get(
+        "/api/v1/contacts/count/", params={"company_country": "Canada", "city": "Toronto"}
+    )
+    assert canada_response.status_code == 200
+    assert canada_response.json()["count"] == 1
+
+    empty_response = await async_client.get(
+        "/api/v1/contacts/count/", params={"company_country": "USA", "city": "Toronto"}
+    )
+    assert empty_response.status_code == 200
+    assert empty_response.json()["count"] == 0
+
+
+@pytest.mark.asyncio
 async def test_create_contact_minimal(async_client):
     response = await async_client.post("/api/v1/contacts/", json={})
     assert response.status_code == 201

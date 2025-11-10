@@ -12,6 +12,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
+from app.core.config import get_settings
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -67,5 +68,9 @@ async def override_get_db(db_session: AsyncSession) -> AsyncGenerator[None, None
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        settings = get_settings()
+        contacts_write_key = (settings.CONTACTS_WRITE_KEY or "").strip()
+        if contacts_write_key:
+            client.headers["X-Contacts-Write-Key"] = contacts_write_key
         yield client
 

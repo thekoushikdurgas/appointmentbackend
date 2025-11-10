@@ -123,3 +123,9 @@ class ContactMetadata(Base):
         primaryjoin="foreign(ContactMetadata.uuid) == Contact.uuid",
     )
 
+    __table_args__ = (
+        Index("idx_contacts_metadata_city", "city"),
+        Index("idx_contacts_metadata_state", "state"),
+        Index("idx_contacts_metadata_country", "country"),
+    )
+

@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ALGORITHM: str = "HS256"
+    CONTACTS_WRITE_KEY: str = "change-this-write-key"
 
     # CORS
     ALLOWED_ORIGINS: List[AnyHttpUrl] = [

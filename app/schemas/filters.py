@@ -127,6 +127,11 @@ class ContactFilterParams(BaseModel):
         default=None,
         description="Ordering key referencing exposed Contact/Company columns (see repository ordering_map).",
     )
+    page: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="1-indexed page number converted to an offset when pagination parameters are supplied.",
+    )
     distinct: bool = Field(
         default=False,
         description="When true, request distinct contacts based on primary key.",
@@ -446,6 +451,7 @@ CONTACT_FILTER_COLUMN_MAP: dict[str, str] = {
     "industries": "Company.industries",
     "search": "Multi-column search helper",
     "ordering": "Ordering key applied in repository ordering_map",
+    "page": "Pagination page number (1-indexed)",
     "distinct": "Distinct contact flag",
     "page_size": "Explicit page size override",
     "cursor": "Cursor token override",

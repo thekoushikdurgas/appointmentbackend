@@ -515,7 +515,26 @@ class TestContactsList:
         ],
     )
     def test_pagination(self, api_request, params: Mapping[str, Any]):
-        api_request("GET", api_v1_path("/contacts/"), params=params, expected_status=200)
+        baseline_params = dict(params)
+        baseline_params["page"] = 1
+        baseline_response = api_request(
+            "GET",
+            api_v1_path("/contacts/"),
+            params=baseline_params,
+            expected_status=200,
+        ).json()
+
+        response = api_request(
+            "GET",
+            api_v1_path("/contacts/"),
+            params=params,
+            expected_status=200,
+        ).json()
+
+        if params.get("page", 1) == 1:
+            assert response["results"] == baseline_response["results"]
+        else:
+            assert response["results"] != baseline_response["results"]
 
     @pytest.mark.parametrize(
         "filter_name,test_value",
