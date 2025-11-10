@@ -1,7 +1,7 @@
 """Filter parameter schemas supporting contact metadata queries."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
@@ -318,6 +318,27 @@ class ContactFilterParams(BaseModel):
             if key not in deduped:
                 deduped[key] = token
         return list(deduped.values()) or None
+
+    @staticmethod
+    def _coerce_datetime_to_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+        """Convert aware datetimes to UTC naive to align with DB columns."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    @field_validator(
+        "created_at_after",
+        "created_at_before",
+        "updated_at_after",
+        "updated_at_before",
+        mode="after",
+    )
+    @classmethod
+    def _normalize_datetimes(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Ensure datetime filters are timezone-naive UTC to match storage."""
+        return cls._coerce_datetime_to_utc_naive(value)
 
     @field_validator("exclude_company_ids", mode="before")
     @classmethod

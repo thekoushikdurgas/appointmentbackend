@@ -192,31 +192,6 @@ async def count_contacts(
     return count
 
 
-@router.get("/{contact_id}/", response_model=ContactDetail)
-async def retrieve_contact_with_trailing_slash(
-    contact_id: str,
-    session: AsyncSession = Depends(get_db),
-) -> ContactDetail:
-    """Retrieve a single contact by primary key, accepting both integer and string path segments."""
-    try:
-        parsed_contact_id = int(contact_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found") from exc
-    logger.info("Retrieving contact detail: contact_id=%d", parsed_contact_id)
-    contact = await service.get_contact(session, parsed_contact_id)
-    logger.info("Retrieved contact detail: contact_id=%d", parsed_contact_id)
-    return contact
-
-
-@router.get("/{contact_id}", include_in_schema=False)
-async def retrieve_contact_without_trailing_slash(
-    contact_id: str,
-    session: AsyncSession = Depends(get_db),
-) -> ContactDetail:
-    """Retrieve a single contact by primary key."""
-    return await retrieve_contact_with_trailing_slash(contact_id, session)
-
-
 @router.post("/", response_model=ContactDetail, status_code=status.HTTP_403_FORBIDDEN)
 async def create_contact(
     payload: ContactCreate,
@@ -559,4 +534,29 @@ async def list_company_countries(
         lambda Contact, Company, ContactMetadata, CompanyMetadata: CompanyMetadata.country,
         "company_country",
     )
+
+
+@router.get("/{contact_id}/", response_model=ContactDetail)
+async def retrieve_contact_with_trailing_slash(
+    contact_id: str,
+    session: AsyncSession = Depends(get_db),
+) -> ContactDetail:
+    """Retrieve a single contact by primary key, accepting both integer and string path segments."""
+    try:
+        parsed_contact_id = int(contact_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found") from exc
+    logger.info("Retrieving contact detail: contact_id=%d", parsed_contact_id)
+    contact = await service.get_contact(session, parsed_contact_id)
+    logger.info("Retrieved contact detail: contact_id=%d", parsed_contact_id)
+    return contact
+
+
+@router.get("/{contact_id}", include_in_schema=False)
+async def retrieve_contact_without_trailing_slash(
+    contact_id: str,
+    session: AsyncSession = Depends(get_db),
+) -> ContactDetail:
+    """Retrieve a single contact by primary key."""
+    return await retrieve_contact_with_trailing_slash(contact_id, session)
 

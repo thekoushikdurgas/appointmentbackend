@@ -363,7 +363,39 @@ class ContactRepository(AsyncRepository[Contact]):
             "company_name_for_emails": company_meta_alias.company_name_for_emails,
             "email": Contact.email,
             "email_status": Contact.email_status,
+            "primary_email_catch_all_status": getattr(
+                Contact, "primary_email_catch_all_status", Contact.email_status
+            ),
             "seniority": Contact.seniority,
+            "departments": cast(Contact.departments, Text),
+            "work_direct_phone": contact_meta_alias.work_direct_phone,
+            "home_phone": contact_meta_alias.home_phone,
+            "mobile_phone": Contact.mobile_phone,
+            "corporate_phone": company_meta_alias.phone_number,
+            "company_phone": company_meta_alias.phone_number,
+            "other_phone": contact_meta_alias.other_phone,
+            "stage": contact_meta_alias.stage,
+            "industry": cast(company_alias.industries, Text),
+            "keywords": cast(company_alias.keywords, Text),
+            "technologies": cast(company_alias.technologies, Text),
+            "person_linkedin_url": contact_meta_alias.linkedin_url,
+            "website": contact_meta_alias.website,
+            "company_linkedin_url": company_meta_alias.linkedin_url,
+            "facebook_url": func.coalesce(
+                contact_meta_alias.facebook_url, company_meta_alias.facebook_url
+            ),
+            "twitter_url": func.coalesce(
+                contact_meta_alias.twitter_url, company_meta_alias.twitter_url
+            ),
+            "city": contact_meta_alias.city,
+            "state": contact_meta_alias.state,
+            "country": contact_meta_alias.country,
+            "company_address": company_alias.address,
+            "company_city": company_meta_alias.city,
+            "company_state": company_meta_alias.state,
+            "company_country": company_meta_alias.country,
+            "latest_funding": company_meta_alias.latest_funding,
+            "last_raised_at": company_meta_alias.last_raised_at,
         }
         stmt = apply_ordering(stmt, filters.ordering, ordering_map)
         stmt = stmt.limit(limit).offset(offset)
