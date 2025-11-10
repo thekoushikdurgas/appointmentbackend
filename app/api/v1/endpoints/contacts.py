@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+import json
+from typing import Any, Callable, Iterable, List, Optional
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import ValidationError
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +24,33 @@ settings = get_settings()
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
 service = ContactsService()
 logger = get_logger(__name__)
+
+
+async def resolve_contact_filters(request: Request) -> ContactFilterParams:
+    """Build contact filter parameters from query string, preserving multi-value inputs."""
+    query_params = request.query_params
+    data = dict(query_params)
+    multi_value_keys = (
+        "exclude_company_ids",
+        "exclude_titles",
+        "exclude_company_locations",
+        "exclude_contact_locations",
+        "exclude_seniorities",
+        "exclude_departments",
+        "exclude_technologies",
+        "exclude_keywords",
+        "exclude_industries",
+    )
+    for key in multi_value_keys:
+        values = query_params.getlist(key)
+        if values:
+            data[key] = values
+    try:
+        return ContactFilterParams.model_validate(data)
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
 
 
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
@@ -45,13 +74,15 @@ def _resolve_pagination(
 @router.get("/", response_model=CursorPage[ContactListItem])
 async def list_contacts(
     request: Request,
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     limit: Optional[int] = Query(None, ge=1),
     offset: Optional[int] = Query(0, ge=0),
     cursor: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_db),
 ) -> CursorPage[ContactListItem]:
     """Return a paginated list of contacts."""
+    if "/contacts//" in request.url.path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     page_limit = _resolve_pagination(filters, limit)
     use_cursor = False
     resolved_offset = offset or 0
@@ -87,9 +118,70 @@ async def list_contacts(
     return page
 
 
+def _parse_iterable_like(value: Any) -> Iterable[str]:
+    """Best effort parsing for list-like attribute payloads."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item or "").strip()]
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return []
+
+        # JSON encoded arrays (SQLite fallback or upstream serialization)
+        if stripped.startswith("[") and stripped.endswith("]"):
+            try:
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item or "").strip()]
+            except json.JSONDecodeError:
+                pass
+
+        # PostgreSQL array string representation {"a","b"}
+        if stripped.startswith("{") and stripped.endswith("}"):
+            transformed = "[" + stripped[1:-1] + "]"
+            try:
+                parsed = json.loads(transformed)
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item or "").strip()]
+            except json.JSONDecodeError:
+                pass
+
+        return [stripped]
+
+    return [str(value).strip()]
+
+
+def _normalize_array_values(values: Iterable[Any]) -> List[str]:
+    """Flatten heterogeneous attribute values into a sorted, deduplicated list."""
+    flattened: list[str] = []
+    for entry in values:
+        flattened.extend(_parse_iterable_like(entry))
+    deduped: dict[str, str] = {}
+    for token in flattened:
+        if not token:
+            continue
+        key = token.lower()
+        if key not in deduped:
+            deduped[key] = token
+    return sorted(deduped.values(), key=str.lower)
+
+
+def _has_alphanumeric(value: Any) -> bool:
+    """Return True when the value contains at least one alphanumeric character."""
+    if value is None:
+        return False
+    text = str(value).strip()
+    if not text:
+        return False
+    return any(char.isalnum() for char in text)
+
+
 @router.get("/count/", response_model=CountResponse)
 async def count_contacts(
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     session: AsyncSession = Depends(get_db),
 ) -> CountResponse:
     """Return the total number of contacts that match the provided filters."""
@@ -100,28 +192,38 @@ async def count_contacts(
     return count
 
 
-@router.get("/{contact_id}", response_model=ContactDetail)
-async def retrieve_contact(
-    contact_id: int,
+@router.get("/{contact_id}/", response_model=ContactDetail)
+async def retrieve_contact_with_trailing_slash(
+    contact_id: str,
     session: AsyncSession = Depends(get_db),
 ) -> ContactDetail:
-    """Retrieve a single contact by primary key."""
-    logger.info("Retrieving contact detail: contact_id=%d", contact_id)
-    contact = await service.get_contact(session, contact_id)
-    logger.info("Retrieved contact detail: contact_id=%d", contact_id)
+    """Retrieve a single contact by primary key, accepting both integer and string path segments."""
+    try:
+        parsed_contact_id = int(contact_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found") from exc
+    logger.info("Retrieving contact detail: contact_id=%d", parsed_contact_id)
+    contact = await service.get_contact(session, parsed_contact_id)
+    logger.info("Retrieved contact detail: contact_id=%d", parsed_contact_id)
     return contact
 
 
-@router.post("/", response_model=ContactDetail, status_code=status.HTTP_201_CREATED)
+@router.get("/{contact_id}", include_in_schema=False)
+async def retrieve_contact_without_trailing_slash(
+    contact_id: str,
+    session: AsyncSession = Depends(get_db),
+) -> ContactDetail:
+    """Retrieve a single contact by primary key."""
+    return await retrieve_contact_with_trailing_slash(contact_id, session)
+
+
+@router.post("/", response_model=ContactDetail, status_code=status.HTTP_403_FORBIDDEN)
 async def create_contact(
     payload: ContactCreate,
     session: AsyncSession = Depends(get_db),
 ) -> ContactDetail:
     """Create a new contact with optional fields."""
-    logger.info("Creating contact: email=%s uuid=%s", payload.email, payload.uuid)
-    contact = await service.create_contact(session, payload)
-    logger.info("Created contact: id=%s email=%s", contact.id, contact.email)
-    return contact
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Contact creation is disabled")
 
 
 async def _attribute_endpoint(
@@ -130,17 +232,40 @@ async def _attribute_endpoint(
     params: AttributeListParams,
     column_factory: Callable,
     attribute_label: str,
+    *,
+    array_mode: bool = False,
 ) -> List[str]:
     """Shared handler for list-of-values endpoints."""
+    effective_params = params
+    forced_distinct = False
+    if array_mode and not params.distinct:
+        forced_distinct = True
+        effective_params = params.model_copy(update={"distinct": True})
+        logger.debug(
+            "Forcing distinct parameters for array attribute: attribute=%s limit=%d offset=%d",
+            attribute_label,
+            params.limit,
+            params.offset,
+        )
+
     logger.info(
         "Listing contact attribute values: attribute=%s distinct=%s limit=%d offset=%d",
         attribute_label,
-        params.distinct,
-        params.limit,
-        params.offset,
+        effective_params.distinct,
+        effective_params.limit,
+        effective_params.offset,
     )
-    values = await service.list_attribute_values(session, filters, params, column_factory=column_factory)
-    if params.distinct:
+    values = await service.list_attribute_values(
+        session,
+        filters,
+        effective_params,
+        column_factory=column_factory,
+        array_mode=array_mode,
+    )
+    if attribute_label == "title":
+        values = [value for value in values if _has_alphanumeric(value)]
+    distinct_requested = effective_params.distinct or forced_distinct
+    if distinct_requested:
         # Repository already applies distinct; guard to ensure uniqueness after post-processing.
         seen = set()
         unique_values = []
@@ -164,7 +289,7 @@ async def _attribute_endpoint(
 
 @router.get("/title/", response_model=List[str])
 async def list_titles(
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
@@ -180,7 +305,7 @@ async def list_titles(
 
 @router.get("/company/", response_model=List[str])
 async def list_companies(
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
@@ -196,30 +321,54 @@ async def list_companies(
 
 @router.get("/industry/", response_model=List[str])
 async def list_industries(
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
+    separated: bool = Query(False),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return industry values sourced from related companies."""
-    return await _attribute_endpoint(
+    column_factory = (
+        (
+            lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.industries
+        )
+        if separated
+        else (
+            lambda Contact, Company, ContactMetadata, CompanyMetadata: func.array_to_string(
+                Company.industries, ","
+            )
+        )
+    )
+    values = await _attribute_endpoint(
         session,
         filters,
         params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: func.unnest(Company.industries),
+        column_factory,
         "industry",
+        array_mode=separated,
     )
+    if separated:
+        deduped = _normalize_array_values(values)
+        if params.limit:
+            deduped = deduped[: params.limit]
+        logger.debug("Separated industry values count=%d", len(deduped))
+        return deduped
+    filtered = [value for value in values if value]
+    logger.debug("Collapsed industry values count=%d", len(filtered))
+    return filtered
 
 
 @router.get("/keywords/", response_model=List[str])
 async def list_keywords(
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
     separated: bool = Query(False),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return keyword values for companies, optionally split into unique tokens."""
     column_factory = (
-        (lambda Contact, Company, ContactMetadata, CompanyMetadata: func.unnest(Company.keywords))
+        (
+            lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.keywords
+        )
         if separated
         else (
             lambda Contact, Company, ContactMetadata, CompanyMetadata: func.array_to_string(
@@ -227,9 +376,18 @@ async def list_keywords(
             )
         )
     )
-    values = await _attribute_endpoint(session, filters, params, column_factory, "keywords")
+    values = await _attribute_endpoint(
+        session,
+        filters,
+        params,
+        column_factory,
+        "keywords",
+        array_mode=separated,
+    )
     if separated:
-        deduped = sorted({value.strip() for value in values if value})
+        deduped = _normalize_array_values(values)
+        if params.limit:
+            deduped = deduped[: params.limit]
         logger.debug("Separated keyword values count=%d", len(deduped))
         return deduped
     filtered = [value for value in values if value]
@@ -239,14 +397,16 @@ async def list_keywords(
 
 @router.get("/technologies/", response_model=List[str])
 async def list_technologies(
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
-    separated: bool = Query(True),
+    separated: bool = Query(False),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
     """Return technology values for associated companies."""
     column_factory = (
-        (lambda Contact, Company, ContactMetadata, CompanyMetadata: func.unnest(Company.technologies))
+        (
+            lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.technologies
+        )
         if separated
         else (
             lambda Contact, Company, ContactMetadata, CompanyMetadata: func.array_to_string(
@@ -254,9 +414,18 @@ async def list_technologies(
             )
         )
     )
-    values = await _attribute_endpoint(session, filters, params, column_factory, "technologies")
+    values = await _attribute_endpoint(
+        session,
+        filters,
+        params,
+        column_factory,
+        "technologies",
+        array_mode=separated,
+    )
     if separated:
-        deduped = sorted({value.strip() for value in values if value})
+        deduped = _normalize_array_values(values)
+        if params.limit:
+            deduped = deduped[: params.limit]
         logger.debug("Separated technology values count=%d", len(deduped))
         return deduped
     filtered = [value for value in values if value]
@@ -264,77 +433,93 @@ async def list_technologies(
     return filtered
 
 
-@router.get("/city/", response_model=List[str])
-async def list_person_cities(
-    filters: ContactFilterParams = Depends(),
+@router.get("/company_address/", response_model=List[str])
+async def list_company_addresses(
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
-    """Return city names for individual contacts."""
+    """Return company address text sourced from the text search column."""
+    return await _attribute_endpoint(
+        session,
+        filters,
+        params,
+        lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.text_search,
+        "company_address",
+    )
+
+
+@router.get("/contact_address/", response_model=List[str])
+async def list_contact_addresses(
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
+    params: AttributeListParams = Depends(),
+    session: AsyncSession = Depends(get_db),
+) -> List[str]:
+    """Return contact address text sourced from the text search column."""
+    return await _attribute_endpoint(
+        session,
+        filters,
+        params,
+        lambda Contact, Company, ContactMetadata, CompanyMetadata: Contact.text_search,
+        "contact_address",
+    )
+
+
+@router.get("/city/", response_model=List[str])
+async def list_contact_cities(
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
+    params: AttributeListParams = Depends(),
+    session: AsyncSession = Depends(get_db),
+) -> List[str]:
+    """Return distinct contact city values."""
     return await _attribute_endpoint(
         session,
         filters,
         params,
         lambda Contact, Company, ContactMetadata, CompanyMetadata: ContactMetadata.city,
-        "person_city",
+        "city",
     )
 
 
 @router.get("/state/", response_model=List[str])
-async def list_person_states(
-    filters: ContactFilterParams = Depends(),
+async def list_contact_states(
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
-    """Return state values for individual contacts."""
+    """Return distinct contact state values."""
     return await _attribute_endpoint(
         session,
         filters,
         params,
         lambda Contact, Company, ContactMetadata, CompanyMetadata: ContactMetadata.state,
-        "person_state",
+        "state",
     )
 
 
 @router.get("/country/", response_model=List[str])
-async def list_person_countries(
-    filters: ContactFilterParams = Depends(),
+async def list_contact_countries(
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
-    """Return country values for individual contacts."""
+    """Return distinct contact country values."""
     return await _attribute_endpoint(
         session,
         filters,
         params,
         lambda Contact, Company, ContactMetadata, CompanyMetadata: ContactMetadata.country,
-        "person_country",
-    )
-
-
-@router.get("/company_address/", response_model=List[str])
-async def list_company_addresses(
-    filters: ContactFilterParams = Depends(),
-    params: AttributeListParams = Depends(),
-    session: AsyncSession = Depends(get_db),
-) -> List[str]:
-    """Return mailing addresses for related companies."""
-    return await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.address,
-        "company_address",
+        "country",
     )
 
 
 @router.get("/company_city/", response_model=List[str])
 async def list_company_cities(
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
-    """Return company city values sourced from metadata."""
+    """Return distinct company city values."""
     return await _attribute_endpoint(
         session,
         filters,
@@ -346,11 +531,11 @@ async def list_company_cities(
 
 @router.get("/company_state/", response_model=List[str])
 async def list_company_states(
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
-    """Return company state values sourced from metadata."""
+    """Return distinct company state values."""
     return await _attribute_endpoint(
         session,
         filters,
@@ -362,11 +547,11 @@ async def list_company_states(
 
 @router.get("/company_country/", response_model=List[str])
 async def list_company_countries(
-    filters: ContactFilterParams = Depends(),
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(),
     session: AsyncSession = Depends(get_db),
 ) -> List[str]:
-    """Return company country values sourced from metadata."""
+    """Return distinct company country values."""
     return await _attribute_endpoint(
         session,
         filters,

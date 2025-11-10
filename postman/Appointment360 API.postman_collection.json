@@ -70,9 +70,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "Retrieve a paginated set of contacts filtered with sample CSV data.",
+            "description": "Retrieve a paginated set of contacts using sample filters sourced from `tables/table_data/contacts.csv`, `tables/table_data/companies.csv`, and `tables/table_data/companies_metadata.csv`.",
             "url": {
-              "raw": "{{baseUrl}}/contacts/?limit=25&offset=0&company={{sampleCompany}}&first_name=Phil&state={{sampleState}}&country={{sampleCountry}}&ordering=last_name",
+              "raw": "{{baseUrl}}/contacts/?limit=25&offset=0&page_size=25&cursor=bz0w&company=Bandura,Omada%20Technologies&name=Bandura,Omada%20Technologies&company_location=McLean%20Virginia%20United%20States,Portsmouth%20New%20Hampshire%20United%20States&company_text_search=McLean%20Virginia%20United%20States,Portsmouth%20New%20Hampshire%20United%20States&contact_location=Fulton%20Maryland%20United%20States&text_search=Fulton%20Maryland%20United%20States&email_status=Verified&title=Chief%20Technology%20Officer&seniority=C%20suite&departments=C-Suite,Engineering%20%26%20Technical&department=C-Suite,Engineering%20%26%20Technical&employees_count=27&employees=27&employees_min=20&employees_max=35&annual_revenue=7708000&annual_revenue_min=7000000&annual_revenue_max=9000000&total_funding=35875000&total_funding_min=20000000&total_funding_max=40000000&latest_funding_amount_min=3500000&latest_funding_amount_max=40000000&technologies=Salesforce,Sendgrid&keywords=cyber%20security&industries=information%20technology%20%26%20services&search=cyber&ordering=last_name&distinct=true",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -84,7 +84,7 @@
                 {
                   "key": "limit",
                   "value": "25",
-                  "description": "Number of records per page."
+                  "description": "Number of contacts per page."
                 },
                 {
                   "key": "offset",
@@ -92,59 +92,204 @@
                   "description": "Offset into the result set."
                 },
                 {
+                  "key": "page_size",
+                  "value": "25",
+                  "description": "Override the configured default page size (constrained by `settings.MAX_PAGE_SIZE`)."
+                },
+                {
+                  "key": "cursor",
+                  "value": "bz0w",
+                  "description": "Opaque cursor token (`bz0w` is the base64 encoding of `o=0`)."
+                },
+                {
                   "key": "company",
-                  "value": "{{sampleCompany}}",
-                  "description": "Company name taken from the CSV sample."
+                  "value": "Bandura,Omada Technologies",
+                  "description": "Company names drawn from `tables/table_data/companies.csv`."
                 },
                 {
-                  "key": "first_name",
-                  "value": "Phil",
-                  "description": "Sample first name filter."
+                  "key": "name",
+                  "value": "Bandura,Omada Technologies",
+                  "description": "Alias for `company`; included to demonstrate both query spellings."
                 },
                 {
-                  "key": "last_name",
-                  "value": "Smith",
-                  "description": "Sample last name filter."
-                },
-                {
-                  "key": "company_id",
+                  "key": "exclude_company_ids",
                   "value": "{{sampleCompanyUuid}}",
-                  "description": "Filter by the related company UUID."
+                  "description": "Exclude contacts belonging to specific company UUIDs."
                 },
                 {
-                  "key": "email",
-                  "value": "phil@example.com",
-                  "description": "Email address filter."
+                  "key": "company_location",
+                  "value": "McLean Virginia United States,Portsmouth New Hampshire United States",
+                  "description": "Company text-search column (`Company.text_search`) values from `companies.csv`."
+                },
+                {
+                  "key": "exclude_company_locations",
+                  "value": "McLean Virginia United States,Portsmouth New Hampshire United States",
+                  "description": "Exclude contacts whose company location text matches any provided value."
+                },
+                {
+                  "key": "company_text_search",
+                  "value": "McLean Virginia United States,Portsmouth New Hampshire United States",
+                  "description": "Alias for `company_location`."
+                },
+                {
+                  "key": "contact_location",
+                  "value": "Fulton Maryland United States",
+                  "description": "Person text-search column (`Contact.text_search`) drawn from `contacts.csv`."
+                },
+                {
+                  "key": "exclude_contact_locations",
+                  "value": "Fulton Maryland United States",
+                  "description": "Exclude contacts whose contact location text matches any provided value."
+                },
+                {
+                  "key": "text_search",
+                  "value": "Fulton Maryland United States",
+                  "description": "Alias for `contact_location`."
+                },
+                {
+                  "key": "email_status",
+                  "value": "Verified",
+                  "description": "Deliverability status from `contacts.csv`."
                 },
                 {
                   "key": "title",
-                  "value": "VP",
-                  "description": "Filter by job title."
+                  "value": "Chief Technology Officer",
+                  "description": "Job title found in `contacts.csv`."
+                },
+                {
+                  "key": "exclude_titles",
+                  "value": "Chief Technology Officer",
+                  "description": "Exclude contacts whose title matches the provided value."
                 },
                 {
                   "key": "seniority",
-                  "value": "Director",
-                  "description": "Filter by seniority level."
+                  "value": "C suite",
+                  "description": "Seniority band recorded in `contacts.csv`."
+                },
+                {
+                  "key": "exclude_seniorities",
+                  "value": "C suite",
+                  "description": "Exclude contacts whose seniority matches the provided value."
                 },
                 {
                   "key": "departments",
-                  "value": "Sales",
-                  "description": "Filter by department affiliation."
+                  "value": "C-Suite,Engineering & Technical",
+                  "description": "Department membership array extracted from `contacts.csv`."
                 },
                 {
-                  "key": "state",
-                  "value": "{{sampleState}}",
-                  "description": "Filter person state."
+                  "key": "department",
+                  "value": "C-Suite,Engineering & Technical",
+                  "description": "Alias for `departments`."
                 },
                 {
-                  "key": "country",
-                  "value": "{{sampleCountry}}",
-                  "description": "Filter person country."
+                  "key": "exclude_departments",
+                  "value": "C-Suite,Engineering & Technical",
+                  "description": "Exclude contacts whose departments include any provided value."
+                },
+                {
+                  "key": "employees_count",
+                  "value": "27",
+                  "description": "Exact company employee count from `companies.csv`."
+                },
+                {
+                  "key": "employees",
+                  "value": "27",
+                  "description": "Alias for `employees_count`."
+                },
+                {
+                  "key": "employees_min",
+                  "value": "20",
+                  "description": "Lower-bound employee filter."
+                },
+                {
+                  "key": "employees_max",
+                  "value": "35",
+                  "description": "Upper-bound employee filter."
+                },
+                {
+                  "key": "annual_revenue",
+                  "value": "7708000",
+                  "description": "Exact annual revenue from `companies.csv` (stored as integer dollars)."
+                },
+                {
+                  "key": "annual_revenue_min",
+                  "value": "7000000",
+                  "description": "Lower-bound annual revenue filter."
+                },
+                {
+                  "key": "annual_revenue_max",
+                  "value": "9000000",
+                  "description": "Upper-bound annual revenue filter."
+                },
+                {
+                  "key": "total_funding",
+                  "value": "35875000",
+                  "description": "Exact total funding from `companies.csv`."
+                },
+                {
+                  "key": "total_funding_min",
+                  "value": "20000000",
+                  "description": "Lower-bound total funding filter."
+                },
+                {
+                  "key": "total_funding_max",
+                  "value": "40000000",
+                  "description": "Upper-bound total funding filter."
+                },
+                {
+                  "key": "latest_funding_amount_min",
+                  "value": "3500000",
+                  "description": "Lower-bound latest funding amount sourced from `companies_metadata.csv`."
+                },
+                {
+                  "key": "latest_funding_amount_max",
+                  "value": "40000000",
+                  "description": "Upper-bound latest funding amount sourced from `companies_metadata.csv`."
+                },
+                {
+                  "key": "technologies",
+                  "value": "Salesforce,Sendgrid",
+                  "description": "Technology stack entries from the `Company.technologies` array in `companies.csv`."
+                },
+                {
+                  "key": "exclude_technologies",
+                  "value": "Salesforce,Sendgrid",
+                  "description": "Exclude contacts whose company technologies include any provided value."
+                },
+                {
+                  "key": "keywords",
+                  "value": "cyber security",
+                  "description": "Keyword tokens from the `Company.keywords` array in `companies.csv`."
+                },
+                {
+                  "key": "exclude_keywords",
+                  "value": "cyber security",
+                  "description": "Exclude contacts whose company keywords include any provided value."
+                },
+                {
+                  "key": "industries",
+                  "value": "information technology & services",
+                  "description": "Industry classification pulled from `companies.csv`."
+                },
+                {
+                  "key": "exclude_industries",
+                  "value": "information technology & services",
+                  "description": "Exclude contacts whose company industries include any provided value."
+                },
+                {
+                  "key": "search",
+                  "value": "cyber",
+                  "description": "General-purpose search term matched across contact and company columns."
                 },
                 {
                   "key": "ordering",
                   "value": "last_name",
-                  "description": "Sort results by last name."
+                  "description": "Sort results by last name (see `ContactRepository.ordering_map`)."
+                },
+                {
+                  "key": "distinct",
+                  "value": "true",
+                  "description": "Request distinct contacts."
                 }
               ]
             }
@@ -161,9 +306,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "Return the total number of contacts that satisfy the provided filters.",
+            "description": "Return the total number of contacts that satisfy the provided filters using sample values pulled from the project CSV tables.",
             "url": {
-              "raw": "{{baseUrl}}/contacts/count/?company={{sampleCompany}}&country={{sampleCountry}}",
+              "raw": "{{baseUrl}}/contacts/count/?company=Bandura,Omada%20Technologies&name=Bandura,Omada%20Technologies&company_location=McLean%20Virginia%20United%20States,Portsmouth%20New%20Hampshire%20United%20States&company_text_search=McLean%20Virginia%20United%20States,Portsmouth%20New%20Hampshire%20United%20States&contact_location=Fulton%20Maryland%20United%20States&text_search=Fulton%20Maryland%20United%20States&email_status=Verified&title=Chief%20Technology%20Officer&seniority=C%20suite&department=C-Suite,Engineering%20%26%20Technical&departments=C-Suite,Engineering%20%26%20Technical&employees_count=27&employees=27&employees_min=20&employees_max=35&annual_revenue=7708000&annual_revenue_min=7000000&annual_revenue_max=9000000&total_funding=35875000&total_funding_min=20000000&total_funding_max=40000000&latest_funding_amount_min=3500000&latest_funding_amount_max=40000000&technologies=Salesforce,Sendgrid&keywords=cyber%20security&industries=information%20technology%20%26%20services&search=cyber&ordering=last_name&distinct=true&page_size=25&cursor=bz0w",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -173,51 +318,46 @@
                 ""
               ],
               "query": [
-                {
-                  "key": "company",
-                  "value": "{{sampleCompany}}",
-                  "description": "Company filter sourced from the sample CSV."
-                },
-                {
-                  "key": "first_name",
-                  "value": "Phil",
-                  "description": "Sample first name filter."
-                },
-                {
-                  "key": "last_name",
-                  "value": "Smith",
-                  "description": "Sample last name filter."
-                },
-                {
-                  "key": "company_id",
-                  "value": "{{sampleCompanyUuid}}",
-                  "description": "Filter by the related company UUID."
-                },
-                {
-                  "key": "email",
-                  "value": "phil@example.com",
-                  "description": "Email address filter."
-                },
-                {
-                  "key": "title",
-                  "value": "VP",
-                  "description": "Filter by job title."
-                },
-                {
-                  "key": "seniority",
-                  "value": "Director",
-                  "description": "Filter by seniority level."
-                },
-                {
-                  "key": "departments",
-                  "value": "Sales",
-                  "description": "Filter by department affiliation."
-                },
-                {
-                  "key": "country",
-                  "value": "{{sampleCountry}}",
-                  "description": "Country filter sourced from the sample CSV."
-                }
+                { "key": "company", "value": "Bandura,Omada Technologies", "description": "Company filter sourced from `tables/table_data/companies.csv`." },
+                { "key": "name", "value": "Bandura,Omada Technologies", "description": "Alias for `company`." },
+                { "key": "exclude_company_ids", "value": "{{sampleCompanyUuid}}", "description": "Exclude contacts belonging to specific company UUIDs." },
+                { "key": "company_location", "value": "McLean Virginia United States,Portsmouth New Hampshire United States", "description": "Company text-search values from `companies.csv`." },
+                { "key": "exclude_company_locations", "value": "McLean Virginia United States,Portsmouth New Hampshire United States", "description": "Exclude contacts whose company location text matches any provided value." },
+                { "key": "company_text_search", "value": "McLean Virginia United States,Portsmouth New Hampshire United States", "description": "Alias for `company_location`." },
+                { "key": "contact_location", "value": "Fulton Maryland United States", "description": "Contact text-search value from `tables/table_data/contacts.csv`." },
+                { "key": "exclude_contact_locations", "value": "Fulton Maryland United States", "description": "Exclude contacts whose contact location text matches any provided value." },
+                { "key": "text_search", "value": "Fulton Maryland United States", "description": "Alias for `contact_location`." },
+                { "key": "title", "value": "Chief Technology Officer", "description": "Job title from `contacts.csv`." },
+                { "key": "exclude_titles", "value": "Chief Technology Officer", "description": "Exclude contacts whose title matches the provided value." },
+                { "key": "seniority", "value": "C suite", "description": "Seniority value from `contacts.csv`." },
+                { "key": "exclude_seniorities", "value": "C suite", "description": "Exclude contacts whose seniority matches the provided value." },
+                { "key": "department", "value": "C-Suite,Engineering & Technical", "description": "Department affiliation from `contacts.csv`." },
+                { "key": "departments", "value": "C-Suite,Engineering & Technical", "description": "Alias for `department`." },
+                { "key": "exclude_departments", "value": "C-Suite,Engineering & Technical", "description": "Exclude contacts whose departments include any provided value." },
+                { "key": "employees_count", "value": "27", "description": "Exact company employee count from `companies.csv`." },
+                { "key": "employees", "value": "27", "description": "Alias for `employees_count`." },
+                { "key": "employees_min", "value": "20", "description": "Lower-bound company employee count." },
+                { "key": "employees_max", "value": "35", "description": "Upper-bound company employee count." },
+                { "key": "annual_revenue", "value": "7708000", "description": "Exact company annual revenue from `companies.csv`." },
+                { "key": "annual_revenue_min", "value": "7000000", "description": "Lower-bound company annual revenue." },
+                { "key": "annual_revenue_max", "value": "9000000", "description": "Upper-bound company annual revenue." },
+                { "key": "total_funding", "value": "35875000", "description": "Exact company total funding from `companies.csv`." },
+                { "key": "total_funding_min", "value": "20000000", "description": "Lower-bound company total funding." },
+                { "key": "total_funding_max", "value": "40000000", "description": "Upper-bound company total funding." },
+                { "key": "latest_funding_amount_min", "value": "3500000", "description": "Lower-bound latest funding amount from `companies_metadata.csv`." },
+                { "key": "latest_funding_amount_max", "value": "40000000", "description": "Upper-bound latest funding amount from `companies_metadata.csv`." },
+                { "key": "technologies", "value": "Salesforce,Sendgrid", "description": "Technology values retrieved from `companies.csv`." },
+                { "key": "exclude_technologies", "value": "Salesforce,Sendgrid", "description": "Exclude contacts whose company technologies include any provided value." },
+                { "key": "keywords", "value": "cyber security", "description": "Keyword values extracted from `companies.csv`." },
+                { "key": "exclude_keywords", "value": "cyber security", "description": "Exclude contacts whose company keywords include any provided value." },
+                { "key": "industries", "value": "information technology & services", "description": "Industry classification taken from `companies.csv`." },
+                { "key": "exclude_industries", "value": "information technology & services", "description": "Exclude contacts whose company industries include any provided value." },
+                { "key": "email_status", "value": "Verified", "description": "Deliverability status stored in `contacts.csv`." },
+                { "key": "search", "value": "cyber", "description": "Multi-column search term." },
+                { "key": "ordering", "value": "last_name", "description": "Ordering key applied by the API." },
+                { "key": "distinct", "value": "true", "description": "Request distinct contact results." },
+                { "key": "page_size", "value": "25", "description": "Optional page-size hint accepted by the filters schema." },
+                { "key": "cursor", "value": "bz0w", "description": "Cursor token accepted by the filters schema (base64 of `o=<offset>`)." }
               ]
             }
           },
@@ -237,10 +377,10 @@
                 "value": "application/json"
               }
             ],
-            "description": "Create a new contact record. All body fields are optional and map directly to columns on the contacts table.",
+            "description": "Create a new contact record. All body fields are optional and map directly to columns on the contacts table. Sample values reference the CSV snapshots checked into `tables/table_data/`.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"first_name\": \"Jane\",\n  \"last_name\": \"Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"title\": \"Director of Sales\",\n  \"departments\": [\"Sales\", \"Marketing\"],\n  \"mobile_phone\": \"+1234567890\",\n  \"email_status\": \"valid\",\n  \"text_search\": \"Austin, TX\",\n  \"seniority\": \"Director\"\n}"
+              "raw": "{\n  \"uuid\": \"f4b8c3f5-1111-4f9b-aaaa-123456789abc\",\n  \"first_name\": \"Patrick\",\n  \"last_name\": \"McGarry\",\n  \"company_id\": \"398cce44-233d-5f7c-aea1-e4a6a79df10c\",\n  \"email\": \"pat.mcgarry@banduracyber.com\",\n  \"title\": \"Chief Technology Officer\",\n  \"departments\": [\"C-Suite\", \"Engineering & Technical\"],\n  \"mobile_phone\": \"+1 937-555-0132\",\n  \"email_status\": \"Verified\",\n  \"text_search\": \"Fulton Maryland United States\",\n  \"seniority\": \"C suite\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/contacts/",
@@ -293,9 +433,9 @@
                     "value": "application/json"
                   }
                 ],
-                "description": "Return contact titles filtered by sample company data.",
+                "description": "Return contact titles filtered by sample data from `contacts.csv` and `companies.csv`.",
                 "url": {
-                  "raw": "{{baseUrl}}/contacts/title/?company={{sampleCompany}}&distinct=true&limit=25&search=President",
+                  "raw": "{{baseUrl}}/contacts/title/?company=Bandura&contact_location=Fulton%20Maryland%20United%20States&text_search=Fulton%20Maryland%20United%20States&distinct=true&limit=25&offset=0&ordering=value&search=Chief",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -305,26 +445,14 @@
                     ""
                   ],
                   "query": [
-                    {
-                      "key": "company",
-                      "value": "{{sampleCompany}}",
-                      "description": "Limit titles to a specific company."
-                    },
-                    {
-                      "key": "distinct",
-                      "value": "true",
-                      "description": "Ensure results are distinct."
-                    },
-                    {
-                      "key": "limit",
-                      "value": "25",
-                      "description": "Maximum number of values to return."
-                    },
-                    {
-                      "key": "search",
-                      "value": "President",
-                      "description": "Prefix search against title values."
-                    }
+                    { "key": "company", "value": "Bandura", "description": "Company name from `tables/table_data/companies.csv`." },
+                    { "key": "contact_location", "value": "Fulton Maryland United States", "description": "Contact text-search value from `tables/table_data/contacts.csv`." },
+                    { "key": "text_search", "value": "Fulton Maryland United States", "description": "Alias for `contact_location`." },
+                    { "key": "distinct", "value": "true", "description": "Ensure unique title values." },
+                    { "key": "limit", "value": "25", "description": "Maximum number of titles to return." },
+                    { "key": "offset", "value": "0", "description": "Offset applied before fetching titles." },
+                    { "key": "ordering", "value": "value", "description": "Sort alphabetically by the returned value." },
+                    { "key": "search", "value": "Chief", "description": "Prefix match to narrow titles (e.g., `Chief Technology Officer`)." }
                   ]
                 }
               },
@@ -342,7 +470,7 @@
                 ],
                 "description": "Return company names tied to contacts matching the filter set.",
                 "url": {
-                  "raw": "{{baseUrl}}/contacts/company/?distinct=true&limit=25&search=DCS",
+                  "raw": "{{baseUrl}}/contacts/company/?industries=information%20technology%20%26%20services&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -352,19 +480,12 @@
                     ""
                   ],
                   "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "25"
-                    },
-                    {
-                      "key": "search",
-                      "value": "DCS",
-                      "description": "Partial company name filter drawn from the CSV."
-                    }
+                    { "key": "industries", "value": "information technology & services", "description": "Industry filter derived from `tables/table_data/companies.csv`." },
+                    { "key": "distinct", "value": "true", "description": "Ensure company names are distinct." },
+                    { "key": "limit", "value": "25", "description": "Maximum number of names to return." },
+                    { "key": "offset", "value": "0", "description": "Offset applied before retrieving company names." },
+                    { "key": "ordering", "value": "value", "description": "Sort the response alphabetically." },
+                    { "key": "search", "value": "Bandura", "description": "Prefix search using the `Company.name` column." }
                   ]
                 }
               },
@@ -380,9 +501,9 @@
                     "value": "application/json"
                   }
                 ],
-                "description": "Return industries associated with the filtered companies.",
+                "description": "Return industries associated with the filtered companies. When `separated=true`, results are deduplicated and the `limit` applies after splitting.",
                 "url": {
-                  "raw": "{{baseUrl}}/contacts/industry/?distinct=true&limit=50&search=information%20technology",
+                  "raw": "{{baseUrl}}/contacts/industry/?company=Bandura&distinct=true&limit=50&offset=0&ordering=value&separated=true&search=information%20technology",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -392,19 +513,13 @@
                     ""
                   ],
                   "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "50"
-                    },
-                    {
-                      "key": "search",
-                      "value": "information technology",
-                      "description": "Sample industry phrase taken from the CSV."
-                    }
+                    { "key": "company", "value": "Bandura", "description": "Company filter backed by `companies.csv`." },
+                    { "key": "distinct", "value": "true", "description": "Return deduplicated industry values." },
+                    { "key": "limit", "value": "50", "description": "Maximum industries to return." },
+                    { "key": "offset", "value": "0", "description": "Offset applied before returning industries." },
+                    { "key": "ordering", "value": "value", "description": "Sort alphabetically." },
+                    { "key": "separated", "value": "true", "description": "Split the array column into individual values." },
+                    { "key": "search", "value": "information technology", "description": "Sample industry phrase taken from `companies.csv`." }
                   ]
                 }
               },
@@ -420,9 +535,9 @@
                     "value": "application/json"
                   }
                 ],
-                "description": "Return keyword values for companies, optionally split into unique tokens.",
+                "description": "Return keyword values for companies, optionally split into unique tokens. When `separated=true`, results are deduplicated and capped by the `limit` after splitting.",
                 "url": {
-                  "raw": "{{baseUrl}}/contacts/keywords/?distinct=true&limit=50&separated=true&search=managed",
+                  "raw": "{{baseUrl}}/contacts/keywords/?company=Bandura&distinct=true&limit=50&offset=0&ordering=value&separated=true&search=cyber",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -432,24 +547,13 @@
                     ""
                   ],
                   "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "50"
-                    },
-                    {
-                      "key": "separated",
-                      "value": "true",
-                      "description": "Split keywords into individual values."
-                    },
-                    {
-                      "key": "search",
-                      "value": "managed",
-                      "description": "Keyword fragment drawn from the CSV."
-                    }
+                    { "key": "company", "value": "Bandura", "description": "Company filter sourced from `companies.csv`." },
+                    { "key": "distinct", "value": "true", "description": "Return deduplicated keyword values." },
+                    { "key": "limit", "value": "50", "description": "Maximum number of keyword tokens." },
+                    { "key": "offset", "value": "0", "description": "Offset applied before returning keywords." },
+                    { "key": "ordering", "value": "value", "description": "Sort alphabetically." },
+                    { "key": "separated", "value": "true", "description": "Split array values into individual tokens." },
+                    { "key": "search", "value": "cyber", "description": "Keyword fragment drawn from `companies.csv`." }
                   ]
                 }
               },
@@ -465,9 +569,9 @@
                     "value": "application/json"
                   }
                 ],
-                "description": "Return technologies associated with the filtered companies.",
+                "description": "Return technologies associated with the filtered companies. When `separated=true`, results are deduplicated and capped by the `limit` after splitting.",
                 "url": {
-                  "raw": "{{baseUrl}}/contacts/technologies/?distinct=true&limit=50&separated=true&search=Cloud",
+                  "raw": "{{baseUrl}}/contacts/technologies/?company=Bandura&distinct=true&limit=50&offset=0&ordering=value&separated=true&search=Salesforce",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -477,144 +581,13 @@
                     ""
                   ],
                   "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "50"
-                    },
-                    {
-                      "key": "separated",
-                      "value": "true",
-                      "description": "Return individual technology values."
-                    },
-                    {
-                      "key": "search",
-                      "value": "Cloud",
-                      "description": "Technology fragment sourced from the CSV."
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Person Cities",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return distinct contact city values.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/city/?distinct=true&limit=25&search={{sampleCity}}",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "city",
-                    ""
-                  ],
-                  "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "25"
-                    },
-                    {
-                      "key": "search",
-                      "value": "{{sampleCity}}",
-                      "description": "City filter pulled from the sample CSV."
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Person States",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return distinct contact state values.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/state/?distinct=true&limit=25&search={{sampleState}}",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "state",
-                    ""
-                  ],
-                  "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "25"
-                    },
-                    {
-                      "key": "search",
-                      "value": "{{sampleState}}",
-                      "description": "State filter pulled from the sample CSV."
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Person Countries",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return distinct contact country values.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/country/?distinct=true&limit=25&search={{sampleCountry}}",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "country",
-                    ""
-                  ],
-                  "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "25"
-                    },
-                    {
-                      "key": "search",
-                      "value": "{{sampleCountry}}",
-                      "description": "Country filter pulled from the sample CSV."
-                    }
+                    { "key": "company", "value": "Bandura", "description": "Company filter sourced from `companies.csv`." },
+                    { "key": "distinct", "value": "true", "description": "Return deduplicated technology values." },
+                    { "key": "limit", "value": "50", "description": "Maximum number of technologies." },
+                    { "key": "offset", "value": "0", "description": "Offset applied before returning technologies." },
+                    { "key": "ordering", "value": "value", "description": "Sort alphabetically." },
+                    { "key": "separated", "value": "true", "description": "Split array values into individual tokens." },
+                    { "key": "search", "value": "Salesforce", "description": "Technology fragment drawn from `companies.csv`." }
                   ]
                 }
               },
@@ -630,9 +603,9 @@
                     "value": "application/json"
                   }
                 ],
-                "description": "Return company mailing addresses for the filtered set of contacts.",
+                "description": "Return company address text derived from the Company.text_search column for the filtered set of contacts.",
                 "url": {
-                  "raw": "{{baseUrl}}/contacts/company_address/?company={{sampleCompany}}&distinct=true&limit=10",
+                  "raw": "{{baseUrl}}/contacts/company_address/?company=Bandura&distinct=true&limit=10&offset=0&ordering=value&search=McLean",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -644,16 +617,33 @@
                   "query": [
                     {
                       "key": "company",
-                      "value": "{{sampleCompany}}",
-                      "description": "Filter by company name."
+                      "value": "Bandura",
+                      "description": "Filter by company name sourced from `companies.csv`."
                     },
                     {
                       "key": "distinct",
-                      "value": "true"
+                      "value": "true",
+                      "description": "Return distinct address strings."
                     },
                     {
                       "key": "limit",
-                      "value": "10"
+                      "value": "10",
+                      "description": "Maximum number of address strings."
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0",
+                      "description": "Offset applied before retrieving addresses."
+                    },
+                    {
+                      "key": "ordering",
+                      "value": "value",
+                      "description": "Sort alphabetically."
+                    },
+                    {
+                      "key": "search",
+                      "value": "McLean",
+                      "description": "Address fragment taken from the `Company.text_search` column in `companies.csv`."
                     }
                   ]
                 }
@@ -661,7 +651,7 @@
               "response": []
             },
             {
-              "name": "List Company Cities",
+              "name": "List Contact Addresses",
               "request": {
                 "method": "GET",
                 "header": [
@@ -670,111 +660,24 @@
                     "value": "application/json"
                   }
                 ],
-                "description": "Return company city metadata for matched contacts.",
+                "description": "Return person-level address text sourced from the Contact.text_search column for matched contacts.",
                 "url": {
-                  "raw": "{{baseUrl}}/contacts/company_city/?distinct=true&limit=25&search=Franklin",
+                  "raw": "{{baseUrl}}/contacts/contact_address/?company=Bandura&distinct=true&limit=10&offset=0&ordering=value&search=Fulton",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "contacts",
-                    "company_city",
+                    "contact_address",
                     ""
                   ],
                   "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "25"
-                    },
-                    {
-                      "key": "search",
-                      "value": "Franklin",
-                      "description": "Company city fragment from the CSV."
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Company States",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return company state metadata for matched contacts.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/company_state/?distinct=true&limit=25&search={{sampleState}}",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "company_state",
-                    ""
-                  ],
-                  "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "25"
-                    },
-                    {
-                      "key": "search",
-                      "value": "{{sampleState}}",
-                      "description": "Company state fragment from the CSV."
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Company Countries",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return company country metadata for matched contacts.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/company_country/?distinct=true&limit=25&search={{sampleCountry}}",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "company_country",
-                    ""
-                  ],
-                  "query": [
-                    {
-                      "key": "distinct",
-                      "value": "true"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "25"
-                    },
-                    {
-                      "key": "search",
-                      "value": "{{sampleCountry}}",
-                      "description": "Company country fragment from the CSV."
-                    }
+                    { "key": "company", "value": "Bandura", "description": "Filter for a company present in `companies.csv`." },
+                    { "key": "distinct", "value": "true", "description": "Return deduplicated contact addresses." },
+                    { "key": "limit", "value": "10", "description": "Maximum number of contact addresses." },
+                    { "key": "offset", "value": "0", "description": "Offset applied before retrieving addresses." },
+                    { "key": "ordering", "value": "value", "description": "Sort alphabetically." },
+                    { "key": "search", "value": "Fulton", "description": "Address fragment from the `Contact.text_search` column in `contacts.csv`." }
                   ]
                 }
               },

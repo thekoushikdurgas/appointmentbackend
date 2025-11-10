@@ -36,6 +36,7 @@ uploads/
 tmp/
 data/
 data/data/
+@results/
 
 # Docker
 .docker/

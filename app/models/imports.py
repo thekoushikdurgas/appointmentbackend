@@ -1,6 +1,6 @@
 """SQLAlchemy models and enums describing contact import jobs and errors."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum as PyEnum
 from typing import Optional
 
@@ -8,6 +8,11 @@ from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Intege
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+
+def datetime_utcnow() -> datetime:
+    """Return a timezone-aware UTC timestamp compatible with SQLAlchemy defaults."""
+    return datetime.now(timezone.utc)
 
 
 class ImportJobStatus(str, PyEnum):
@@ -37,9 +42,9 @@ class ContactImportJob(Base):
     )
     error_count: Mapped[int] = mapped_column(Integer, default=0)
     message: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=datetime_utcnow, onupdate=datetime_utcnow
     )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
@@ -62,7 +67,7 @@ class ContactImportError(Base):
     row_number: Mapped[int] = mapped_column(Integer)
     error_message: Mapped[str] = mapped_column(Text)
     payload: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime_utcnow)
 
     job: Mapped[ContactImportJob] = relationship("ContactImportJob", back_populates="errors")
 

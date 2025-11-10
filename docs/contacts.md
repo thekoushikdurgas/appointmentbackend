@@ -743,129 +743,9 @@ Get list of contacts with only id and technologies field.
 
 ---
 
-### GET /api/contacts/city/ - List Cities (Person)
-
-Get list of contacts with only id and person city field.
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct city values
-- `limit` (integer): Number of results per page (max 100, default: 25)
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "city": "San Francisco"
-    },
-    {
-      "id": 2,
-      "city": "New York"
-    }
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
-### GET /api/contacts/state/ - List States (Person)
-
-Get list of contacts with only id and person state field.
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct state values
-- `limit` (integer): Number of results per page (max 100, default: 25)
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "state": "CA"
-    },
-    {
-      "id": 2,
-      "state": "NY"
-    }
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
-### GET /api/contacts/country/ - List Countries (Person)
-
-Get list of contacts with only id and person country field.
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct country values
-- `limit` (integer): Number of results per page (max 100, default: 25)
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "country": "United States"
-    },
-    {
-      "id": 2,
-      "country": "Canada"
-    }
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
 ### GET /api/contacts/company_address/ - List Company Addresses
 
-Get list of contacts with only id and company_address field.
+Return address text for related companies, sourced from the `Company.text_search` column.
 
 **Headers:**
 
@@ -887,11 +767,11 @@ Get list of contacts with only id and company_address field.
   "results": [
     {
       "id": 1,
-      "company_address": "123 Main St"
+      "company_address": "123 Main St, Austin, TX"
     },
     {
       "id": 2,
-      "company_address": "456 Oak Ave"
+      "company_address": "456 Oak Ave, Denver, CO"
     }
   ]
 }
@@ -903,9 +783,9 @@ Get list of contacts with only id and company_address field.
 
 ---
 
-### GET /api/contacts/company_city/ - List Company Cities
+### GET /api/contacts/contact_address/ - List Contact Addresses
 
-Get list of contacts with only id and company_city field.
+Return person-level address text sourced from the `Contact.text_search` column.
 
 **Headers:**
 
@@ -914,7 +794,7 @@ Get list of contacts with only id and company_city field.
 **Query Parameters:**
 
 - `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct company city values
+- `distinct` (boolean): If `true`, returns only distinct contact address values
 - `limit` (integer): Number of results per page (max 100, default: 25)
 - `offset` (integer): Offset for pagination
 
@@ -927,91 +807,11 @@ Get list of contacts with only id and company_city field.
   "results": [
     {
       "id": 1,
-      "company_city": "San Francisco"
+      "contact_address": "789 Market St, San Francisco, CA"
     },
     {
       "id": 2,
-      "company_city": "New York"
-    }
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
-### GET /api/contacts/company_state/ - List Company States
-
-Get list of contacts with only id and company_state field.
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct company state values
-- `limit` (integer): Number of results per page (max 100, default: 25)
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "company_state": "CA"
-    },
-    {
-      "id": 2,
-      "company_state": "NY"
-    }
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
-### GET /api/contacts/company_country/ - List Company Countries
-
-Get list of contacts with only id and company_country field.
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct company country values
-- `limit` (integer): Number of results per page (max 100, default: 25)
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "company_country": "United States"
-    },
-    {
-      "id": 2,
-      "company_country": "Canada"
+      "contact_address": "456 Sample Ave, Denver, CO"
     }
   ]
 }

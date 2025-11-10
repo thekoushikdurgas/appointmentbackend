@@ -91,10 +91,10 @@ def apply_ordering(
             direction = desc
             token = token[1:]
         column = mapping.get(token)
-        if column is not None:
-            order_by_columns.append(direction(column))
-        else:
-            logger.debug("Unknown ordering token skipped token=%s", token)
+        if column is None:
+            logger.debug("Unknown ordering token encountered token=%s", token)
+            raise ValueError(f"Unknown ordering field: {token}")
+        order_by_columns.append(direction(column))
     if order_by_columns:
         stmt = stmt.order_by(*order_by_columns)
     logger.debug(

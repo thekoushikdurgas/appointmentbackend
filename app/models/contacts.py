@@ -27,7 +27,7 @@ class Contact(Base):
     __tablename__ = "contacts"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    uuid: Mapped[str] = mapped_column(Text, unique=True, index=True)
+    uuid: Mapped[str] = mapped_column(Text, unique=True, index=True, nullable=False)
     first_name: Mapped[Optional[str]] = mapped_column(Text, index=True)
     last_name: Mapped[Optional[str]] = mapped_column(Text, index=True)
     company_id: Mapped[Optional[str]] = mapped_column(
@@ -39,8 +39,8 @@ class Contact(Base):
     mobile_phone: Mapped[Optional[str]] = mapped_column(Text, index=True)
     email_status: Mapped[Optional[str]] = mapped_column(Text, index=True)
     text_search: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False))
     seniority: Mapped[Optional[str]] = mapped_column(Text, default="_", index=True)
 
     company: Mapped[Optional["Company"]] = relationship(
@@ -104,7 +104,7 @@ class ContactMetadata(Base):
     __tablename__ = "contacts_metadata"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    uuid: Mapped[str] = mapped_column(Text, unique=True, index=True)
+    uuid: Mapped[str] = mapped_column(Text, unique=True, index=True, nullable=False)
     linkedin_url: Mapped[Optional[str]] = mapped_column(Text, default="_")
     facebook_url: Mapped[Optional[str]] = mapped_column(Text, default="_")
     twitter_url: Mapped[Optional[str]] = mapped_column(Text, default="_")

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Callable, Iterable, List, Optional
+from datetime import UTC, datetime
+from typing import Any, Callable, Iterable, List, Optional
 from uuid import uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import ColumnElement, func
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -21,6 +21,58 @@ from app.schemas.filters import AttributeListParams, ContactFilterParams
 from app.schemas.metadata import ContactMetadataOut
 from app.utils.cursor import encode_offset_cursor
 from app.utils.pagination import build_cursor_link, build_pagination_link
+
+
+PLACEHOLDER_VALUE = "_"
+
+
+def _normalize_text(value: Any, *, allow_placeholder: bool = False) -> Optional[str]:
+    """Coerce raw string-like values to cleaned text or None."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if not allow_placeholder and text == PLACEHOLDER_VALUE:
+        return None
+
+    # Remove wrapping quotes that leak from CSV exports (e.g., "'+123", '"value"').
+    while len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+        text = text[1:-1].strip()
+        if not text:
+            return None
+        if not allow_placeholder and text == PLACEHOLDER_VALUE:
+            return None
+
+    if text.startswith("'+") and len(text) > 2:
+        text = text[1:].strip()
+
+    if not text:
+        return None
+    if not allow_placeholder and text == PLACEHOLDER_VALUE:
+        return None
+    return text
+
+
+def _normalize_sequence(values: Optional[Iterable[Any]], *, allow_placeholder: bool = False) -> list[str]:
+    """Clean an iterable of values, returning only meaningful text tokens."""
+    if not values:
+        return []
+    cleaned: list[str] = []
+    for value in values:
+        normalized = _normalize_text(value, allow_placeholder=allow_placeholder)
+        if normalized:
+            cleaned.append(normalized)
+    return cleaned
+
+
+def _coalesce_text(*values: Any, allow_placeholder: bool = False) -> Optional[str]:
+    """Return the first non-empty normalized text value from the provided options."""
+    for value in values:
+        normalized = _normalize_text(value, allow_placeholder=allow_placeholder)
+        if normalized is not None:
+            return normalized
+    return None
 
 
 class ContactsService:
@@ -40,11 +92,28 @@ class ContactsService:
     ) -> ContactDetail:
         """Create a new contact and return the hydrated detail schema."""
         data = payload.model_dump()
-        data["uuid"] = data.get("uuid") or uuid4().hex
-        seniority = data.get("seniority")
-        if not seniority:
-            data["seniority"] = "_"
-        now = datetime.now(timezone.utc)
+        normalized_uuid = _normalize_text(data.get("uuid"), allow_placeholder=False)
+        data["uuid"] = normalized_uuid or uuid4().hex
+
+        for field in (
+            "first_name",
+            "last_name",
+            "email",
+            "title",
+            "mobile_phone",
+            "email_status",
+            "text_search",
+            "company_id",
+        ):
+            data[field] = _normalize_text(data.get(field))
+
+        departments = _normalize_sequence(data.get("departments"))
+        data["departments"] = departments or None
+
+        seniority = _normalize_text(data.get("seniority"), allow_placeholder=False)
+        data["seniority"] = seniority or PLACEHOLDER_VALUE
+
+        now = datetime.now(UTC).replace(tzinfo=None)
         data["created_at"] = now
         data["updated_at"] = now
 
@@ -75,7 +144,11 @@ class ContactsService:
             use_cursor,
             active_filter_keys,
         )
-        rows = await self.repository.list_contacts(session, filters, limit, offset)
+        try:
+            rows = await self.repository.list_contacts(session, filters, limit, offset)
+        except ValueError as exc:
+            self.logger.warning("List contacts request rejected: %s", exc)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         self.logger.debug("Repository returned %d rows for contact list", len(rows))
 
         results = [
@@ -157,6 +230,8 @@ class ContactsService:
         filters: ContactFilterParams,
         params: AttributeListParams,
         column_factory: Callable[[Contact, Company, ContactMetadata, CompanyMetadata], Iterable],
+        *,
+        array_mode: bool = False,
     ) -> List[str]:
         """Return a list of attribute values for contacts."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
@@ -167,8 +242,17 @@ class ContactsService:
             params.distinct,
             active_filter_keys,
         )
-        column: ColumnElement = column_factory(Contact, Company, ContactMetadata, CompanyMetadata)
-        values = await self.repository.list_attribute_values(session, column, filters, params)
+        try:
+            values = await self.repository.list_attribute_values(
+                session,
+                filters,
+                params,
+                array_mode=array_mode,
+                column_factory=column_factory,
+            )
+        except ValueError as exc:
+            self.logger.warning("Service attribute list rejected: %s", exc)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         self.logger.debug("Service received %d attribute values", len(values))
         self.logger.debug("Exiting ContactsService.list_attribute_values")
         return values
@@ -185,11 +269,12 @@ class ContactsService:
             "Entering ContactsService._hydrate_contact contact_id=%s",
             getattr(contact, "id", None),
         )
-        company_keywords = (company.keywords or []) if company else []
-        company_technologies = (company.technologies or []) if company else []
-        industries = (company.industries or []) if company else []
+        company_keywords = _normalize_sequence(company.keywords if company else None)
+        company_technologies = _normalize_sequence(company.technologies if company else None)
+        industries = _normalize_sequence(company.industries if company else None)
+        contact_departments = _normalize_sequence(contact.departments)
 
-        departments = ", ".join(contact.departments or []) if contact.departments else None
+        departments = ", ".join(contact_departments) if contact_departments else None
         keywords = ", ".join(company_keywords) if company_keywords else None
         technologies = ", ".join(company_technologies) if company_technologies else None
         industry = ", ".join(industries) if industries else None
@@ -200,44 +285,52 @@ class ContactsService:
 
         item = ContactListItem(
             id=contact.id,
-            first_name=contact.first_name,
-            last_name=contact.last_name,
-            title=contact.title,
-            company=company.name if company else None,
-            company_name_for_emails=company_meta.company_name_for_emails if company_meta else None,
-            email=contact.email,
-            email_status=contact.email_status,
+            first_name=_normalize_text(contact.first_name),
+            last_name=_normalize_text(contact.last_name),
+            title=_normalize_text(contact.title),
+            company=_normalize_text(company.name if company else None),
+            company_name_for_emails=_normalize_text(
+                company_meta.company_name_for_emails if company_meta else None
+            ),
+            email=_normalize_text(contact.email),
+            email_status=_normalize_text(contact.email_status),
             primary_email_catch_all_status=None,
-            seniority=contact.seniority,
+            seniority=_normalize_text(contact.seniority, allow_placeholder=True),
             departments=departments,
-            work_direct_phone=contact_meta.work_direct_phone if contact_meta else None,
-            home_phone=contact_meta.home_phone if contact_meta else None,
-            mobile_phone=contact.mobile_phone,
-            corporate_phone=company_meta.phone_number if company_meta else None,
-            other_phone=contact_meta.other_phone if contact_meta else None,
-            stage=contact_meta.stage if contact_meta else None,
+            work_direct_phone=_normalize_text(contact_meta.work_direct_phone if contact_meta else None),
+            home_phone=_normalize_text(contact_meta.home_phone if contact_meta else None),
+            mobile_phone=_normalize_text(contact.mobile_phone),
+            corporate_phone=_normalize_text(company_meta.phone_number if company_meta else None),
+            other_phone=_normalize_text(contact_meta.other_phone if contact_meta else None),
+            stage=_normalize_text(contact_meta.stage if contact_meta else None),
             employees=company.employees_count if company else None,
             industry=industry,
             keywords=keywords,
-            person_linkedin_url=contact_meta.linkedin_url if contact_meta else None,
-            website=contact_meta.website if contact_meta else None,
-            company_linkedin_url=company_meta.linkedin_url if company_meta else None,
-            facebook_url=company_meta.facebook_url if company_meta else contact_meta.facebook_url if contact_meta else None,
-            twitter_url=company_meta.twitter_url if company_meta else contact_meta.twitter_url if contact_meta else None,
-            city=contact_meta.city if contact_meta else None,
-            state=contact_meta.state if contact_meta else None,
-            country=contact_meta.country if contact_meta else None,
-            company_address=company.address if company else None,
-            company_city=company_meta.city if company_meta else None,
-            company_state=company_meta.state if company_meta else None,
-            company_country=company_meta.country if company_meta else None,
-            company_phone=company_meta.phone_number if company_meta else None,
+            person_linkedin_url=_normalize_text(contact_meta.linkedin_url if contact_meta else None),
+            website=_normalize_text(contact_meta.website if contact_meta else None),
+            company_linkedin_url=_normalize_text(company_meta.linkedin_url if company_meta else None),
+            facebook_url=_coalesce_text(
+                company_meta.facebook_url if company_meta else None,
+                contact_meta.facebook_url if contact_meta else None,
+            ),
+            twitter_url=_coalesce_text(
+                company_meta.twitter_url if company_meta else None,
+                contact_meta.twitter_url if contact_meta else None,
+            ),
+            city=_normalize_text(contact_meta.city if contact_meta else None),
+            state=_normalize_text(contact_meta.state if contact_meta else None),
+            country=_normalize_text(contact_meta.country if contact_meta else None),
+            company_address=_normalize_text(company.address if company else None),
+            company_city=_normalize_text(company_meta.city if company_meta else None),
+            company_state=_normalize_text(company_meta.state if company_meta else None),
+            company_country=_normalize_text(company_meta.country if company_meta else None),
+            company_phone=_normalize_text(company_meta.phone_number if company_meta else None),
             technologies=technologies,
             annual_revenue=company.annual_revenue if company else None,
             total_funding=company.total_funding if company else None,
-            latest_funding=company_meta.latest_funding if company_meta else None,
+            latest_funding=_normalize_text(company_meta.latest_funding if company_meta else None),
             latest_funding_amount=company_meta.latest_funding_amount if company_meta else None,
-            last_raised_at=company_meta.last_raised_at if company_meta else None,
+            last_raised_at=_normalize_text(company_meta.last_raised_at if company_meta else None),
             meta_data=metadata_dict or None,
             created_at=contact.created_at,
             updated_at=contact.updated_at,
@@ -261,20 +354,22 @@ class ContactsService:
         if not company:
             self.logger.debug("Exiting ContactsService._company_summary (no company)")
             return None
+        industries = _normalize_sequence(company.industries)
+        technologies = _normalize_sequence(company.technologies)
         summary = CompanySummary(
             uuid=company.uuid,
-            name=company.name,
+            name=_normalize_text(company.name) or company.name,
             employees_count=company.employees_count,
             annual_revenue=company.annual_revenue,
             total_funding=company.total_funding,
-            industry=", ".join(company.industries or []) if company.industries else None,
-            city=company_meta.city if company_meta else None,
-            state=company_meta.state if company_meta else None,
-            country=company_meta.country if company_meta else None,
-            website=company_meta.website if company_meta else None,
-            linkedin_url=company_meta.linkedin_url if company_meta else None,
-            phone_number=company_meta.phone_number if company_meta else None,
-            technologies=company.technologies or None,
+            industry=", ".join(industries) if industries else None,
+            city=_normalize_text(company_meta.city if company_meta else None),
+            state=_normalize_text(company_meta.state if company_meta else None),
+            country=_normalize_text(company_meta.country if company_meta else None),
+            website=_normalize_text(company_meta.website if company_meta else None),
+            linkedin_url=_normalize_text(company_meta.linkedin_url if company_meta else None),
+            phone_number=_normalize_text(company_meta.phone_number if company_meta else None),
+            technologies=technologies or None,
         )
         self.logger.debug(
             "Exiting ContactsService._company_summary company_uuid=%s",
@@ -296,17 +391,17 @@ class ContactsService:
             return None
         metadata = ContactMetadataOut(
             uuid=contact_meta.uuid,
-            linkedin_url=contact_meta.linkedin_url,
-            facebook_url=contact_meta.facebook_url,
-            twitter_url=contact_meta.twitter_url,
-            website=contact_meta.website,
-            work_direct_phone=contact_meta.work_direct_phone,
-            home_phone=contact_meta.home_phone,
-            city=contact_meta.city,
-            state=contact_meta.state,
-            country=contact_meta.country,
-            other_phone=contact_meta.other_phone,
-            stage=contact_meta.stage,
+            linkedin_url=_normalize_text(contact_meta.linkedin_url),
+            facebook_url=_normalize_text(contact_meta.facebook_url),
+            twitter_url=_normalize_text(contact_meta.twitter_url),
+            website=_normalize_text(contact_meta.website),
+            work_direct_phone=_normalize_text(contact_meta.work_direct_phone),
+            home_phone=_normalize_text(contact_meta.home_phone),
+            city=_normalize_text(contact_meta.city),
+            state=_normalize_text(contact_meta.state),
+            country=_normalize_text(contact_meta.country),
+            other_phone=_normalize_text(contact_meta.other_phone),
+            stage=_normalize_text(contact_meta.stage),
         )
         self.logger.debug(
             "Exiting ContactsService._contact_metadata contact_uuid=%s",

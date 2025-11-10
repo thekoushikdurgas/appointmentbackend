@@ -19,7 +19,7 @@ class Company(Base):
     __tablename__ = "companies"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    uuid: Mapped[str] = mapped_column(Text, unique=True, index=True)
+    uuid: Mapped[str] = mapped_column(Text, unique=True, index=True, nullable=False)
     name: Mapped[Optional[str]] = mapped_column(Text, index=True)
     employees_count: Mapped[Optional[int]] = mapped_column(BigInteger)
     industries: Mapped[Optional[list[str]]] = mapped_column(StringList())
@@ -29,8 +29,8 @@ class Company(Base):
     total_funding: Mapped[Optional[int]] = mapped_column(BigInteger)
     technologies: Mapped[Optional[list[str]]] = mapped_column(StringList())
     text_search: Mapped[Optional[str]] = mapped_column(Text, index=True)
-    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False))
 
     metadata_: Mapped["CompanyMetadata"] = relationship(
         "CompanyMetadata",
@@ -95,6 +95,7 @@ class CompanyMetadata(Base):
         Text,
         unique=True,
         index=True,
+        nullable=False,
         doc="Matches Company.uuid",
     )
     linkedin_url: Mapped[Optional[str]] = mapped_column(Text)

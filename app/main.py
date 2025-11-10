@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -94,4 +94,16 @@ async def health_check():
 
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+
+@app.get("/favicon.ico", status_code=204, include_in_schema=False)
+async def favicon() -> Response:
+    """Return an empty favicon response to silence browser requests."""
+    return Response(status_code=204)
+
+
+@app.get("/admin/", include_in_schema=False)
+async def admin_placeholder() -> JSONResponse:
+    """Present a placeholder admin endpoint to satisfy integration probes."""
+    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": "Forbidden"})
 

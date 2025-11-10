@@ -2647,3 +2647,7 @@ graph TB
     style DD fill:#fff3e0
     style LL fill:#fce4ec
     style VV fill:#e0f2f1
+
+
+
+    name, employees_count, industries, keywords, address, annual_revenue, total_funding, technologies, text_search
