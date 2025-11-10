@@ -1,0 +1,25 @@
+[Unit]
+Description=Appointment360 FastAPI service
+After=network.target
+Wants=network-online.target
+
+[Service]
+User=app
+Group=www-data
+WorkingDirectory=/opt/appointment360
+Environment="PATH=/opt/appointment360/.venv/bin"
+EnvironmentFile=/opt/appointment360/.env
+ExecStart=/opt/appointment360/.venv/bin/gunicorn --config /opt/appointment360/gunicorn_conf.py app.main:app
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGQUIT
+SyslogIdentifier=appointment360-api
+RuntimeDirectory=appointment360
+RuntimeDirectoryMode=0755
+Environment="GUNICORN_BIND=unix:/run/appointment360.sock"
+Environment="FORWARDED_ALLOW_IPS=127.0.0.1"
+
+[Install]
+WantedBy=multi-user.target
+

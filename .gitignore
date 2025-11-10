@@ -9,13 +9,10 @@ build/
 dist/
 
 # Environment files
-.env
-.env.local
 .venv/
 venv/
 
 # Editor/IDE
-.vscode/
 .idea/
 *.swp
 
@@ -49,3 +46,5 @@ pytest.xml
 
 
 
+config.bat
+node_modules
