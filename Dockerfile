@@ -19,8 +19,12 @@ COPY README.md ./README.md
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
+COPY gunicorn_conf.py ./gunicorn_conf.py
+COPY scripts ./scripts
+
+RUN chmod +x ./scripts/run_gunicorn.sh ./scripts/run_app.sh ./scripts/run_worker.sh
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["gunicorn", "--config", "gunicorn_conf.py", "app.main:app"]
 

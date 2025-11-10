@@ -4,7 +4,7 @@ from functools import lru_cache
 from typing import List, Optional
 from urllib.parse import quote_plus
 
-from pydantic import AnyHttpUrl, Field, ValidationInfo, field_validator
+from pydantic import AnyHttpUrl, Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.logging import get_logger, log_function_call
@@ -63,6 +63,19 @@ class Settings(BaseSettings):
         return default
 
 
+    @field_validator("ENVIRONMENT", mode="before")
+    @classmethod
+    def normalize_environment(cls, value):
+        """Normalize deployment environment names and enforce allowed values."""
+        logger.debug("Entering Settings.normalize_environment value=%r", value)
+        normalized = str(value).strip().lower() if value is not None else cls.model_fields["ENVIRONMENT"].default
+        allowed = {"development", "staging", "production"}
+        if normalized not in allowed:
+            raise ValueError(f"ENVIRONMENT must be one of {sorted(allowed)}")
+        logger.debug("Exiting Settings.normalize_environment result=%s", normalized)
+        return normalized
+
+
     # Security
     SECRET_KEY: str = "change-me-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -70,11 +83,11 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     CONTACTS_WRITE_KEY: str = "change-this-write-key"
 
-    # CORS
-    ALLOWED_ORIGINS: List[AnyHttpUrl] = [
-        AnyHttpUrl("http://localhost:3000"),
-        AnyHttpUrl("http://localhost:8000"),
-    ]
+    # CORS / Hosts
+    ALLOWED_ORIGINS: List[AnyHttpUrl] = Field(
+        default_factory=lambda: ["http://localhost:3000", "http://localhost:8000"]
+    )
+    TRUSTED_HOSTS: List[str] = Field(default_factory=lambda: ["*"])
 
     # Celery / Redis
     REDIS_HOST: str = "localhost"
@@ -188,6 +201,89 @@ class Settings(BaseSettings):
             "Exiting Settings.default_celery_urls assembled redis_url=%s", assembled
         )
         return assembled
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, value):
+        """Permit comma or newline separated entries for CORS origins."""
+        logger.debug("Entering Settings.parse_allowed_origins value=%r", value)
+        if value is None:
+            return value
+        if isinstance(value, str):
+            parsed = [
+                origin.strip()
+                for origin in value.replace("\n", ",").split(",")
+                if origin.strip()
+            ]
+            logger.debug(
+                "Exiting Settings.parse_allowed_origins parsed=%s",
+                parsed,
+            )
+            return parsed
+        logger.debug("Exiting Settings.parse_allowed_origins unchanged")
+        return value
+
+    @field_validator("TRUSTED_HOSTS", mode="before")
+    @classmethod
+    def parse_trusted_hosts(cls, value):
+        """Permit comma or newline separated entries for trusted hosts."""
+        logger.debug("Entering Settings.parse_trusted_hosts value=%r", value)
+        if value is None:
+            return value
+        if isinstance(value, str):
+            hosts = [
+                host.strip()
+                for host in value.replace("\n", ",").split(",")
+                if host.strip()
+            ]
+            logger.debug(
+                "Exiting Settings.parse_trusted_hosts parsed=%s",
+                hosts,
+            )
+            return hosts
+        logger.debug("Exiting Settings.parse_trusted_hosts unchanged")
+        return value
+
+    @field_validator("DOCS_URL", "REDOC_URL", mode="before")
+    @classmethod
+    def normalize_docs_urls(cls, value):
+        """Allow empty strings or explicit 'null' values to disable documentation UIs."""
+        logger.debug("Entering Settings.normalize_docs_urls value=%r", value)
+        if value is None:
+            return None
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed or trimmed.lower() == "null":
+                logger.debug("Exiting Settings.normalize_docs_urls result=None")
+                return None
+        logger.debug("Exiting Settings.normalize_docs_urls unchanged")
+        return value
+
+    @model_validator(mode="after")
+    def validate_production_configuration(self):
+        """Enforce secure defaults when running in production."""
+        logger.debug(
+            "Entering Settings.validate_production_configuration environment=%s",
+            self.ENVIRONMENT,
+        )
+        if self.ENVIRONMENT == "production":
+            errors: List[str] = []
+            if self.SECRET_KEY == "change-me-in-production":
+                errors.append("SECRET_KEY must be set to a secure value in production.")
+            if self.CONTACTS_WRITE_KEY == "change-this-write-key":
+                errors.append("CONTACTS_WRITE_KEY must be set in production.")
+            if not self.ALLOWED_ORIGINS:
+                errors.append("ALLOWED_ORIGINS cannot be empty in production.")
+            if not self.TRUSTED_HOSTS or self.TRUSTED_HOSTS == ["*"]:
+                errors.append("TRUSTED_HOSTS must be configured for production.")
+            if errors:
+                logger.error(
+                    "Production configuration validation failed errors=%s",
+                    errors,
+                )
+                raise ValueError(" ".join(errors))
+        logger.debug("Exiting Settings.validate_production_configuration")
+        return self
 
 
 @log_function_call(logger=logger, log_result=True)

@@ -3,7 +3,7 @@ version: "3.9"
 services:
   api:
     build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: ./scripts/run_app.sh
     ports:
       - "8000:8000"
     environment:
@@ -26,7 +26,7 @@ services:
 
   worker:
     build: .
-    command: celery -A app.tasks.celery_app worker --loglevel=info
+    command: ./scripts/run_worker.sh
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASS=${POSTGRES_PASS:-postgres}
