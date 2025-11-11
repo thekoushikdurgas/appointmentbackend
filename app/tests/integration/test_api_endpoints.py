@@ -166,6 +166,7 @@ FIELD_ENDPOINTS = [
     "state",
     "country",
     "company_address",
+    "contact_address",
     "company_city",
     "company_state",
     "company_country",

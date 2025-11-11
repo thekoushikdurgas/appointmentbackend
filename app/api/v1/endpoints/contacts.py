@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Iterable, List, Optional
+from typing import Any, Callable, Iterable, List, Optional, Union
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import ValidationError
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_admin, get_current_user
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.common import CountResponse, CursorPage
-from app.schemas.contacts import ContactCreate, ContactDetail, ContactListItem
+from app.schemas.contacts import ContactCreate, ContactDetail, ContactListItem, ContactSimpleItem
 from app.schemas.filters import AttributeListParams, ContactFilterParams
 from app.services.contacts_service import ContactsService
 from app.utils.cursor import decode_offset_cursor
@@ -94,15 +96,17 @@ def _resolve_pagination(
     return resolved
 
 
-@router.get("/", response_model=CursorPage[ContactListItem])
+@router.get("/", response_model=CursorPage[Union[ContactListItem, ContactSimpleItem]])
 async def list_contacts(
     request: Request,
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     limit: Optional[int] = Query(None, ge=1),
     offset: Optional[int] = Query(0, ge=0),
     cursor: Optional[str] = Query(None),
+    view: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_db),
-) -> CursorPage[ContactListItem]:
+    current_user: User = Depends(get_current_user),
+) -> CursorPage[Union[ContactListItem, ContactSimpleItem]]:
     """Return a paginated list of contacts."""
     raw_path = request.scope.get("raw_path")
     if isinstance(raw_path, (bytes, bytearray)):
@@ -137,14 +141,24 @@ async def list_contacts(
         active_filter_keys,
     )
 
-    page = await service.list_contacts(
-        session,
-        filters,
-        limit=page_limit,
-        offset=resolved_offset,
-        request_url=str(request.url),
-        use_cursor=use_cursor,
-    )
+    if (view or "").strip().lower() == "simple":
+        page = await service.list_contacts_simple(
+            session,
+            filters,
+            limit=page_limit,
+            offset=resolved_offset,
+            request_url=str(request.url),
+            use_cursor=use_cursor,
+        )
+    else:
+        page = await service.list_contacts(
+            session,
+            filters,
+            limit=page_limit,
+            offset=resolved_offset,
+            request_url=str(request.url),
+            use_cursor=use_cursor,
+        )
 
     logger.info(
         "Listed contacts: returned=%d has_next=%s has_previous=%s",
@@ -220,6 +234,7 @@ def _has_alphanumeric(value: Any) -> bool:
 async def count_contacts(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> CountResponse:
     """Return the total number of contacts that match the provided filters."""
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
@@ -232,6 +247,7 @@ async def count_contacts(
 @router.post("/", response_model=ContactDetail, status_code=status.HTTP_201_CREATED)
 async def create_contact(
     payload: ContactCreate,
+    current_user: User = Depends(get_current_admin),
     _: None = Depends(require_contacts_write_key),
     session: AsyncSession = Depends(get_db),
 ) -> ContactDetail:
@@ -329,6 +345,7 @@ async def list_titles(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return contact titles filtered by the supplied parameters."""
     return await _attribute_endpoint(
@@ -345,6 +362,7 @@ async def list_companies(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return company names for contacts matching the filters."""
     return await _attribute_endpoint(
@@ -362,6 +380,7 @@ async def list_industries(
     params: AttributeListParams = Depends(resolve_attribute_params),
     separated: bool = Query(False),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return industry values sourced from related companies."""
     column_factory = (
@@ -400,6 +419,7 @@ async def list_keywords(
     params: AttributeListParams = Depends(resolve_attribute_params),
     separated: bool = Query(False),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return keyword values for companies, optionally split into unique tokens."""
     column_factory = (
@@ -438,6 +458,7 @@ async def list_technologies(
     params: AttributeListParams = Depends(resolve_attribute_params),
     separated: bool = Query(False),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return technology values for associated companies."""
     column_factory = (
@@ -475,6 +496,7 @@ async def list_company_addresses(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return company address text sourced from the text search column."""
     return await _attribute_endpoint(
@@ -491,6 +513,7 @@ async def list_contact_addresses(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return contact address text sourced from the text search column."""
     return await _attribute_endpoint(
@@ -507,6 +530,7 @@ async def list_contact_cities(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return distinct contact city values."""
     return await _attribute_endpoint(
@@ -523,6 +547,7 @@ async def list_contact_states(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return distinct contact state values."""
     return await _attribute_endpoint(
@@ -539,6 +564,7 @@ async def list_contact_countries(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return distinct contact country values."""
     return await _attribute_endpoint(
@@ -555,6 +581,7 @@ async def list_company_cities(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return distinct company city values."""
     return await _attribute_endpoint(
@@ -571,6 +598,7 @@ async def list_company_states(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return distinct company state values."""
     return await _attribute_endpoint(
@@ -587,6 +615,7 @@ async def list_company_countries(
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[str]:
     """Return distinct company country values."""
     return await _attribute_endpoint(
@@ -602,6 +631,7 @@ async def list_company_countries(
 async def retrieve_contact_with_trailing_slash(
     contact_id: int,
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ContactDetail:
     """Retrieve a single contact by primary key."""
     logger.info("Retrieving contact detail: contact_id=%d", contact_id)
@@ -614,7 +644,11 @@ async def retrieve_contact_with_trailing_slash(
 async def retrieve_contact_without_trailing_slash(
     contact_id: int,
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ContactDetail:
     """Retrieve a single contact by primary key."""
-    return await retrieve_contact_with_trailing_slash(contact_id, session)
+    logger.info("Retrieving contact detail: contact_id=%d", contact_id)
+    contact = await service.get_contact(session, contact_id)
+    logger.info("Retrieved contact detail: contact_id=%d", contact_id)
+    return contact
 

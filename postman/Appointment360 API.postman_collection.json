@@ -1,880 +1,2465 @@
 {
-  "info": {
-    "name": "Appointment360 API",
-    "_postman_id": "b6d2fae3-1a69-4c74-9cb4-1f4020d61a3b",
-    "description": "Local-first Postman collection for the Appointment360 FastAPI backend. Sample query parameters and body data are sourced from data/data/apollo_sample_5000_cleaned.csv.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "item": [
-    {
-      "name": "System",
-      "description": "Operational endpoints exposed alongside the v1 API router.",
-      "item": [
-        {
-          "name": "Root Metadata",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "description": "Return API metadata such as project name, version, and documentation URL.",
-            "url": {
-              "raw": "{{baseUrl}}/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": []
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Health Check",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "description": "Lightweight probe endpoint used by infrastructure monitors.",
-            "url": {
-              "raw": "{{baseHost}}/health",
-              "host": [
-                "{{baseHost}}"
-              ],
-              "path": [
-                "health"
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Contacts",
-      "description": "Contact list, detail, and attribute lookup endpoints.",
-      "item": [
-        {
-          "name": "List Contacts",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "description": "Retrieve a paginated set of contacts using sample filters sourced from `tables/table_data/contacts.csv`, `tables/table_data/companies.csv`, and `tables/table_data/companies_metadata.csv`.",
-            "url": {
-              "raw": "{{baseUrl}}/contacts/?limit=25&offset=0&page_size=25&cursor=bz0w&company=Bandura,Omada%20Technologies&name=Bandura,Omada%20Technologies&company_location=McLean%20Virginia%20United%20States,Portsmouth%20New%20Hampshire%20United%20States&company_text_search=McLean%20Virginia%20United%20States,Portsmouth%20New%20Hampshire%20United%20States&contact_location=Fulton%20Maryland%20United%20States&text_search=Fulton%20Maryland%20United%20States&email_status=Verified&title=Chief%20Technology%20Officer&seniority=C%20suite&departments=C-Suite,Engineering%20%26%20Technical&department=C-Suite,Engineering%20%26%20Technical&employees_count=27&employees=27&employees_min=20&employees_max=35&annual_revenue=7708000&annual_revenue_min=7000000&annual_revenue_max=9000000&total_funding=35875000&total_funding_min=20000000&total_funding_max=40000000&latest_funding_amount_min=3500000&latest_funding_amount_max=40000000&technologies=Salesforce,Sendgrid&keywords=cyber%20security&industries=information%20technology%20%26%20services&search=cyber&ordering=last_name&distinct=true",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                ""
-              ],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "25",
-                  "description": "Number of contacts per page."
-                },
-                {
-                  "key": "offset",
-                  "value": "0",
-                  "description": "Offset into the result set."
-                },
-                {
-                  "key": "page_size",
-                  "value": "25",
-                  "description": "Override the configured default page size (constrained by `settings.MAX_PAGE_SIZE`)."
-                },
-                {
-                  "key": "cursor",
-                  "value": "bz0w",
-                  "description": "Opaque cursor token (`bz0w` is the base64 encoding of `o=0`)."
-                },
-                {
-                  "key": "company",
-                  "value": "Bandura,Omada Technologies",
-                  "description": "Company names drawn from `tables/table_data/companies.csv`."
-                },
-                {
-                  "key": "name",
-                  "value": "Bandura,Omada Technologies",
-                  "description": "Alias for `company`; included to demonstrate both query spellings."
-                },
-                {
-                  "key": "exclude_company_ids",
-                  "value": "{{sampleCompanyUuid}}",
-                  "description": "Exclude contacts belonging to specific company UUIDs."
-                },
-                {
-                  "key": "company_location",
-                  "value": "McLean Virginia United States,Portsmouth New Hampshire United States",
-                  "description": "Company text-search column (`Company.text_search`) values from `companies.csv`."
-                },
-                {
-                  "key": "exclude_company_locations",
-                  "value": "McLean Virginia United States,Portsmouth New Hampshire United States",
-                  "description": "Exclude contacts whose company location text matches any provided value."
-                },
-                {
-                  "key": "company_text_search",
-                  "value": "McLean Virginia United States,Portsmouth New Hampshire United States",
-                  "description": "Alias for `company_location`."
-                },
-                {
-                  "key": "contact_location",
-                  "value": "Fulton Maryland United States",
-                  "description": "Person text-search column (`Contact.text_search`) drawn from `contacts.csv`."
-                },
-                {
-                  "key": "exclude_contact_locations",
-                  "value": "Fulton Maryland United States",
-                  "description": "Exclude contacts whose contact location text matches any provided value."
-                },
-                {
-                  "key": "text_search",
-                  "value": "Fulton Maryland United States",
-                  "description": "Alias for `contact_location`."
-                },
-                {
-                  "key": "email_status",
-                  "value": "Verified",
-                  "description": "Deliverability status from `contacts.csv`."
-                },
-                {
-                  "key": "title",
-                  "value": "Chief Technology Officer",
-                  "description": "Job title found in `contacts.csv`."
-                },
-                {
-                  "key": "exclude_titles",
-                  "value": "Chief Technology Officer",
-                  "description": "Exclude contacts whose title matches the provided value."
-                },
-                {
-                  "key": "seniority",
-                  "value": "C suite",
-                  "description": "Seniority band recorded in `contacts.csv`."
-                },
-                {
-                  "key": "exclude_seniorities",
-                  "value": "C suite",
-                  "description": "Exclude contacts whose seniority matches the provided value."
-                },
-                {
-                  "key": "departments",
-                  "value": "C-Suite,Engineering & Technical",
-                  "description": "Department membership array extracted from `contacts.csv`."
-                },
-                {
-                  "key": "department",
-                  "value": "C-Suite,Engineering & Technical",
-                  "description": "Alias for `departments`."
-                },
-                {
-                  "key": "exclude_departments",
-                  "value": "C-Suite,Engineering & Technical",
-                  "description": "Exclude contacts whose departments include any provided value."
-                },
-                {
-                  "key": "employees_count",
-                  "value": "27",
-                  "description": "Exact company employee count from `companies.csv`."
-                },
-                {
-                  "key": "employees",
-                  "value": "27",
-                  "description": "Alias for `employees_count`."
-                },
-                {
-                  "key": "employees_min",
-                  "value": "20",
-                  "description": "Lower-bound employee filter."
-                },
-                {
-                  "key": "employees_max",
-                  "value": "35",
-                  "description": "Upper-bound employee filter."
-                },
-                {
-                  "key": "annual_revenue",
-                  "value": "7708000",
-                  "description": "Exact annual revenue from `companies.csv` (stored as integer dollars)."
-                },
-                {
-                  "key": "annual_revenue_min",
-                  "value": "7000000",
-                  "description": "Lower-bound annual revenue filter."
-                },
-                {
-                  "key": "annual_revenue_max",
-                  "value": "9000000",
-                  "description": "Upper-bound annual revenue filter."
-                },
-                {
-                  "key": "total_funding",
-                  "value": "35875000",
-                  "description": "Exact total funding from `companies.csv`."
-                },
-                {
-                  "key": "total_funding_min",
-                  "value": "20000000",
-                  "description": "Lower-bound total funding filter."
-                },
-                {
-                  "key": "total_funding_max",
-                  "value": "40000000",
-                  "description": "Upper-bound total funding filter."
-                },
-                {
-                  "key": "latest_funding_amount_min",
-                  "value": "3500000",
-                  "description": "Lower-bound latest funding amount sourced from `companies_metadata.csv`."
-                },
-                {
-                  "key": "latest_funding_amount_max",
-                  "value": "40000000",
-                  "description": "Upper-bound latest funding amount sourced from `companies_metadata.csv`."
-                },
-                {
-                  "key": "technologies",
-                  "value": "Salesforce,Sendgrid",
-                  "description": "Technology stack entries from the `Company.technologies` array in `companies.csv`."
-                },
-                {
-                  "key": "exclude_technologies",
-                  "value": "Salesforce,Sendgrid",
-                  "description": "Exclude contacts whose company technologies include any provided value."
-                },
-                {
-                  "key": "keywords",
-                  "value": "cyber security",
-                  "description": "Keyword tokens from the `Company.keywords` array in `companies.csv`."
-                },
-                {
-                  "key": "exclude_keywords",
-                  "value": "cyber security",
-                  "description": "Exclude contacts whose company keywords include any provided value."
-                },
-                {
-                  "key": "industries",
-                  "value": "information technology & services",
-                  "description": "Industry classification pulled from `companies.csv`."
-                },
-                {
-                  "key": "exclude_industries",
-                  "value": "information technology & services",
-                  "description": "Exclude contacts whose company industries include any provided value."
-                },
-                {
-                  "key": "search",
-                  "value": "cyber",
-                  "description": "General-purpose search term matched across contact and company columns."
-                },
-                {
-                  "key": "ordering",
-                  "value": "last_name",
-                  "description": "Sort results by last name (see `ContactRepository.ordering_map`)."
-                },
-                {
-                  "key": "distinct",
-                  "value": "true",
-                  "description": "Request distinct contacts."
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Count Contacts",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "description": "Return the total number of contacts that satisfy the provided filters using sample values pulled from the project CSV tables.",
-            "url": {
-              "raw": "{{baseUrl}}/contacts/count/?company=Bandura,Omada%20Technologies&name=Bandura,Omada%20Technologies&company_location=McLean%20Virginia%20United%20States,Portsmouth%20New%20Hampshire%20United%20States&company_text_search=McLean%20Virginia%20United%20States,Portsmouth%20New%20Hampshire%20United%20States&contact_location=Fulton%20Maryland%20United%20States&text_search=Fulton%20Maryland%20United%20States&email_status=Verified&title=Chief%20Technology%20Officer&seniority=C%20suite&department=C-Suite,Engineering%20%26%20Technical&departments=C-Suite,Engineering%20%26%20Technical&employees_count=27&employees=27&employees_min=20&employees_max=35&annual_revenue=7708000&annual_revenue_min=7000000&annual_revenue_max=9000000&total_funding=35875000&total_funding_min=20000000&total_funding_max=40000000&latest_funding_amount_min=3500000&latest_funding_amount_max=40000000&technologies=Salesforce,Sendgrid&keywords=cyber%20security&industries=information%20technology%20%26%20services&search=cyber&ordering=last_name&distinct=true&page_size=25&cursor=bz0w",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                "count",
-                ""
-              ],
-              "query": [
-                { "key": "company", "value": "Bandura,Omada Technologies", "description": "Company filter sourced from `tables/table_data/companies.csv`." },
-                { "key": "name", "value": "Bandura,Omada Technologies", "description": "Alias for `company`." },
-                { "key": "exclude_company_ids", "value": "{{sampleCompanyUuid}}", "description": "Exclude contacts belonging to specific company UUIDs." },
-                { "key": "company_location", "value": "McLean Virginia United States,Portsmouth New Hampshire United States", "description": "Company text-search values from `companies.csv`." },
-                { "key": "exclude_company_locations", "value": "McLean Virginia United States,Portsmouth New Hampshire United States", "description": "Exclude contacts whose company location text matches any provided value." },
-                { "key": "company_text_search", "value": "McLean Virginia United States,Portsmouth New Hampshire United States", "description": "Alias for `company_location`." },
-                { "key": "contact_location", "value": "Fulton Maryland United States", "description": "Contact text-search value from `tables/table_data/contacts.csv`." },
-                { "key": "exclude_contact_locations", "value": "Fulton Maryland United States", "description": "Exclude contacts whose contact location text matches any provided value." },
-                { "key": "text_search", "value": "Fulton Maryland United States", "description": "Alias for `contact_location`." },
-                { "key": "title", "value": "Chief Technology Officer", "description": "Job title from `contacts.csv`." },
-                { "key": "exclude_titles", "value": "Chief Technology Officer", "description": "Exclude contacts whose title matches the provided value." },
-                { "key": "seniority", "value": "C suite", "description": "Seniority value from `contacts.csv`." },
-                { "key": "exclude_seniorities", "value": "C suite", "description": "Exclude contacts whose seniority matches the provided value." },
-                { "key": "department", "value": "C-Suite,Engineering & Technical", "description": "Department affiliation from `contacts.csv`." },
-                { "key": "departments", "value": "C-Suite,Engineering & Technical", "description": "Alias for `department`." },
-                { "key": "exclude_departments", "value": "C-Suite,Engineering & Technical", "description": "Exclude contacts whose departments include any provided value." },
-                { "key": "employees_count", "value": "27", "description": "Exact company employee count from `companies.csv`." },
-                { "key": "employees", "value": "27", "description": "Alias for `employees_count`." },
-                { "key": "employees_min", "value": "20", "description": "Lower-bound company employee count." },
-                { "key": "employees_max", "value": "35", "description": "Upper-bound company employee count." },
-                { "key": "annual_revenue", "value": "7708000", "description": "Exact company annual revenue from `companies.csv`." },
-                { "key": "annual_revenue_min", "value": "7000000", "description": "Lower-bound company annual revenue." },
-                { "key": "annual_revenue_max", "value": "9000000", "description": "Upper-bound company annual revenue." },
-                { "key": "total_funding", "value": "35875000", "description": "Exact company total funding from `companies.csv`." },
-                { "key": "total_funding_min", "value": "20000000", "description": "Lower-bound company total funding." },
-                { "key": "total_funding_max", "value": "40000000", "description": "Upper-bound company total funding." },
-                { "key": "latest_funding_amount_min", "value": "3500000", "description": "Lower-bound latest funding amount from `companies_metadata.csv`." },
-                { "key": "latest_funding_amount_max", "value": "40000000", "description": "Upper-bound latest funding amount from `companies_metadata.csv`." },
-                { "key": "technologies", "value": "Salesforce,Sendgrid", "description": "Technology values retrieved from `companies.csv`." },
-                { "key": "exclude_technologies", "value": "Salesforce,Sendgrid", "description": "Exclude contacts whose company technologies include any provided value." },
-                { "key": "keywords", "value": "cyber security", "description": "Keyword values extracted from `companies.csv`." },
-                { "key": "exclude_keywords", "value": "cyber security", "description": "Exclude contacts whose company keywords include any provided value." },
-                { "key": "industries", "value": "information technology & services", "description": "Industry classification taken from `companies.csv`." },
-                { "key": "exclude_industries", "value": "information technology & services", "description": "Exclude contacts whose company industries include any provided value." },
-                { "key": "email_status", "value": "Verified", "description": "Deliverability status stored in `contacts.csv`." },
-                { "key": "search", "value": "cyber", "description": "Multi-column search term." },
-                { "key": "ordering", "value": "last_name", "description": "Ordering key applied by the API." },
-                { "key": "distinct", "value": "true", "description": "Request distinct contact results." },
-                { "key": "page_size", "value": "25", "description": "Optional page-size hint accepted by the filters schema." },
-                { "key": "cursor", "value": "bz0w", "description": "Cursor token accepted by the filters schema (base64 of `o=<offset>`)." }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Create Contact",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "description": "Create a new contact record. All body fields are optional and map directly to columns on the contacts table. Sample values reference the CSV snapshots checked into `tables/table_data/`.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"uuid\": \"f4b8c3f5-1111-4f9b-aaaa-123456789abc\",\n  \"first_name\": \"Patrick\",\n  \"last_name\": \"McGarry\",\n  \"company_id\": \"398cce44-233d-5f7c-aea1-e4a6a79df10c\",\n  \"email\": \"pat.mcgarry@banduracyber.com\",\n  \"title\": \"Chief Technology Officer\",\n  \"departments\": [\"C-Suite\", \"Engineering & Technical\"],\n  \"mobile_phone\": \"+1 937-555-0132\",\n  \"email_status\": \"Verified\",\n  \"text_search\": \"Fulton Maryland United States\",\n  \"seniority\": \"C suite\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/contacts/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                ""
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Retrieve Contact",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "description": "Fetch details for a single contact by primary key.",
-            "url": {
-              "raw": "{{baseUrl}}/contacts/{{sampleContactId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                "{{sampleContactId}}"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Attribute Lookups",
-          "description": "Distinct value lookups for contact and company metadata.",
-          "item": [
-            {
-              "name": "List Contact Titles",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return contact titles filtered by sample data from `contacts.csv` and `companies.csv`.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/title/?company=Bandura&contact_location=Fulton%20Maryland%20United%20States&text_search=Fulton%20Maryland%20United%20States&distinct=true&limit=25&offset=0&ordering=value&search=Chief",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "title",
-                    ""
-                  ],
-                  "query": [
-                    { "key": "company", "value": "Bandura", "description": "Company name from `tables/table_data/companies.csv`." },
-                    { "key": "contact_location", "value": "Fulton Maryland United States", "description": "Contact text-search value from `tables/table_data/contacts.csv`." },
-                    { "key": "text_search", "value": "Fulton Maryland United States", "description": "Alias for `contact_location`." },
-                    { "key": "distinct", "value": "true", "description": "Ensure unique title values." },
-                    { "key": "limit", "value": "25", "description": "Maximum number of titles to return." },
-                    { "key": "offset", "value": "0", "description": "Offset applied before fetching titles." },
-                    { "key": "ordering", "value": "value", "description": "Sort alphabetically by the returned value." },
-                    { "key": "search", "value": "Chief", "description": "Prefix match to narrow titles (e.g., `Chief Technology Officer`)." }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Company Names",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return company names tied to contacts matching the filter set.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/company/?industries=information%20technology%20%26%20services&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "company",
-                    ""
-                  ],
-                  "query": [
-                    { "key": "industries", "value": "information technology & services", "description": "Industry filter derived from `tables/table_data/companies.csv`." },
-                    { "key": "distinct", "value": "true", "description": "Ensure company names are distinct." },
-                    { "key": "limit", "value": "25", "description": "Maximum number of names to return." },
-                    { "key": "offset", "value": "0", "description": "Offset applied before retrieving company names." },
-                    { "key": "ordering", "value": "value", "description": "Sort the response alphabetically." },
-                    { "key": "search", "value": "Bandura", "description": "Prefix search using the `Company.name` column." }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Industries",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return industries associated with the filtered companies. When `separated=true`, results are deduplicated and the `limit` applies after splitting.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/industry/?company=Bandura&distinct=true&limit=50&offset=0&ordering=value&separated=true&search=information%20technology",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "industry",
-                    ""
-                  ],
-                  "query": [
-                    { "key": "company", "value": "Bandura", "description": "Company filter backed by `companies.csv`." },
-                    { "key": "distinct", "value": "true", "description": "Return deduplicated industry values." },
-                    { "key": "limit", "value": "50", "description": "Maximum industries to return." },
-                    { "key": "offset", "value": "0", "description": "Offset applied before returning industries." },
-                    { "key": "ordering", "value": "value", "description": "Sort alphabetically." },
-                    { "key": "separated", "value": "true", "description": "Split the array column into individual values." },
-                    { "key": "search", "value": "information technology", "description": "Sample industry phrase taken from `companies.csv`." }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Keywords",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return keyword values for companies, optionally split into unique tokens. When `separated=true`, results are deduplicated and capped by the `limit` after splitting.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/keywords/?company=Bandura&distinct=true&limit=50&offset=0&ordering=value&separated=true&search=cyber",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "keywords",
-                    ""
-                  ],
-                  "query": [
-                    { "key": "company", "value": "Bandura", "description": "Company filter sourced from `companies.csv`." },
-                    { "key": "distinct", "value": "true", "description": "Return deduplicated keyword values." },
-                    { "key": "limit", "value": "50", "description": "Maximum number of keyword tokens." },
-                    { "key": "offset", "value": "0", "description": "Offset applied before returning keywords." },
-                    { "key": "ordering", "value": "value", "description": "Sort alphabetically." },
-                    { "key": "separated", "value": "true", "description": "Split array values into individual tokens." },
-                    { "key": "search", "value": "cyber", "description": "Keyword fragment drawn from `companies.csv`." }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Technologies",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return technologies associated with the filtered companies. When `separated=true`, results are deduplicated and capped by the `limit` after splitting.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/technologies/?company=Bandura&distinct=true&limit=50&offset=0&ordering=value&separated=true&search=Salesforce",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "technologies",
-                    ""
-                  ],
-                  "query": [
-                    { "key": "company", "value": "Bandura", "description": "Company filter sourced from `companies.csv`." },
-                    { "key": "distinct", "value": "true", "description": "Return deduplicated technology values." },
-                    { "key": "limit", "value": "50", "description": "Maximum number of technologies." },
-                    { "key": "offset", "value": "0", "description": "Offset applied before returning technologies." },
-                    { "key": "ordering", "value": "value", "description": "Sort alphabetically." },
-                    { "key": "separated", "value": "true", "description": "Split array values into individual tokens." },
-                    { "key": "search", "value": "Salesforce", "description": "Technology fragment drawn from `companies.csv`." }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Company Addresses",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return company address text derived from the Company.text_search column for the filtered set of contacts.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/company_address/?company=Bandura&distinct=true&limit=10&offset=0&ordering=value&search=McLean",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "company_address",
-                    ""
-                  ],
-                  "query": [
-                    {
-                      "key": "company",
-                      "value": "Bandura",
-                      "description": "Filter by company name sourced from `companies.csv`."
-                    },
-                    {
-                      "key": "distinct",
-                      "value": "true",
-                      "description": "Return distinct address strings."
-                    },
-                    {
-                      "key": "limit",
-                      "value": "10",
-                      "description": "Maximum number of address strings."
-                    },
-                    {
-                      "key": "offset",
-                      "value": "0",
-                      "description": "Offset applied before retrieving addresses."
-                    },
-                    {
-                      "key": "ordering",
-                      "value": "value",
-                      "description": "Sort alphabetically."
-                    },
-                    {
-                      "key": "search",
-                      "value": "McLean",
-                      "description": "Address fragment taken from the `Company.text_search` column in `companies.csv`."
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Contact Addresses",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json"
-                  }
-                ],
-                "description": "Return person-level address text sourced from the Contact.text_search column for matched contacts.",
-                "url": {
-                  "raw": "{{baseUrl}}/contacts/contact_address/?company=Bandura&distinct=true&limit=10&offset=0&ordering=value&search=Fulton",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "contacts",
-                    "contact_address",
-                    ""
-                  ],
-                  "query": [
-                    { "key": "company", "value": "Bandura", "description": "Filter for a company present in `companies.csv`." },
-                    { "key": "distinct", "value": "true", "description": "Return deduplicated contact addresses." },
-                    { "key": "limit", "value": "10", "description": "Maximum number of contact addresses." },
-                    { "key": "offset", "value": "0", "description": "Offset applied before retrieving addresses." },
-                    { "key": "ordering", "value": "value", "description": "Sort alphabetically." },
-                    { "key": "search", "value": "Fulton", "description": "Address fragment from the `Contact.text_search` column in `contacts.csv`." }
-                  ]
-                }
-              },
-              "response": []
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Imports",
-      "description": "Endpoints supporting the contacts CSV import workflow.",
-      "item": [
-        {
-          "name": "Import Info",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "description": "Provides instructions for uploading a contacts CSV file.",
-            "url": {
-              "raw": "{{baseUrl}}/contacts/import/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                "import",
-                ""
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Upload Contacts CSV",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "description": "Start a background contacts import using the sample CSV file from the repository.",
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "file",
-                  "type": "file",
-                  "src": "{{importFilePath}}",
-                  "description": "Upload the sample CSV located under data/data/apollo_sample_5000_cleaned.csv."
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/contacts/import/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                "import",
-                ""
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Import Job Detail",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "description": "Fetch the status of a queued import job.",
-            "url": {
-              "raw": "{{baseUrl}}/contacts/import/{{sampleImportJobId}}/?include_errors=false",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                "import",
-                "{{sampleImportJobId}}",
-                ""
-              ],
-              "query": [
-                {
-                  "key": "include_errors",
-                  "value": "false",
-                  "description": "Toggle inclusion of row-level error details."
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Download Import Errors",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "description": "Retrieve recorded row-level import errors for the specified job.",
-            "url": {
-              "raw": "{{baseUrl}}/contacts/import/{{sampleImportJobId}}/errors/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                "import",
-                "{{sampleImportJobId}}",
-                "errors",
-                ""
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    }
-  ],
-  "variable": [
-    {
-      "key": "baseHost",
-      "value": "http://localhost:8000",
-      "type": "string",
-      "description": "Default FastAPI server origin."
-    },
-    {
-      "key": "baseUrl",
-      "value": "{{baseHost}}/api/v1",
-      "type": "string",
-      "description": "Versioned API base path."
-    },
-    {
-      "key": "sampleContactId",
-      "value": "1",
-      "type": "string",
-      "description": "Example contact identifier for detail routes."
-    },
-    {
-      "key": "sampleImportJobId",
-      "value": "demo-job-id",
-      "type": "string",
-      "description": "Placeholder job identifier for import status checks."
-    },
-    {
-      "key": "importFilePath",
-      "value": "D:\\\\code\\\\ayan\\\\appoinmentbackend\\\\data\\\\data\\\\apollo_sample_5000_cleaned.csv",
-      "type": "string",
-      "description": "Local CSV used for import requests."
-    },
-    {
-      "key": "sampleCompanyUuid",
-      "value": "demo-company-uuid",
-      "type": "string",
-      "description": "Placeholder company UUID used for filtering."
-    },
-    {
-      "key": "sampleCompany",
-      "value": "DCS Technologies",
-      "type": "string",
-      "description": "Company name from the sample CSV."
-    },
-    {
-      "key": "sampleCity",
-      "value": "Miamisburg",
-      "type": "string",
-      "description": "City from the sample CSV."
-    },
-    {
-      "key": "sampleState",
-      "value": "Ohio",
-      "type": "string",
-      "description": "State from the sample CSV."
-    },
-    {
-      "key": "sampleCountry",
-      "value": "United States",
-      "type": "string",
-      "description": "Country from the sample CSV."
-    }
-  ]
+	"info": {
+		"_postman_id": "4e5fd9cf-5bdf-4450-aac7-78ee5fecc18d",
+		"name": "Appointment360 API",
+		"description": "Postman collection for the Appointment360 FastAPI backend. Includes v1 endpoints (Contacts, Imports) and v2 endpoints (Authentication, Users, AI Chat). All endpoints require Bearer token authentication. Sample parameters align with docs/apis.md, docs/api/user.md, and docs/api/ai_chat.md.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "20572666",
+		"_collection_link": "https://prbal5-1003.postman.co/workspace/prbal~38626842-f3c9-4a6f-a7bc-0367cd9a6824/collection/20572666-4e5fd9cf-5bdf-4450-aac7-78ee5fecc18d?action=share&source=collection_link&creator=20572666"
+	},
+	"item": [
+		{
+			"name": "System",
+			"item": [
+				{
+					"name": "Root Metadata",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Return API metadata such as project name, version, and documentation URL."
+					},
+					"response": []
+				},
+				{
+					"name": "API Health",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/health/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"health",
+								""
+							]
+						},
+						"description": "Health probe served under the versioned API prefix."
+					},
+					"response": []
+				},
+				{
+					"name": "Application Health",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							}
+						],
+						"url": {
+							"raw": "{{baseHost}}/health",
+							"host": [
+								"{{baseHost}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Unversioned health check defined in app/main.py."
+					},
+					"response": []
+				}
+			],
+			"description": "Operational endpoints exposed alongside the versioned API router."
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/auth/register/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"auth",
+								"register",
+								""
+							]
+						},
+						"description": "Register a new user account and receive access tokens. A user profile is automatically created upon registration.\n\n**Field Requirements:**\n- name (string, required): User's full name (max 255 characters)\n- email (string, required): Valid email address (must be unique)\n- password (string, required): Password (min 8 characters, max 72 characters due to bcrypt limitation)\n\n**Response Codes:**\n- 201 Created: Registration successful\n- 400 Bad Request: Invalid request data, email already exists, or password validation failed"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('accessToken', jsonData.access_token);",
+									"    pm.collectionVariables.set('refreshToken', jsonData.refresh_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/auth/login/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"auth",
+								"login",
+								""
+							]
+						},
+						"description": "Authenticate a user and receive access tokens. Updates the user's last_sign_in_at timestamp upon successful login.\n\n**Field Requirements:**\n- email (string, required): User's email address (must be valid email format)\n- password (string, required): User's password\n\n**Response Codes:**\n- 200 OK: Login successful\n- 400 Bad Request: Invalid credentials, missing fields, or account disabled"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('accessToken', jsonData.access_token);",
+									"    pm.collectionVariables.set('refreshToken', jsonData.refresh_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "Get Current Session",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrlV2}}/auth/session/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"auth",
+								"session",
+								""
+							]
+						},
+						"description": "Get the current authenticated user's session information. Useful for checking token validity."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/auth/refresh/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"auth",
+								"refresh",
+								""
+							]
+						},
+						"description": "Refresh an expired access token using a refresh token. Returns new access and refresh tokens (token rotation).\n\n**Request Body:**\n- refresh_token (string, required): Valid refresh token\n\n**Response Codes:**\n- 200 OK: Token refresh successful\n- 400 Bad Request: Invalid or expired refresh token"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('accessToken', jsonData.access_token);",
+									"    pm.collectionVariables.set('refreshToken', jsonData.refresh_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/auth/logout/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"auth",
+								"logout",
+								""
+							]
+						},
+						"description": "Logout the current user and invalidate refresh token. Logout succeeds even if refresh token is not provided.\n\n**Request Body:**\n- refresh_token (string, optional): Refresh token to blacklist. If not provided, logout still succeeds.\n\n**Response Codes:**\n- 200 OK: Logout successful"
+					},
+					"response": []
+				}
+			],
+			"description": "User authentication endpoints for registration, login, logout, token refresh, and session management."
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Get User Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrlV2}}/users/profile/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"users",
+								"profile",
+								""
+							]
+						},
+						"description": "Get the profile information for the currently authenticated user. If a profile doesn't exist, it will be automatically created with default values."
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe Updated\",\n  \"job_title\": \"Senior Software Engineer\",\n  \"bio\": \"Updated bio\",\n  \"timezone\": \"America/Los_Angeles\",\n  \"avatar_url\": \"https://picsum.photos/seed/123/40/40\",\n  \"notifications\": {\n    \"weeklyReports\": false,\n    \"newLeadAlerts\": true\n  },\n  \"role\": \"Admin\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/users/profile/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"users",
+								"profile",
+								""
+							]
+						},
+						"description": "Update the profile information for the currently authenticated user. All fields are optional - only provided fields will be updated (partial update).\n\n**Optional Fields:**\n- name (string, optional, max 255 chars): User's full name\n- job_title (string, optional, max 255 chars): User's job title\n- bio (string, optional): User's biography (text field)\n- timezone (string, optional, max 100 chars): User's timezone (e.g., \"America/New_York\")\n- avatar_url (string, optional): URL to user's avatar image\n- notifications (object, optional): User notification preferences (merged with existing preferences)\n  - weeklyReports (boolean, optional): Enable/disable weekly reports\n  - newLeadAlerts (boolean, optional): Enable/disable new lead alerts\n- role (string, optional, max 50 chars): User's role\n\n**Response Codes:**\n- 200 OK: Profile updated successfully\n- 400 Bad Request: Invalid data provided\n- 401 Unauthorized: Authentication required"
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Avatar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "avatar",
+									"type": "file",
+									"description": "Image file (JPEG, PNG, GIF, or WebP, max 5MB)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/users/profile/avatar/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"users",
+								"profile",
+								"avatar",
+								""
+							]
+						},
+						"description": "Upload an avatar image file for the currently authenticated user.\n\n**File Requirements:**\n- File Types: JPEG, PNG, GIF, or WebP\n- Maximum Size: 5MB\n- Validation: Both file extension and file content (magic bytes) are validated\n\n**Request:**\n- Content-Type: multipart/form-data (automatically set by Postman)\n- Body: Form-data with key \"avatar\" and type \"file\"\n\n**Response Codes:**\n- 200 OK: Avatar uploaded successfully\n- 400 Bad Request: Invalid file type or size\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error saving file"
+					},
+					"response": []
+				}
+			],
+			"description": "User profile management endpoints for retrieving, updating profiles, and uploading avatars."
+		},
+		{
+			"name": "AI Chat",
+			"item": [
+				{
+					"name": "List Chats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrlV2}}/ai-chats/?limit=25&offset=0&ordering=-created_at",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"ai-chats",
+								""
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "25",
+									"description": "Number of results per page (default: 25, max: 100)",
+									"disabled": true
+								},
+								{
+									"key": "offset",
+									"value": "0",
+									"description": "Offset for pagination (default: 0)",
+									"disabled": true
+								},
+								{
+									"key": "ordering",
+									"value": "-created_at",
+									"description": "Order by field. Prepend '-' for descending. Valid: created_at, updated_at, -created_at, -updated_at (default: -created_at)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get a list of all AI chat conversations for the current user with pagination.\n\n**Query Parameters:**\n- limit (integer, optional): Number of results per page (default: 25, max: 100)\n- offset (integer, optional): Offset for pagination (default: 0)\n- ordering (string, optional): Order by field. Prepend '-' for descending. Valid fields: created_at, updated_at, -created_at, -updated_at (default: -created_at)\n\n**Response Codes:**\n- 200 OK: Chat history retrieved successfully\n- 401 Unauthorized: Authentication required"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Chat",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Who are my most recent leads?\",\n  \"messages\": [\n    {\n      \"sender\": \"ai\",\n      \"text\": \"Hello! I'm NexusAI, your smart CRM assistant. How can I help you find contacts today?\"\n    },\n    {\n      \"sender\": \"user\",\n      \"text\": \"Who are my most recent leads?\"\n    },\n    {\n      \"sender\": \"ai\",\n      \"text\": \"Here are your most recent leads:\",\n      \"contacts\": []\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/ai-chats/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"ai-chats",
+								""
+							]
+						},
+						"description": "Create a new AI chat conversation.\n\n**Field Requirements:**\n- title (string, optional): Chat title (max 255 characters, default: empty string)\n- messages (array, optional): List of messages (default: empty list)\n\n**Message Format:**\nEach message must be an object with:\n- sender (string, required): Must be either \"user\" or \"ai\"\n- text (string, required): Message text content\n- contacts (array, optional): Array of contact objects when AI returns search results\n\n**Response Codes:**\n- 201 Created: Chat created successfully\n- 400 Bad Request: Invalid request data\n- 401 Unauthorized: Authentication required"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('sampleChatId', jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "Get Chat",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrlV2}}/ai-chats/{{sampleChatId}}/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"ai-chats",
+								"{{sampleChatId}}",
+								""
+							]
+						},
+						"description": "Get detailed information about a specific AI chat conversation, including all messages.\n\n**Path Parameters:**\n- id (string, UUID): Chat ID\n\n**Response Codes:**\n- 200 OK: Chat retrieved successfully\n- 401 Unauthorized: Authentication required\n- 403 Forbidden: User does not own this chat\n- 404 Not Found: Chat not found"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Chat",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Updated title (optional)\",\n  \"messages\": [\n    {\n      \"sender\": \"ai\",\n      \"text\": \"Hello! I'm NexusAI...\"\n    },\n    {\n      \"sender\": \"user\",\n      \"text\": \"Who are my most recent leads?\"\n    },\n    {\n      \"sender\": \"ai\",\n      \"text\": \"Here are your most recent leads:\",\n      \"contacts\": []\n    },\n    {\n      \"sender\": \"user\",\n      \"text\": \"Show me more details\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/ai-chats/{{sampleChatId}}/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"ai-chats",
+								"{{sampleChatId}}",
+								""
+							]
+						},
+						"description": "Update an existing AI chat conversation (typically to add new messages or update the title). All fields are optional - only provided fields will be updated.\n\n**Path Parameters:**\n- id (string, UUID): Chat ID\n\n**Field Requirements:**\nAll fields are optional:\n- title (string, optional): Chat title (max 255 characters)\n- messages (array, optional): Complete list of messages (replaces existing messages)\n\n**Message Format:**\nEach message must be an object with:\n- sender (string, required): Must be either \"user\" or \"ai\"\n- text (string, required): Message text content\n- contacts (array, optional): Array of contact objects when AI returns search results\n\n**Response Codes:**\n- 200 OK: Chat updated successfully\n- 400 Bad Request: Invalid request data\n- 401 Unauthorized: Authentication required\n- 403 Forbidden: User does not own this chat\n- 404 Not Found: Chat not found"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Chat",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrlV2}}/ai-chats/{{sampleChatId}}/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"ai-chats",
+								"{{sampleChatId}}",
+								""
+							]
+						},
+						"description": "Delete an AI chat conversation.\n\n**Path Parameters:**\n- id (string, UUID): Chat ID\n\n**Response Codes:**\n- 204 No Content: Chat deleted successfully\n- 401 Unauthorized: Authentication required\n- 403 Forbidden: User does not own this chat\n- 404 Not Found: Chat not found\n\n**Notes:**\n- Only the chat owner can delete their chats\n- Deletion is permanent and cannot be undone\n- The response has no body (204 No Content)"
+					},
+					"response": []
+				}
+			],
+			"description": "AI chat conversation endpoints for listing, creating, retrieving, updating, and deleting chat conversations. All endpoints require JWT authentication and verify ownership before allowing access."
+		},
+		{
+			"name": "Contacts",
+			"item": [
+				{
+					"name": "Core",
+					"item": [
+						{
+							"name": "List Contacts (All Filters)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										""
+									],
+									"query": [
+										{
+											"key": "view",
+											"value": "simple",
+											"description": "View mode: 'simple' returns ContactSimpleItem (id, uuid, name, title, location, company_name, person_linkedin_url, company_domain). Omit for full ContactListItem.",
+											"disabled": true
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Number of contacts per page (>=1).",
+											"disabled": true
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Zero-based offset into the result set (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "cursor",
+											"value": "bz0w",
+											"description": "Opaque cursor token for pagination (base64 encoding of offset).",
+											"disabled": true
+										},
+										{
+											"key": "page",
+											"value": "1",
+											"description": "Optional 1-indexed page number (>=1). Converts to offset when provided.",
+											"disabled": true
+										},
+										{
+											"key": "page_size",
+											"value": "25",
+											"description": "Explicit page size override (>=1, bounded by MAX_PAGE_SIZE).",
+											"disabled": true
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return distinct contacts based on primary key (boolean).",
+											"disabled": true
+										},
+										{
+											"key": "ordering",
+											"value": "last_name",
+											"description": "Sort results by field. Prepend '-' for descending. Valid fields: created_at, updated_at, first_name, last_name, email, company name, etc.",
+											"disabled": true
+										},
+										{
+											"key": "search",
+											"value": "cyber",
+											"description": "General-purpose search term applied across contact and company text columns (case-insensitive).",
+											"disabled": true
+										},
+										{
+											"key": "first_name",
+											"value": "Patrick",
+											"description": "Case-insensitive substring match against Contact.first_name.",
+											"disabled": true
+										},
+										{
+											"key": "last_name",
+											"value": "McGarry",
+											"description": "Case-insensitive substring match against Contact.last_name.",
+											"disabled": true
+										},
+										{
+											"key": "title",
+											"value": "Chief Technology Officer",
+											"description": "Case-insensitive substring match against Contact.title.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_titles",
+											"value": "Chief Technology Officer",
+											"description": "Exclude contacts whose title matches any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "seniority",
+											"value": "C suite",
+											"description": "Case-insensitive substring match against Contact.seniority.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_seniorities",
+											"value": "C suite",
+											"description": "Exclude contacts whose seniority matches any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "department",
+											"value": "C-Suite,Engineering %26 Technical",
+											"description": "Alias for departments filter. Substring match against Contact.departments array (comma-delimited text).",
+											"disabled": true
+										},
+										{
+											"key": "departments",
+											"value": "C-Suite,Engineering %26 Technical",
+											"description": "Substring match against Contact.departments array (stored as comma-delimited text).",
+											"disabled": true
+										},
+										{
+											"key": "exclude_departments",
+											"value": "C-Suite,Engineering %26 Technical",
+											"description": "Exclude contacts whose departments include any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "email",
+											"value": "pat.mcgarry@banduracyber.com",
+											"description": "Case-insensitive substring match against Contact.email.",
+											"disabled": true
+										},
+										{
+											"key": "email_status",
+											"value": "Verified",
+											"description": "Case-insensitive substring match against Contact.email_status.",
+											"disabled": true
+										},
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Case-insensitive substring match against Company.name.",
+											"disabled": true
+										},
+										{
+											"key": "name",
+											"value": "{{sampleCompany}}",
+											"description": "Alias for company filter. Case-insensitive substring match against Company.name.",
+											"disabled": true
+										},
+										{
+											"key": "company_name_for_emails",
+											"value": "{{sampleCompany}}",
+											"description": "Case-insensitive substring match against CompanyMetadata.company_name_for_emails.",
+											"disabled": true
+										},
+										{
+											"key": "company_location",
+											"value": "McLean Virginia United States,Portsmouth New Hampshire United States",
+											"description": "Company text-search filter. Matches Company.text_search covering address, city, state, and country.",
+											"disabled": true
+										},
+										{
+											"key": "company_text_search",
+											"value": "McLean Virginia United States,Portsmouth New Hampshire United States",
+											"description": "Alias for company_location. Company text-search column covering address fields.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_company_locations",
+											"value": "McLean Virginia United States,Portsmouth New Hampshire United States",
+											"description": "Exclude contacts whose company text_search matches any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "contact_location",
+											"value": "Fulton Maryland United States",
+											"description": "Contact text-search filter. Matches Contact.text_search covering person-level location metadata.",
+											"disabled": true
+										},
+										{
+											"key": "text_search",
+											"value": "Fulton Maryland United States",
+											"description": "Alias for contact_location. Contact text-search column covering person-level location metadata.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_contact_locations",
+											"value": "Fulton Maryland United States",
+											"description": "Exclude contacts whose contact text_search matches any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "employees_count",
+											"value": "27",
+											"description": "Exact match against Company.employees_count (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "employees",
+											"value": "27",
+											"description": "Alias for employees_count. Exact match against Company.employees_count (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "employees_min",
+											"value": "20",
+											"description": "Lower-bound filter applied to Company.employees_count (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "employees_max",
+											"value": "35",
+											"description": "Upper-bound filter applied to Company.employees_count (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue",
+											"value": "7708000",
+											"description": "Exact match against Company.annual_revenue stored as integer dollars (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue_min",
+											"value": "7000000",
+											"description": "Lower-bound filter applied to Company.annual_revenue in integer dollars (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue_max",
+											"value": "9000000",
+											"description": "Upper-bound filter applied to Company.annual_revenue in integer dollars (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "total_funding",
+											"value": "35875000",
+											"description": "Exact match against Company.total_funding (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "total_funding_min",
+											"value": "20000000",
+											"description": "Lower-bound filter applied to Company.total_funding (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "total_funding_max",
+											"value": "40000000",
+											"description": "Upper-bound filter applied to Company.total_funding (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "latest_funding_amount_min",
+											"value": "3500000",
+											"description": "Lower-bound filter applied to CompanyMetadata.latest_funding_amount (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "latest_funding_amount_max",
+											"value": "40000000",
+											"description": "Upper-bound filter applied to CompanyMetadata.latest_funding_amount (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "technologies",
+											"value": "Salesforce,Sendgrid",
+											"description": "Substring match within Company.technologies array (stored as text array).",
+											"disabled": true
+										},
+										{
+											"key": "exclude_technologies",
+											"value": "Salesforce,Sendgrid",
+											"description": "Exclude contacts whose company technologies include any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "keywords",
+											"value": "cyber security",
+											"description": "Substring match within Company.keywords array (stored as text array).",
+											"disabled": true
+										},
+										{
+											"key": "exclude_keywords",
+											"value": "cyber security",
+											"description": "Exclude contacts whose company keywords include any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "industries",
+											"value": "information technology %26 services",
+											"description": "Substring match within Company.industries array (stored as text array). Alias: industry.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_industries",
+											"value": "information technology %26 services",
+											"description": "Exclude contacts whose company industries include any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_company_ids",
+											"value": "{{sampleCompanyUuid}}",
+											"description": "Exclude contacts whose company UUID matches any provided value. Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "mobile_phone",
+											"value": "+1 937-555-0132",
+											"description": "Substring match against Contact.mobile_phone.",
+											"disabled": true
+										},
+										{
+											"key": "work_direct_phone",
+											"value": "+1 937-555-0200",
+											"description": "Substring match against ContactMetadata.work_direct_phone.",
+											"disabled": true
+										},
+										{
+											"key": "home_phone",
+											"value": "+1 937-555-0201",
+											"description": "Substring match against ContactMetadata.home_phone.",
+											"disabled": true
+										},
+										{
+											"key": "other_phone",
+											"value": "+1 937-555-0202",
+											"description": "Substring match against ContactMetadata.other_phone.",
+											"disabled": true
+										},
+										{
+											"key": "corporate_phone",
+											"value": "+1 703-555-0199",
+											"description": "Substring match against CompanyMetadata.phone_number.",
+											"disabled": true
+										},
+										{
+											"key": "company_phone",
+											"value": "+1 703-555-0199",
+											"description": "Alias for corporate_phone. Substring match against CompanyMetadata.phone_number.",
+											"disabled": true
+										},
+										{
+											"key": "city",
+											"value": "{{sampleCity}}",
+											"description": "Substring match against ContactMetadata.city.",
+											"disabled": true
+										},
+										{
+											"key": "state",
+											"value": "{{sampleState}}",
+											"description": "Substring match against ContactMetadata.state.",
+											"disabled": true
+										},
+										{
+											"key": "country",
+											"value": "{{sampleCountry}}",
+											"description": "Substring match against ContactMetadata.country.",
+											"disabled": true
+										},
+										{
+											"key": "company_city",
+											"value": "McLean",
+											"description": "Substring match against CompanyMetadata.city.",
+											"disabled": true
+										},
+										{
+											"key": "company_state",
+											"value": "Virginia",
+											"description": "Substring match against CompanyMetadata.state.",
+											"disabled": true
+										},
+										{
+											"key": "company_country",
+											"value": "United States",
+											"description": "Substring match against CompanyMetadata.country.",
+											"disabled": true
+										},
+										{
+											"key": "company_address",
+											"value": "McLean Virginia United States",
+											"description": "Substring match against Company.text_search (address fields).",
+											"disabled": true
+										},
+										{
+											"key": "person_linkedin_url",
+											"value": "linkedin.com/in/patrickmcgarry",
+											"description": "Substring match against ContactMetadata.linkedin_url.",
+											"disabled": true
+										},
+										{
+											"key": "company_linkedin_url",
+											"value": "linkedin.com/company/bandura",
+											"description": "Substring match against CompanyMetadata.linkedin_url.",
+											"disabled": true
+										},
+										{
+											"key": "website",
+											"value": "banduracyber.com",
+											"description": "Substring match against ContactMetadata.website.",
+											"disabled": true
+										},
+										{
+											"key": "facebook_url",
+											"value": "facebook.com/banduracyber",
+											"description": "Substring match against ContactMetadata.facebook_url or CompanyMetadata.facebook_url.",
+											"disabled": true
+										},
+										{
+											"key": "twitter_url",
+											"value": "twitter.com/banduracyber",
+											"description": "Substring match against ContactMetadata.twitter_url or CompanyMetadata.twitter_url.",
+											"disabled": true
+										},
+										{
+											"key": "stage",
+											"value": "Customer",
+											"description": "Substring match against ContactMetadata.stage.",
+											"disabled": true
+										},
+										{
+											"key": "created_at_after",
+											"value": "2024-01-01T00:00:00",
+											"description": "Filter contacts created after the provided ISO 8601 timestamp (inclusive). Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SSZ.",
+											"disabled": true
+										},
+										{
+											"key": "created_at_before",
+											"value": "2024-12-31T23:59:59",
+											"description": "Filter contacts created before the provided ISO 8601 timestamp (inclusive). Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SSZ.",
+											"disabled": true
+										},
+										{
+											"key": "updated_at_after",
+											"value": "2024-06-01T00:00:00",
+											"description": "Filter contacts updated after the provided ISO 8601 timestamp (inclusive). Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SSZ.",
+											"disabled": true
+										},
+										{
+											"key": "updated_at_before",
+											"value": "2024-10-01T00:00:00",
+											"description": "Filter contacts updated before the provided ISO 8601 timestamp (inclusive). Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SSZ.",
+											"disabled": true
+										}
+									]
+								},
+								"description": "Retrieve a paginated set of contacts using every supported filter parameter."
+							},
+							"response": []
+						},
+						{
+							"name": "Count Contacts",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/count/?company={{sampleCompany}}&distinct=true&search=cyber",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"count",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Case-insensitive substring match against Company.name.",
+											"disabled": true
+										},
+										{
+											"key": "name",
+											"value": "{{sampleCompany}}",
+											"description": "Alias for company filter.",
+											"disabled": true
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Request distinct contacts based on primary key (boolean).",
+											"disabled": true
+										},
+										{
+											"key": "search",
+											"value": "cyber",
+											"description": "General-purpose search term applied across contact and company text columns (case-insensitive).",
+											"disabled": true
+										},
+										{
+											"key": "first_name",
+											"value": "Patrick",
+											"description": "Case-insensitive substring match against Contact.first_name.",
+											"disabled": true
+										},
+										{
+											"key": "last_name",
+											"value": "McGarry",
+											"description": "Case-insensitive substring match against Contact.last_name.",
+											"disabled": true
+										},
+										{
+											"key": "title",
+											"value": "Chief Technology Officer",
+											"description": "Case-insensitive substring match against Contact.title.",
+											"disabled": true
+										},
+										{
+											"key": "email",
+											"value": "pat.mcgarry@banduracyber.com",
+											"description": "Case-insensitive substring match against Contact.email.",
+											"disabled": true
+										},
+										{
+											"key": "email_status",
+											"value": "Verified",
+											"description": "Case-insensitive substring match against Contact.email_status.",
+											"disabled": true
+										},
+										{
+											"key": "seniority",
+											"value": "C suite",
+											"description": "Case-insensitive substring match against Contact.seniority.",
+											"disabled": true
+										},
+										{
+											"key": "department",
+											"value": "C-Suite",
+											"description": "Substring match against Contact.departments array.",
+											"disabled": true
+										},
+										{
+											"key": "mobile_phone",
+											"value": "+1 937-555-0132",
+											"description": "Substring match against Contact.mobile_phone.",
+											"disabled": true
+										},
+										{
+											"key": "city",
+											"value": "{{sampleCity}}",
+											"description": "Substring match against ContactMetadata.city.",
+											"disabled": true
+										},
+										{
+											"key": "state",
+											"value": "{{sampleState}}",
+											"description": "Substring match against ContactMetadata.state.",
+											"disabled": true
+										},
+										{
+											"key": "country",
+											"value": "{{sampleCountry}}",
+											"description": "Substring match against ContactMetadata.country.",
+											"disabled": true
+										},
+										{
+											"key": "employees_min",
+											"value": "20",
+											"description": "Lower-bound filter for Company.employees_count (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "employees_max",
+											"value": "35",
+											"description": "Upper-bound filter for Company.employees_count (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue_min",
+											"value": "7000000",
+											"description": "Lower-bound filter for Company.annual_revenue (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue_max",
+											"value": "9000000",
+											"description": "Upper-bound filter for Company.annual_revenue (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "technologies",
+											"value": "Salesforce",
+											"description": "Substring match within Company.technologies array.",
+											"disabled": true
+										},
+										{
+											"key": "keywords",
+											"value": "cyber security",
+											"description": "Substring match within Company.keywords array.",
+											"disabled": true
+										},
+										{
+											"key": "industries",
+											"value": "information technology",
+											"description": "Substring match within Company.industries array.",
+											"disabled": true
+										},
+										{
+											"key": "created_at_after",
+											"value": "2024-01-01T00:00:00",
+											"description": "Filter contacts created after ISO 8601 timestamp (inclusive).",
+											"disabled": true
+										},
+										{
+											"key": "created_at_before",
+											"value": "2024-12-31T23:59:59",
+											"description": "Filter contacts created before ISO 8601 timestamp (inclusive).",
+											"disabled": true
+										}
+									]
+								},
+								"description": "Return the total number of contacts that satisfy the provided filters. Supports all ContactFilterParams. Use distinct=true to count unique contacts."
+							},
+							"response": []
+						},
+						{
+							"name": "Retrieve Contact",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/{{sampleContactId}}/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"{{sampleContactId}}",
+										""
+									]
+								},
+								"description": "Fetch details for a single contact by primary key."
+							},
+							"response": []
+						},
+						{
+							"name": "Create Contact",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-Contacts-Write-Key",
+										"value": "{{contactsWriteKey}}",
+										"description": "Required header for write operations. Must match the configured CONTACTS_WRITE_KEY value. Used to authorize contact creation, updates, and deletions."
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"uuid\": \"f4b8c3f5-1111-4f9b-aaaa-123456789abc\",\n  \"first_name\": \"Patrick\",\n  \"last_name\": \"McGarry\",\n  \"company_id\": \"398cce44-233d-5f7c-aea1-e4a6a79df10c\",\n  \"email\": \"pat.mcgarry@banduracyber.com\",\n  \"title\": \"Chief Technology Officer\",\n  \"departments\": [\n    \"C-Suite\",\n    \"Engineering & Technical\"\n  ],\n  \"mobile_phone\": \"+1 937-555-0132\",\n  \"email_status\": \"Verified\",\n  \"text_search\": \"Fulton Maryland United States\",\n  \"seniority\": \"C suite\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/contacts/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										""
+									]
+								},
+								"description": "Create a new contact record using the ContactCreate schema. All body fields are optional:\n- uuid (string, optional): Contact UUID. If not provided, one will be generated.\n- first_name (string, optional): Contact's first name.\n- last_name (string, optional): Contact's last name.\n- company_id (string, optional): UUID of the related company.\n- email (string, optional): Contact's email address.\n- title (string, optional): Contact's job title.\n- departments (array[string], optional): List of department names.\n- mobile_phone (string, optional): Contact's mobile phone number.\n- email_status (string, optional): Email verification status.\n- text_search (string, optional): Free-form search text, e.g., location information.\n- seniority (string, optional): Contact's seniority level.\n\nRequires admin authentication and X-Contacts-Write-Key header."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Attribute Lookups",
+					"item": [
+						{
+							"name": "List Contact Titles",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/title/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"title",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/title/ using AttributeListParams."
+							},
+							"response": []
+						},
+						{
+							"name": "List Company Names",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/company/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"company",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/company/ using AttributeListParams."
+							},
+							"response": []
+						},
+						{
+							"name": "List Industries",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/industry/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura&separated=true",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"industry",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										},
+										{
+											"key": "separated",
+											"value": "true",
+											"description": "Split array columns into unique tokens."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/industry/ using AttributeListParams. The separated parameter (true/false) controls whether array columns are split into unique tokens. When separated=true, each industry value in the array is returned as a separate item. When separated=false (default), arrays are collapsed into comma-separated strings. Supports all ContactFilterParams for filtering which contacts to consider."
+							},
+							"response": []
+						},
+						{
+							"name": "List Keywords",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/keywords/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura&separated=true",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"keywords",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										},
+										{
+											"key": "separated",
+											"value": "true",
+											"description": "Split array columns into unique tokens."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/keywords/ using AttributeListParams. The separated parameter (true/false) controls whether array columns are split into unique tokens. When separated=true, each keyword value in the array is returned as a separate item. When separated=false (default), arrays are collapsed into comma-separated strings. Supports all ContactFilterParams for filtering which contacts to consider."
+							},
+							"response": []
+						},
+						{
+							"name": "List Technologies",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/technologies/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura&separated=true",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"technologies",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										},
+										{
+											"key": "separated",
+											"value": "true",
+											"description": "Split array columns into unique tokens."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/technologies/ using AttributeListParams. The separated parameter (true/false) controls whether array columns are split into unique tokens. When separated=true, each technology value in the array is returned as a separate item. When separated=false (default), arrays are collapsed into comma-separated strings. Supports all ContactFilterParams for filtering which contacts to consider."
+							},
+							"response": []
+						},
+						{
+							"name": "List Company Addresses",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/company_address/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"company_address",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/company_address/ using AttributeListParams."
+							},
+							"response": []
+						},
+						{
+							"name": "List Contact Addresses",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/contact_address/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"contact_address",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/contact_address/ using AttributeListParams."
+							},
+							"response": []
+						},
+						{
+							"name": "List Contact Cities",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/city/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"city",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/city/ using AttributeListParams."
+							},
+							"response": []
+						},
+						{
+							"name": "List Contact States",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/state/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"state",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/state/ using AttributeListParams."
+							},
+							"response": []
+						},
+						{
+							"name": "List Contact Countries",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/country/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"country",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/country/ using AttributeListParams."
+							},
+							"response": []
+						},
+						{
+							"name": "List Company Cities",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/company_city/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"company_city",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/company_city/ using AttributeListParams."
+							},
+							"response": []
+						},
+						{
+							"name": "List Company States",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/company_state/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"company_state",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/company_state/ using AttributeListParams."
+							},
+							"response": []
+						},
+						{
+							"name": "List Company Countries",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/company_country/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"company_country",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Restrict results to a single company."
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Return unique values."
+										},
+										{
+											"key": "limit",
+											"value": "25",
+											"description": "Maximum number of results."
+										},
+										{
+											"key": "offset",
+											"value": "0",
+											"description": "Offset applied before fetching values."
+										},
+										{
+											"key": "ordering",
+											"value": "value",
+											"description": "Sort alphabetically."
+										},
+										{
+											"key": "search",
+											"value": "Bandura",
+											"description": "Optional case-insensitive search term."
+										}
+									]
+								},
+								"description": "Return distinct values for /contacts/company_country/ using AttributeListParams."
+							},
+							"response": []
+						}
+					],
+					"description": "Distinct value lookups for contact and company metadata columns."
+				}
+			],
+			"description": "Contact list, detail, creation, and attribute lookup endpoints."
+		},
+		{
+			"name": "Imports",
+			"item": [
+				{
+					"name": "Import Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/contacts/import/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"contacts",
+								"import",
+								""
+							]
+						},
+						"description": "Provides instructions for uploading a contacts CSV file."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Contacts CSV",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"description": "Upload the sample CSV located under data/data/apollo_sample_5000_cleaned.csv.",
+									"type": "file",
+									"src": "{{importFilePath}}"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/contacts/import/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"contacts",
+								"import",
+								""
+							]
+						},
+						"description": "Start a background contacts import using a CSV file.\n\n**File Requirements:**\n- Format: CSV (Comma-Separated Values)\n- File must not be empty\n- File name is required\n\n**Request:**\n- Content-Type: multipart/form-data (automatically set by Postman)\n- Body: Form-data with key \"file\" and type \"file\"\n- Requires admin authentication\n\n**Response Codes:**\n- 202 Accepted: Import job created and queued\n- 400 Bad Request: Empty file or missing filename\n- 401 Unauthorized: Authentication required\n- 403 Forbidden: Admin access required\n- 422 Unprocessable Entity: File name is required\n- 500 Internal Server Error: Failed to store file or create job"
+					},
+					"response": []
+				},
+				{
+					"name": "Import Job Detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/contacts/import/{{sampleImportJobId}}/?include_errors=false",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"contacts",
+								"import",
+								"{{sampleImportJobId}}",
+								""
+							],
+							"query": [
+								{
+									"key": "include_errors",
+									"value": "false",
+									"description": "Toggle inclusion of row-level error details in the response. When false (default), returns ImportJobDetail. When true, returns ImportJobWithErrors containing an errors array with row-level import errors."
+								}
+							]
+						},
+						"description": "Fetch the status of a queued import job without embedded errors.\n\n**Query Parameters:**\n- include_errors (boolean, optional, default: false): When false, returns ImportJobDetail. When true, returns ImportJobWithErrors with embedded error payloads.\n\n**Response Codes:**\n- 200 OK: Job details retrieved\n- 401 Unauthorized: Authentication required\n- 404 Not Found: Import job not found"
+					},
+					"response": []
+				},
+				{
+					"name": "Import Job Detail (With Errors)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/contacts/import/{{sampleImportJobId}}/?include_errors=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"contacts",
+								"import",
+								"{{sampleImportJobId}}",
+								""
+							],
+							"query": [
+								{
+									"key": "include_errors",
+									"value": "true",
+									"description": "Toggle inclusion of row-level error details in the response. When true, returns ImportJobWithErrors containing an errors array with row-level import errors. When false (default), returns ImportJobDetail."
+								}
+							]
+						},
+						"description": "Fetch the status of a queued import job with embedded error payloads.\n\n**Query Parameters:**\n- include_errors (boolean, optional, default: false): When true, returns ImportJobWithErrors with embedded error payloads. When false, returns ImportJobDetail.\n\n**Response Codes:**\n- 200 OK: Job details with errors retrieved\n- 401 Unauthorized: Authentication required\n- 404 Not Found: Import job not found"
+					},
+					"response": []
+				},
+				{
+					"name": "Download Import Errors",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/contacts/import/{{sampleImportJobId}}/errors/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"contacts",
+								"import",
+								"{{sampleImportJobId}}",
+								"errors",
+								""
+							]
+						},
+						"description": "Retrieve recorded row-level import errors for the specified job."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints supporting the contacts CSV import workflow."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseHost",
+			"value": "http://localhost:8000",
+			"description": "Default FastAPI server origin."
+		},
+		{
+			"key": "baseUrl",
+			"value": "{{baseHost}}/api/v1",
+			"description": "Versioned API base path for v1 endpoints."
+		},
+		{
+			"key": "baseUrlV2",
+			"value": "{{baseHost}}/api/v2",
+			"description": "Versioned API base path for v2 endpoints (Authentication, Users, AI Chat)."
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"description": "JWT access token obtained from login or register endpoints. Automatically set by test scripts."
+		},
+		{
+			"key": "refreshToken",
+			"value": "",
+			"description": "JWT refresh token obtained from login or register endpoints. Automatically set by test scripts."
+		},
+		{
+			"key": "contactsWriteKey",
+			"value": "demo-write-key",
+			"description": "Sample value for the X-Contacts-Write-Key header. Must match the configured CONTACTS_WRITE_KEY value in the backend. Required for contact write operations (create, update, delete)."
+		},
+		{
+			"key": "sampleContactId",
+			"value": "1",
+			"description": "Example contact identifier for detail routes."
+		},
+		{
+			"key": "sampleImportJobId",
+			"value": "demo-job-id",
+			"description": "Placeholder job identifier for import status checks."
+		},
+		{
+			"key": "importFilePath",
+			"value": "D:\\\\code\\\\ayan\\\\appoinmentbackend\\\\data\\\\data\\\\apollo_sample_5000_cleaned.csv",
+			"description": "Local CSV file path used for import requests. Update this to point to your CSV file location. File must be in CSV format and not empty."
+		},
+		{
+			"key": "sampleCompanyUuid",
+			"value": "demo-company-uuid",
+			"description": "Placeholder company UUID used for exclusion filters."
+		},
+		{
+			"key": "sampleCompany",
+			"value": "DCS Technologies",
+			"description": "Company name from the sample CSV."
+		},
+		{
+			"key": "sampleCity",
+			"value": "Miamisburg",
+			"description": "City from the sample CSV."
+		},
+		{
+			"key": "sampleState",
+			"value": "Ohio",
+			"description": "State from the sample CSV."
+		},
+		{
+			"key": "sampleCountry",
+			"value": "United States",
+			"description": "Country from the sample CSV."
+		},
+		{
+			"key": "sampleChatId",
+			"value": "",
+			"description": "Chat UUID identifier. Automatically set by the Create Chat endpoint test script."
+		}
+	]
 }

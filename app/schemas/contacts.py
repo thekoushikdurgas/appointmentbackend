@@ -104,3 +104,27 @@ class ContactDetail(ContactListItem):
     company_detail: Optional[CompanySummary] = None
     metadata: Optional[ContactMetadataOut] = None
 
+
+class ContactLocation(BaseModel):
+    """Location object for the simple contact view."""
+
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+
+
+class ContactSimpleItem(BaseModel):
+    """Simplified contact representation for view=simple."""
+
+    id: int
+    uuid: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    title: Optional[str] = None
+    location: Optional[ContactLocation] = None
+    company_name: Optional[str] = None
+    person_linkedin_url: Optional[str] = None
+    company_domain: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+

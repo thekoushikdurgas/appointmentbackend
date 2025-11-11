@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # API
     API_V1_STR: str = "/api"
     API_V1_PREFIX: str = "/api/v1"
+    API_V2_PREFIX: str = "/api/v2"
     DOCS_URL: Optional[str] = "/docs"
     REDOC_URL: Optional[str] = "/redoc"
 
@@ -98,6 +99,8 @@ class Settings(BaseSettings):
 
     # File uploads
     UPLOAD_DIR: str = "./uploads"
+    MEDIA_URL: str = "/media"
+    BASE_URL: str = "http://localhost:8000"  # Base URL for generating full avatar URLs
 
     # Pagination defaults
     DEFAULT_PAGE_SIZE: int = 25

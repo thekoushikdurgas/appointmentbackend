@@ -10,7 +10,6 @@ dist/
 
 # Environment files
 venv/
-venv/
 
 # Editor/IDE
 .vscode/

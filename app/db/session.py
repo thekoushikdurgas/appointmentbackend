@@ -39,13 +39,15 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     FastAPI dependency that provides an async database session.
 
-    Ensures the session is closed and the transaction is rolled back on exception.
+    Commits the transaction on successful completion, rolls back on exception.
     """
     logger.debug("Entering get_db dependency")
     async with AsyncSessionLocal() as session:
         logger.debug("Opening async DB session")
         try:
             yield session
+            await session.commit()
+            logger.debug("Session committed successfully")
         except Exception as exc:
             await session.rollback()
             logger.debug("Session rollback due to exception: %s", exc, exc_info=True)

@@ -10,10 +10,12 @@ from typing import List
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_admin, get_current_user
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
 from app.models.imports import ContactImportError, ImportJobStatus
+from app.models.user import User
 from app.schemas.common import MessageResponse
 from app.schemas.imports import ImportErrorRecord, ImportJobDetail, ImportJobWithErrors
 from app.services.import_service import ImportService
@@ -27,7 +29,9 @@ logger = get_logger(__name__)
 
 
 @router.get("/", response_model=MessageResponse)
-async def import_info() -> MessageResponse:
+async def import_info(
+    current_user: User = Depends(get_current_user),
+) -> MessageResponse:
     """Provide instructions for triggering a contacts import."""
     logger.info("Import info endpoint requested")
     payload = MessageResponse(
@@ -41,6 +45,7 @@ async def import_info() -> MessageResponse:
 async def upload_contacts_import(
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
 ) -> ImportJobDetail:
     """Accept a CSV upload, persist job metadata, and enqueue background processing."""
     logger.info(
@@ -146,6 +151,7 @@ async def import_job_detail(
     job_id: str,
     include_errors: bool = False,
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ImportJobWithErrors | ImportJobDetail:
     """Return a job record with optional error payload."""
     logger.info("Fetching import job detail: job_id=%s include_errors=%s", job_id, include_errors)
@@ -165,6 +171,7 @@ async def import_job_detail(
 async def download_import_errors(
     job_id: str,
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[ImportErrorRecord]:
     """Return recorded row-level errors for a contacts import job."""
     logger.info("Fetching import job errors: job_id=%s", job_id)

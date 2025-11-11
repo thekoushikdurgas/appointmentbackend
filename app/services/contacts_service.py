@@ -16,7 +16,7 @@ from app.models.contacts import Contact, ContactMetadata
 from app.repositories.contacts import ContactRepository
 from app.schemas.common import CountResponse, CursorPage
 from app.schemas.companies import CompanySummary
-from app.schemas.contacts import ContactCreate, ContactDetail, ContactListItem
+from app.schemas.contacts import ContactCreate, ContactDetail, ContactListItem, ContactSimpleItem, ContactLocation
 from app.schemas.filters import AttributeListParams, ContactFilterParams
 from app.schemas.metadata import ContactMetadataOut
 from app.utils.cursor import encode_offset_cursor
@@ -188,6 +188,78 @@ class ContactsService:
             bool(previous_link),
         )
         return CursorPage(next=next_link, previous=previous_link, results=results)
+
+    async def list_contacts_simple(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        *,
+        limit: int,
+        offset: int,
+        request_url: str,
+        use_cursor: bool = False,
+    ) -> CursorPage[ContactSimpleItem]:
+        """List contacts in simplified projection for view=simple."""
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        self.logger.info(
+            "Service listing contacts (simple): limit=%d offset=%d use_cursor=%s filters=%s",
+            limit,
+            offset,
+            use_cursor,
+            active_filter_keys,
+        )
+        try:
+            rows = await self.repository.list_contacts(session, filters, limit, offset)
+        except ValueError as exc:
+            self.logger.info("List contacts (simple) request rejected: %s", exc)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        self.logger.debug("Repository returned %d rows for contact simple list", len(rows))
+
+        simple_results: list[ContactSimpleItem] = []
+        for contact, company, contact_meta, company_meta in rows:
+            location = ContactLocation(
+                city=_normalize_text(contact_meta.city if contact_meta else None),
+                state=_normalize_text(contact_meta.state if contact_meta else None),
+                country=_normalize_text(contact_meta.country if contact_meta else None),
+            )
+            # When all location fields are None, keep location as None
+            location_value = location if any([location.city, location.state, location.country]) else None
+            simple_results.append(
+                ContactSimpleItem(
+                    id=contact.id,
+                    uuid=contact.uuid,
+                    first_name=_normalize_text(contact.first_name),
+                    last_name=_normalize_text(contact.last_name),
+                    title=_normalize_text(contact.title),
+                    location=location_value,
+                    company_name=_normalize_text(company.name if company else None),
+                    person_linkedin_url=_normalize_text(contact_meta.linkedin_url if contact_meta else None),
+                    company_domain=_normalize_text(contact_meta.website if contact_meta else None),
+                )
+            )
+
+        next_link = None
+        if len(simple_results) == limit:
+            if use_cursor:
+                next_cursor = encode_offset_cursor(offset + limit)
+                next_link = build_cursor_link(request_url, next_cursor)
+            else:
+                next_link = build_pagination_link(request_url, limit=limit, offset=offset + limit)
+        previous_link = None
+        if offset > 0:
+            if use_cursor:
+                prev_offset = max(offset - limit, 0)
+                prev_cursor = encode_offset_cursor(prev_offset)
+                previous_link = build_cursor_link(request_url, prev_cursor)
+            else:
+                prev_offset = max(offset - limit, 0)
+                previous_link = build_pagination_link(request_url, limit=limit, offset=prev_offset)
+        self.logger.info(
+            "List contacts (simple) pagination prepared: next=%s previous=%s",
+            bool(next_link),
+            bool(previous_link),
+        )
+        return CursorPage(next=next_link, previous=previous_link, results=simple_results)
 
     async def count_contacts(
         self,

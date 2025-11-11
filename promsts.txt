@@ -70,64 +70,7 @@ also in root codebase also modify thsThe src folder codebase is modified, but th
 
 Reviewing key files to understand the project structure and determine how to run it.
 
-[7 tools called]
-
-## ASGI Context
-- `app.main:app` is a singleton FastAPI instance configured with lifespan hooks, custom logging/timing middleware, proxy headers, and router registration under `settings.API_V1_PREFIX`.  
-```50:57:app/main.py
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    version=settings.VERSION,
-    description=settings.DESCRIPTION,
-    docs_url=docs_url,
-    redoc_url=redoc_url,
-    root_path=settings.ROOT_PATH or "",
-    lifespan=lifespan,
-)
-```
-- Runtime behavior is driven by `.env` values read via `get_settings()`; defaults include proxy header support and CORS/host allowlists.  
-```16:88:app/core/config.py
-class Settings(BaseSettings):
-    PROJECT_NAME: str = "Appointment360 API"
-    ...
-    TRUSTED_HOSTS: List[str] = [
-        "54.88.182.69",
-        "localhost",
-        "127.0.0.1",
-        "testserver",
-    ]
-    ROOT_PATH: str = ""
-    USE_PROXY_HEADERS: bool = True
-```
-
-## Server Preparation
-- Update and install base packages:  
-  `sudo apt update && sudo apt upgrade -y`  
-  `sudo apt install -y python3 python3-venv python3-pip build-essential nginx git`
-- Create target directory and virtualenv:  
-  `sudo mkdir -p /home/ubuntu/appointmentbackend`  
-  `sudo chown -R ubuntu:ubuntu /home/ubuntu/appointmentbackend`  
-  `cd /home/ubuntu/appointmentbackend && python3 -m venv venv`
-- Sync code (clone or rsync) and install Python deps:  
-  `source venv/bin/activate`  
-  `pip install --upgrade pip`  
-  `pip install -r requirements.txt`
-
-## Environment Settings & File Permissions
-- Populate `/home/ubuntu/appointmentbackend/.env` to override sensitive defaults:
-  - `ENVIRONMENT=production`
-  - `DEBUG=false`
-  - `POSTGRES_*` credentials for the RDS instance (host already set)
-  - `SECRET_KEY`, `CONTACTS_WRITE_KEY`, token expiry overrides as needed
-  - `REDIS_URL`/`CELERY_*` if Redis is remote or secured
-  - `ALLOWED_ORIGINS` / `TRUSTED_HOSTS` updated for public domain(s)
-- Ensure directories required by the app exist:  
-  `mkdir -p uploads logs` (owned by `ubuntu:ubuntu` with 750 permissions if desired).  
-  Systemd service will run as `ubuntu`, so no additional ACLs needed if ownership is correct.
-
-## Systemd Gunicorn Service
-- Create `/etc/systemd/system/gunicorn_app.service` (run `sudo nano` or similar) with:
-```
+sudo tee /etc/systemd/system/appointmentbackend.service >/dev/null <<'EOF'
 [Unit]
 Description=Gunicorn service for Appointment360 FastAPI
 After=network.target
@@ -137,13 +80,7 @@ User=ubuntu
 Group=www-data
 WorkingDirectory=/home/ubuntu/appointmentbackend
 EnvironmentFile=/home/ubuntu/appointmentbackend/.env
-ExecStart=/home/ubuntu/appointmentbackend/venv/bin/gunicorn \
-  --workers 3 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind unix:/run/appointmentbackend/appointmentbackend.sock \
-  --access-logfile - \
-  --error-logfile - \
-  app.main:app
+ExecStart=/home/ubuntu/appointmentbackend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 RuntimeDirectory=appointmentbackend
 RuntimeDirectoryMode=0755
 Restart=always
@@ -151,65 +88,4 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-```
-- Reload and start:  
-  `sudo systemctl daemon-reload`  
-  `sudo systemctl enable gunicorn_app`  
-  `sudo systemctl start gunicorn_app`
-- Socket path `/run/appointmentbackend/appointmentbackend.sock` will be created automatically with correct ownership because of `RuntimeDirectory`.
-
-## NGINX Reverse Proxy
-- Create `/etc/nginx/sites-available/appointmentbackend` with:
-```
-server {
-    listen 80;
-    server_name 54.88.182.69;
-
-    access_log /var/log/nginx/appointmentbackend.access.log;
-    error_log  /var/log/nginx/appointmentbackend.error.log;
-
-    location / {
-        proxy_pass http://unix:/run/appointmentbackend/appointmentbackend.sock;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 60;
-        proxy_connect_timeout 60;
-    }
-
-    location /docs {
-        proxy_pass http://unix:/run/appointmentbackend/appointmentbackend.sock;
-    }
-
-    client_max_body_size 50M;
-
-    gzip on;
-    gzip_types text/plain application/json application/javascript text/css;
-}
-```
-- Enable site and disable default:  
-  `sudo ln -s /etc/nginx/sites-available/appointmentbackend /etc/nginx/sites-enabled/`  
-  `sudo rm /etc/nginx/sites-enabled/default` (if still present)
-- Test config and reload:  
-  `sudo nginx -t`  
-  `sudo systemctl reload nginx`
-- Ensure firewall allows HTTP/HTTPS (if UFW enabled):  
-  `sudo ufw allow 'Nginx Full'`
-
-## Verification & Operations
-- Check service health:  
-  `sudo systemctl status gunicorn_app`  
-  `sudo journalctl -u gunicorn_app -f`
-- Validate application:  
-  `curl http://54.88.182.69/health` (expect `{"status":"healthy","environment":"production"}`)
-- Deployment updates:  
-  - `cd /home/ubuntu/appointmentbackend`  
-  - `source venv/bin/activate`  
-  - `git pull` (or sync changes)  
-  - `pip install -r requirements.txt` (if dependencies changed)  
-  - `sudo systemctl restart gunicorn_app`
-- NGINX logs at `/var/log/nginx/appointmentbackend.*`, application logs via journald unless you configure `LOG_LEVEL`/handlers differently.
-- Optional hardening: enable HTTPS via Certbot once you map a domain; consider `fail2ban`, cron-based database migrations, and monitoring (uptime checks or CloudWatch).
-
-Next steps: apply SSL if using a domain, set up automated backups and metrics, and ensure database credentials in `.env` align with production readiness.
+EOF

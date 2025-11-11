@@ -12,6 +12,8 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
+from app.models.user import User, UserProfile
+from app.api.deps import get_current_user
 from app.core.config import get_settings
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -44,7 +46,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest_asyncio.fixture(autouse=True)
 async def clean_database(db_session: AsyncSession) -> AsyncGenerator[None, None]:
-    tables = (ContactMetadata, Contact, CompanyMetadata, Company)
+    tables = (ContactMetadata, Contact, CompanyMetadata, Company, UserProfile, User)
     for table in tables:
         await db_session.execute(delete(table))
     await db_session.commit()
@@ -62,6 +64,30 @@ async def override_get_db(db_session: AsyncSession) -> AsyncGenerator[None, None
     app.dependency_overrides[get_db] = _get_test_db
     yield
     app.dependency_overrides.pop(get_db, None)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def override_get_current_user(db_session: AsyncSession) -> AsyncGenerator[None, None]:
+    """Override get_current_user to return a test user for all tests."""
+    from uuid import uuid4
+    
+    # Create a test user
+    test_user = User(
+        id=str(uuid4()),
+        email="test@example.com",
+        hashed_password="test_hashed_password",
+        name="Test User",
+        is_active=True,
+    )
+    db_session.add(test_user)
+    await db_session.flush()
+
+    async def _get_test_user():
+        return test_user
+
+    app.dependency_overrides[get_current_user] = _get_test_user
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest_asyncio.fixture

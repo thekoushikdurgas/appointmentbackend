@@ -8,14 +8,23 @@ Complete API documentation for contact management endpoints, including listing, 
 http://107.21.188.21:8000
 ```
 
+**API Version:** All endpoints are under `/api/v1/contacts/`
+
 ## Authentication
 
-Most contact endpoints are publicly accessible (no authentication required). Import endpoints require admin authentication (IsAdminUser).
+All contact endpoints require user authentication. Import endpoints require admin authentication.
 
-**Admin Authentication (for import endpoints):**
+**User Authentication (for all endpoints):**
+
+```txt
+Authorization: Bearer <access_token>
+```
+
+**Admin Authentication (for import and write endpoints):**
 
 ```txt
 Authorization: Bearer <admin_access_token>
+X-Contacts-Write-Key: <write_key>  (required for POST /api/v1/contacts/)
 ```
 
 ---
@@ -28,7 +37,7 @@ Authorization: Bearer <admin_access_token>
 
 ## Main Contact Endpoints
 
-### GET /api/contacts/ - List Contacts
+### GET /api/v1/contacts/ - List Contacts
 
 Retrieve a paginated list of contacts with optional filtering, searching, and ordering.
 
@@ -79,17 +88,41 @@ All text filters support partial matching:
 - `primary_email_catch_all_status` (string): Filter by catch-all status
 - `stage` (string): Filter by stage (exact match)
 - `seniority` (string): Filter by seniority (exact match)
+- `employees_count` (integer): Exact match for number of employees
+- `annual_revenue` (integer): Exact match for annual revenue (in dollars)
+- `total_funding` (integer): Exact match for total funding (in dollars)
 
 #### Numeric Range Filters
 
 - `employees_min` (integer): Minimum number of employees
 - `employees_max` (integer): Maximum number of employees
-- `annual_revenue_min` (integer): Minimum annual revenue
-- `annual_revenue_max` (integer): Maximum annual revenue
-- `total_funding_min` (integer): Minimum total funding
-- `total_funding_max` (integer): Maximum total funding
-- `latest_funding_amount_min` (integer): Minimum latest funding amount
-- `latest_funding_amount_max` (integer): Maximum latest funding amount
+- `annual_revenue_min` (integer): Minimum annual revenue (in dollars)
+- `annual_revenue_max` (integer): Maximum annual revenue (in dollars)
+- `total_funding_min` (integer): Minimum total funding (in dollars)
+- `total_funding_max` (integer): Maximum total funding (in dollars)
+- `latest_funding_amount_min` (integer): Minimum latest funding amount (in dollars)
+- `latest_funding_amount_max` (integer): Maximum latest funding amount (in dollars)
+
+#### Location Filters
+
+- `company_location` (string): Filter by company location text (searches Company.text_search covering address, city, state, country)
+- `contact_location` (string): Filter by contact location text (searches Contact.text_search covering person-level location metadata)
+
+#### Exclusion Filters (multi-value, case-insensitive)
+
+These filters exclude contacts matching any of the provided values:
+
+- `exclude_company_ids` (array of strings): Exclude contacts from specified company UUIDs
+- `exclude_titles` (array of strings): Exclude contacts with specified titles
+- `exclude_company_locations` (array of strings): Exclude contacts from companies in specified locations
+- `exclude_contact_locations` (array of strings): Exclude contacts in specified locations
+- `exclude_seniorities` (array of strings): Exclude contacts with specified seniority levels
+- `exclude_departments` (array of strings): Exclude contacts in specified departments
+- `exclude_technologies` (array of strings): Exclude contacts from companies using specified technologies
+- `exclude_keywords` (array of strings): Exclude contacts from companies with specified keywords
+- `exclude_industries` (array of strings): Exclude contacts from companies in specified industries
+
+**Note:** Exclusion filters accept multiple values as comma-separated strings or repeated query parameters (e.g., `?exclude_titles=Intern&exclude_titles=Junior` or `?exclude_titles=Intern,Junior`)
 
 #### Date Range Filters (ISO datetime format)
 
@@ -111,6 +144,7 @@ All text filters support partial matching:
 
 #### Advanced Controls
 
+- `view` (string): When set to `"simple"`, returns simplified contact data (`ContactSimpleItem`) with only essential fields (id, uuid, first_name, last_name, title, location, company_name, person_linkedin_url, company_domain). Omit for full `ContactListItem` response.
 - `include_meta` (boolean): When `true`, includes the `meta_data` JSON column in list responses. Defaults to `false` for lean payloads.
 - `use_replica` (boolean): When `true` and a replica database is configured, routes reads to that replica. Defaults to the `CONTACTS_DEFAULT_REPLICA_READ` setting.
 
@@ -120,7 +154,7 @@ All text filters support partial matching:
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/contacts/?cursor=cj0xJnN1YiI6IjE2ODAwMDAwMDAwMDAwMDAwMDAwMCJ9",
+  "next": "http://107.21.188.21:8000/api/v1/contacts/?cursor=cj0xJnN1YiI6IjE2ODAwMDAwMDAwMDAwMDAwMDAwMCJ9",
   "previous": null,
   "results": [
     {
@@ -192,14 +226,40 @@ Every list response now ships with a `meta` section describing how the data was 
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/contacts/?ordering=-employees&limit=25&offset=25",
-  "previous": "http://107.21.188.21:8000/api/contacts/?ordering=-employees&limit=25&offset=0",
+  "next": "http://107.21.188.21:8000/api/v1/contacts/?ordering=-employees&limit=25&offset=25",
+  "previous": "http://107.21.188.21:8000/api/v1/contacts/?ordering=-employees&limit=25&offset=0",
   "results": [
     {
       "id": 1,
       "first_name": "John",
       "last_name": "Doe",
       ...
+    }
+  ]
+}
+```
+
+**With view=simple:**
+
+```json
+{
+  "next": "http://107.21.188.21:8000/api/v1/contacts/?view=simple&cursor=...",
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "uuid": "abc123-def456-ghi789",
+      "first_name": "John",
+      "last_name": "Doe",
+      "title": "CEO",
+      "location": {
+        "city": "San Francisco",
+        "state": "CA",
+        "country": "United States"
+      },
+      "company_name": "Acme Corp",
+      "person_linkedin_url": "https://linkedin.com/in/johndoe",
+      "company_domain": "https://acme.com"
     }
   ]
 }
@@ -230,10 +290,11 @@ Every list response now ships with a `meta` section describing how the data was 
 **Example Requests:**
 
 ```txt
-GET /api/contacts/?first_name=John&country=United States&employees_min=50&ordering=-employees
-GET /api/contacts/?search=technology&page_size=10
-GET /api/contacts/?title=cto&company_name_for_emails=inc&industry=software&ordering=-employees,company&limit=25&offset=0
-GET /api/contacts/?created_at_after=2024-01-01T00:00:00Z&ordering=-created_at
+GET /api/v1/contacts/?first_name=John&country=United States&employees_min=50&ordering=-employees
+GET /api/v1/contacts/?search=technology&page_size=10
+GET /api/v1/contacts/?title=cto&company_name_for_emails=inc&industry=software&ordering=-employees,company&limit=25&offset=0
+GET /api/v1/contacts/?created_at_after=2024-01-01T00:00:00Z&ordering=-created_at
+GET /api/v1/contacts/?view=simple&company=Acme&limit=10
 ```
 
 **Notes:**
@@ -249,7 +310,7 @@ GET /api/contacts/?created_at_after=2024-01-01T00:00:00Z&ordering=-created_at
 
 ---
 
-### GET /api/contacts/{id}/ - Retrieve Contact
+### GET /api/v1/contacts/{id}/ - Retrieve Contact
 
 Get detailed information about a specific contact by ID.
 
@@ -331,7 +392,7 @@ Get detailed information about a specific contact by ID.
 
 ---
 
-### GET /api/contacts/count/ - Get Contact Count
+### GET /api/v1/contacts/count/ - Get Contact Count
 
 Get the total count of contacts, optionally filtered. Uses PostgreSQL estimated count for unfiltered queries (fast) and actual count for filtered queries (accurate).
 
@@ -390,9 +451,9 @@ Or:
 **Example Requests:**
 
 ```txt
-GET /api/contacts/count/
-GET /api/contacts/count/?country=United States&city=San Francisco&employees_min=50
-GET /api/contacts/count/?email_status=valid&industry=Technology
+GET /api/v1/contacts/count/
+GET /api/v1/contacts/count/?country=United States&city=San Francisco&employees_min=50
+GET /api/v1/contacts/count/?email_status=valid&industry=Technology
 ```
 
 **Notes:**
@@ -403,33 +464,53 @@ GET /api/contacts/count/?email_status=valid&industry=Technology
 
 ---
 
-### GET /api/contacts/analytics/ - Contact Analytics Snapshot
+### POST /api/v1/contacts/ - Create Contact
 
-Returns high-level aggregates for dashboards or health checks. When Spark (Thrift/Livy) or Hadoop is configured the service streams results from those backends; otherwise it falls back to PostgreSQL/ORM aggregation.
+Create a new contact. Requires admin authentication and the `X-Contacts-Write-Key` header.
 
-**Query Parameters:**
+**Headers:**
 
-- `limit` (integer, default `10`, max `50`): Number of top countries/industries to include.
+- `Authorization: Bearer <admin_access_token>` (required)
+- `X-Contacts-Write-Key: <write_key>` (required)
+- `X-Request-Id` (optional): Request tracking ID
 
-**Response:**
+**Request Body:**
 
 ```json
 {
-  "total_contacts": 125000,
-  "top_countries": [{"country": "US", "total": 82000}, {"country": "GB", "total": 9000}],
-  "top_industries": [{"industry": "software", "total": 55000}],
-  "hadoop_job_configured": false,
-  "generated_at": "2025-03-01T12:00:00Z",
-  "limit": 10,
-  "source": "spark"
+  "uuid": "optional-uuid-or-auto-generated",
+  "first_name": "John",
+  "last_name": "Doe",
+  "company_id": "company-uuid",
+  "email": "john@example.com",
+  "title": "CEO",
+  "departments": ["executive"],
+  "mobile_phone": "+1234567890",
+  "email_status": "valid",
+  "text_search": "San Francisco, CA",
+  "seniority": "c-level"
 }
 ```
 
-**Notes:**
+**Response:**
 
-- Responses are cached for `CONTACTS_ANALYTICS_CACHE_TTL` seconds. Cached responses include the `X-Cache-Hit` header.
-- When big data services are unavailable, the endpoint automatically switches to the ORM fallback and reports `"source": "django"`.
-- Add `Cache-Control: no-cache` to force regeneration of analytics snapshots.
+**Success (201 Created):**
+
+Returns a `ContactDetail` object (same structure as GET /api/v1/contacts/{id}/).
+
+**Error (403 Forbidden):**
+
+```json
+{
+  "detail": "Forbidden"
+}
+```
+
+**Status Codes:**
+
+- `201 Created`: Contact created successfully
+- `403 Forbidden`: Missing or invalid write key
+- `401 Unauthorized`: Authentication required
 
 ---
 
@@ -444,7 +525,7 @@ These endpoints return only the `id` and the specific field value for each conta
 - `limit` (integer): Number of results per page (max 100, default: 25)
 - `offset` (integer): Offset for pagination
 
-### GET /api/contacts/title/ - List Titles
+### GET /api/v1/contacts/title/ - List Titles
 
 Get list of contacts with only id and title field.
 
@@ -463,7 +544,7 @@ Get list of contacts with only id and title field.
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/contacts/title/?limit=25&offset=25",
+  "next": "http://107.21.188.21:8000/api/v1/contacts/title/?limit=25&offset=25",
   "previous": null,
   "results": [
     {
@@ -487,13 +568,13 @@ Get list of contacts with only id and title field.
 **Example Requests:**
 
 ```txt
-GET /api/contacts/title/?search=technology
-GET /api/contacts/title/?distinct=true&limit=50
+GET /api/v1/contacts/title/?search=technology
+GET /api/v1/contacts/title/?distinct=true&limit=50
 ```
 
 ---
 
-### GET /api/contacts/company/ - List Companies
+### GET /api/v1/contacts/company/ - List Companies
 
 Get list of contacts with only id and company field.
 
@@ -512,7 +593,7 @@ Get list of contacts with only id and company field.
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/contacts/company/?limit=25&offset=25",
+  "next": "http://107.21.188.21:8000/api/v1/contacts/company/?limit=25&offset=25",
   "previous": null,
   "results": [
     {
@@ -534,13 +615,13 @@ Get list of contacts with only id and company field.
 **Example Requests:**
 
 ```txt
-GET /api/contacts/company/?search=tech
-GET /api/contacts/company/?distinct=true
+GET /api/v1/contacts/company/?search=tech
+GET /api/v1/contacts/company/?distinct=true
 ```
 
 ---
 
-### GET /api/contacts/industry/ - List Industries
+### GET /api/v1/contacts/industry/ - List Industries
 
 Get list of contacts with only id and industry field.
 
@@ -552,6 +633,7 @@ Get list of contacts with only id and industry field.
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct industry values
+- `separated` (boolean): If `true`, expands comma-separated industries into individual records (one record per industry). Each contact ID may appear multiple times.
 - `limit` (integer): Number of results per page (max 100, default: 25)
 - `offset` (integer): Offset for pagination
 
@@ -580,7 +662,7 @@ Get list of contacts with only id and industry field.
 
 ---
 
-### GET /api/contacts/keywords/ - List Keywords
+### GET /api/v1/contacts/keywords/ - List Keywords
 
 Get list of contacts with only id and keywords field. Supports expansion of comma-separated keywords.
 
@@ -703,7 +785,7 @@ GET /api/contacts/keywords/?separated=true&search=cloud&distinct=true
 
 ---
 
-### GET /api/contacts/technologies/ - List Technologies
+### GET /api/v1/contacts/technologies/ - List Technologies
 
 Get list of contacts with only id and technologies field.
 
@@ -715,6 +797,7 @@ Get list of contacts with only id and technologies field.
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct technology values
+- `separated` (boolean): If `true`, expands comma-separated technologies into individual records (one record per technology). Each contact ID may appear multiple times.
 - `limit` (integer): Number of results per page (max 100, default: 25)
 - `offset` (integer): Offset for pagination
 
@@ -743,7 +826,7 @@ Get list of contacts with only id and technologies field.
 
 ---
 
-### GET /api/contacts/company_address/ - List Company Addresses
+### GET /api/v1/contacts/company_address/ - List Company Addresses
 
 Return address text for related companies, sourced from the `Company.text_search` column.
 
@@ -783,7 +866,7 @@ Return address text for related companies, sourced from the `Company.text_search
 
 ---
 
-### GET /api/contacts/contact_address/ - List Contact Addresses
+### GET /api/v1/contacts/contact_address/ - List Contact Addresses
 
 Return person-level address text sourced from the `Contact.text_search` column.
 
@@ -823,11 +906,221 @@ Return person-level address text sourced from the `Contact.text_search` column.
 
 ---
 
+### GET /api/v1/contacts/city/ - List Contact Cities
+
+Get list of contacts with only id and city field (from ContactMetadata).
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+- `search` (string): Search term to filter results (case-insensitive)
+- `distinct` (boolean): If `true`, returns only distinct city values
+- `limit` (integer): Number of results per page (max 100, default: 25)
+- `offset` (integer): Offset for pagination
+
+**Response:**
+
+```json
+{
+  "next": null,
+  "previous": null,
+  "results": [
+    "San Francisco",
+    "New York",
+    "Austin"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+
+---
+
+### GET /api/v1/contacts/state/ - List Contact States
+
+Get list of contacts with only id and state field (from ContactMetadata).
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+- `search` (string): Search term to filter results (case-insensitive)
+- `distinct` (boolean): If `true`, returns only distinct state values
+- `limit` (integer): Number of results per page (max 100, default: 25)
+- `offset` (integer): Offset for pagination
+
+**Response:**
+
+```json
+{
+  "next": null,
+  "previous": null,
+  "results": [
+    "CA",
+    "NY",
+    "TX"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+
+---
+
+### GET /api/v1/contacts/country/ - List Contact Countries
+
+Get list of contacts with only id and country field (from ContactMetadata).
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+- `search` (string): Search term to filter results (case-insensitive)
+- `distinct` (boolean): If `true`, returns only distinct country values
+- `limit` (integer): Number of results per page (max 100, default: 25)
+- `offset` (integer): Offset for pagination
+
+**Response:**
+
+```json
+{
+  "next": null,
+  "previous": null,
+  "results": [
+    "United States",
+    "United Kingdom",
+    "Canada"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+
+---
+
+### GET /api/v1/contacts/company_city/ - List Company Cities
+
+Get list of contacts with only id and company city field (from CompanyMetadata).
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+- `search` (string): Search term to filter results (case-insensitive)
+- `distinct` (boolean): If `true`, returns only distinct company city values
+- `limit` (integer): Number of results per page (max 100, default: 25)
+- `offset` (integer): Offset for pagination
+
+**Response:**
+
+```json
+{
+  "next": null,
+  "previous": null,
+  "results": [
+    "San Francisco",
+    "New York",
+    "Austin"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+
+---
+
+### GET /api/v1/contacts/company_state/ - List Company States
+
+Get list of contacts with only id and company state field (from CompanyMetadata).
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+- `search` (string): Search term to filter results (case-insensitive)
+- `distinct` (boolean): If `true`, returns only distinct company state values
+- `limit` (integer): Number of results per page (max 100, default: 25)
+- `offset` (integer): Offset for pagination
+
+**Response:**
+
+```json
+{
+  "next": null,
+  "previous": null,
+  "results": [
+    "CA",
+    "NY",
+    "TX"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+
+---
+
+### GET /api/v1/contacts/company_country/ - List Company Countries
+
+Get list of contacts with only id and company country field (from CompanyMetadata).
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+- `search` (string): Search term to filter results (case-insensitive)
+- `distinct` (boolean): If `true`, returns only distinct company country values
+- `limit` (integer): Number of results per page (max 100, default: 25)
+- `offset` (integer): Offset for pagination
+
+**Response:**
+
+```json
+{
+  "next": null,
+  "previous": null,
+  "results": [
+    "United States",
+    "United Kingdom",
+    "Canada"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+
+---
+
 ## Import Endpoints
 
 These endpoints require admin authentication (IsAdminUser permission).
 
-### GET /api/contacts/import/ - Get Import Information
+### GET /api/v1/contacts/import/ - Get Import Information
 
 Get information about the import endpoint.
 
@@ -843,7 +1136,7 @@ Get information about the import endpoint.
 
 ```json
 {
-  "detail": "Upload contacts CSV via POST multipart/form-data with field 'file'."
+  "message": "Upload a CSV file via POST to /api/v1/contacts/import/ to start a background import job."
 }
 ```
 
@@ -855,7 +1148,7 @@ Get information about the import endpoint.
 
 ---
 
-### POST /api/contacts/import/ - Upload Contacts CSV
+### POST /api/v1/contacts/import/ - Upload Contacts CSV
 
 Upload a CSV file to import contacts. The file is processed asynchronously via Celery.
 
@@ -878,11 +1171,22 @@ file: [CSV file]
 
 **Response:**
 
-**Success (201 Created):**
+**Success (202 Accepted):**
 
 ```json
 {
-  "job_id": 123
+  "job_id": "abc123def456",
+  "status": "pending",
+  "total_rows": 0,
+  "success_count": 0,
+  "error_count": 0,
+  "upload_file_path": "/path/to/uploads/uuid_filename.csv",
+  "error_file_path": null,
+  "message": "Queued",
+  "started_at": null,
+  "finished_at": null,
+  "created_at": "2024-01-01T12:00:00Z",
+  "updated_at": "2024-01-01T12:00:00Z"
 }
 ```
 
@@ -920,16 +1224,18 @@ file: [CSV file]
 
 **Status Codes:**
 
-- `201 Created`: Upload successful, job created
+- `202 Accepted`: Upload successful, job created and queued
 - `400 Bad Request`: Invalid file or missing file field
 - `401 Unauthorized`: Authentication required
 - `403 Forbidden`: Admin access required
+- `422 Unprocessable Entity`: File name is required
+- `500 Internal Server Error`: Server error during upload or job creation
 
 **Example Request:**
 
 ```bash
 curl -X POST \
-  http://107.21.188.21:8000/api/contacts/import \
+  http://107.21.188.21:8000/api/v1/contacts/import/ \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -F "file=@contacts.csv"
 ```
@@ -943,7 +1249,7 @@ curl -X POST \
 
 ---
 
-### GET /api/contacts/import/{job_id}/ - Get Import Job Status
+### GET /api/v1/contacts/import/{job_id}/ - Get Import Job Status
 
 Get the status and details of an import job.
 
@@ -957,7 +1263,7 @@ Get the status and details of an import job.
 
 **Path Parameters:**
 
-- `job_id` (integer): Import job ID
+- `job_id` (string): Import job ID (UUID)
 
 **Response:**
 
@@ -965,21 +1271,50 @@ Get the status and details of an import job.
 
 ```json
 {
-  "id": 123,
+  "job_id": "abc123def456",
   "status": "completed",
   "total_rows": 10000,
   "success_count": 9850,
   "error_count": 150,
-  "upload_file_path": "/path/to/uploads/contacts_20240101T120000Z.csv",
-  "error_file_path": "/path/to/errors/job_123_errors.csv",
+  "upload_file_path": "/path/to/uploads/uuid_filename.csv",
+  "error_file_path": "/path/to/errors/job_abc123def456_errors.csv",
+  "message": "Completed",
+  "started_at": "2024-01-01T12:00:00Z",
+  "finished_at": "2024-01-01T12:05:30Z",
+  "created_at": "2024-01-01T12:00:00Z",
+  "updated_at": "2024-01-01T12:05:30Z"
+}
+```
+
+**With errors (when include_errors=true):**
+
+```json
+{
+  "job_id": "abc123def456",
+  "status": "completed",
+  "total_rows": 10000,
+  "success_count": 9850,
+  "error_count": 150,
+  "upload_file_path": "/path/to/uploads/uuid_filename.csv",
+  "error_file_path": "/path/to/errors/job_abc123def456_errors.csv",
   "message": "Completed",
   "started_at": "2024-01-01T12:00:00Z",
   "finished_at": "2024-01-01T12:05:30Z",
   "created_at": "2024-01-01T12:00:00Z",
   "updated_at": "2024-01-01T12:05:30Z",
-  "errors_url": "http://107.21.188.21:8000/api/contacts/import/123/errors/"
+  "errors": [
+    {
+      "row_number": 5,
+      "error_message": "Invalid email format",
+      "row_data": {...}
+    }
+  ]
 }
 ```
+
+**Query Parameters:**
+
+- `include_errors` (boolean): If `true`, includes error records in the response
 
 **Status Values:**
 
@@ -1021,13 +1356,13 @@ Get the status and details of an import job.
 
 **Notes:**
 
-- The `errors_url` field provides a direct link to download error rows
-- `error_file_path` will be empty if there are no errors
+- `error_file_path` will be null if there are no errors
 - `started_at` and `finished_at` are null until the job starts/completes
+- Use `include_errors=true` query parameter to get error details in the response
 
 ---
 
-### GET /api/contacts/import/{job_id}/errors/ - Download Import Errors
+### GET /api/v1/contacts/import/{job_id}/errors/ - Get Import Errors
 
 Download a CSV file containing all rows that failed during import.
 
@@ -1041,11 +1376,33 @@ Download a CSV file containing all rows that failed during import.
 
 **Path Parameters:**
 
-- `job_id` (integer): Import job ID
+- `job_id` (string): Import job ID (UUID)
 
 **Response:**
 
-- CSV file download with error rows
+**Success (200 OK):**
+
+Returns a JSON array of error records:
+
+```json
+[
+  {
+    "row_number": 5,
+    "error_message": "Invalid email format",
+    "row_data": {
+      "first_name": "John",
+      "email": "invalid-email"
+    }
+  },
+  {
+    "row_number": 12,
+    "error_message": "Missing required field: company_id",
+    "row_data": {
+      "first_name": "Jane"
+    }
+  }
+]
+```
 
 **Error (401 Unauthorized):**
 
@@ -1073,26 +1430,23 @@ Download a CSV file containing all rows that failed during import.
 
 **Status Codes:**
 
-- `200 OK`: Success, file downloaded
+- `200 OK`: Success, errors returned
 - `401 Unauthorized`: Authentication required
 - `403 Forbidden`: Admin access required
-- `404 Not Found`: Job not found or no error file available
+- `404 Not Found`: Job not found or no errors available
 
 **Example Request:**
 
 ```bash
 curl -X GET \
-  http://107.21.188.21:8000/api/contacts/import/123/errors/ \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
-  -o errors.csv
+  http://107.21.188.21:8000/api/v1/contacts/import/abc123def456/errors/ \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
 
 **Notes:**
 
-- The file is downloaded as an attachment
-- The filename is based on the error file path
-- If there are no errors, the endpoint returns 404
-- The error CSV contains the original row data plus error messages
+- Returns an empty array if there are no errors
+- Each error record includes the row number, error message, and the original row data
 
 ---
 

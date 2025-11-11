@@ -495,9 +495,8 @@ class ContactRepository(AsyncRepository[Contact]):
         company_meta_alias = aliased(CompanyMetadata, name="company_meta_attribute")
 
         column_expression = column_factory(Contact, company_alias, contact_meta_alias, company_meta_alias)
-        selectable_column = distinct(column_expression) if params.distinct else column_expression
 
-        stmt = select(selectable_column).select_from(Contact)
+        stmt = select(column_expression).select_from(Contact)
         stmt = stmt.outerjoin(company_alias, Contact.company_id == company_alias.uuid)
         stmt = stmt.outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
         stmt = stmt.outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
@@ -519,13 +518,26 @@ class ContactRepository(AsyncRepository[Contact]):
             contact_meta_alias,
             dialect_name=dialect_name,
         )
+        stmt = stmt.where(column_expression.isnot(None))
+        
+        # Apply distinct BEFORE ordering to avoid SQL issues
+        # When using DISTINCT, ORDER BY columns must be in SELECT list
+        if params.distinct:
+            stmt = stmt.distinct()
+        
+        # Apply ordering after distinct - only order by the selected column
         ordering_map = {"value": column_expression}
         stmt = apply_ordering(
             stmt,
             params.ordering,
             ordering_map,
         )
-        stmt = stmt.where(column_expression.isnot(None))
+        
+        # When using DISTINCT, ensure there's always an explicit ORDER BY
+        # This helps avoid issues with some databases (especially with joins)
+        if params.distinct and not params.ordering:
+            stmt = stmt.order_by(column_expression.asc())
+        
         stmt = stmt.limit(params.limit).offset(params.offset)
         result = await session.execute(stmt)
         values = []
@@ -583,7 +595,7 @@ class ContactRepository(AsyncRepository[Contact]):
         value_column = value_selectable.c.value
 
         attr_stmt = (
-            select(distinct(value_column) if params.distinct else value_column)
+            select(value_column)
             .select_from(filtered_companies)
             .join(source_company, source_company.uuid == filtered_companies.c.uuid)
             .join(value_selectable, true())
@@ -600,6 +612,10 @@ class ContactRepository(AsyncRepository[Contact]):
         attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
         if params.ordering is None:
             attr_stmt = attr_stmt.order_by(value_column.asc())
+        
+        # Apply distinct to the statement if requested
+        if params.distinct:
+            attr_stmt = attr_stmt.distinct()
 
         attr_stmt = attr_stmt.limit(params.limit).offset(params.offset)
         result = await session.execute(attr_stmt)

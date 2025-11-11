@@ -10,10 +10,12 @@ from fastapi.responses import JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api.v1.api import api_router
+from app.api.v2.api import api_router as api_router_v2
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.logging import get_logger, setup_logging
 from app.core.middleware import LoggingMiddleware, TimingMiddleware
+from fastapi.staticfiles import StaticFiles
 
 
 settings = get_settings()
@@ -30,6 +32,7 @@ async def lifespan(app: FastAPI):
     logger.debug("Entering lifespan startup")
     setup_logging()
     Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+    Path(settings.UPLOAD_DIR, "avatars").mkdir(parents=True, exist_ok=True)
     logger.info("Application startup complete: project=%s version=%s", settings.PROJECT_NAME, settings.VERSION)
     yield
     logger.info("Application shutdown initiated: project=%s", settings.PROJECT_NAME)
@@ -113,6 +116,10 @@ async def health_check():
 
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+app.include_router(api_router_v2, prefix=settings.API_V2_PREFIX)
+
+# Mount static files for media (avatars)
+app.mount(settings.MEDIA_URL, StaticFiles(directory=settings.UPLOAD_DIR), name="media")
 
 
 @app.get("/favicon.ico", status_code=204, include_in_schema=False)

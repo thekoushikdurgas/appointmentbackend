@@ -118,6 +118,54 @@ def test_contact_filter_exclude_titles_normalization():
     assert filters.exclude_titles == ["Engineer", "Manager", "VP"]
 
 
+@pytest.mark.asyncio
+async def test_contacts_list_view_simple_shape(async_client, db_session):
+    company = await create_company(db_session, with_metadata=True, metadata_overrides={"website": "https://acme.example.com", "city": "Austin", "state": "TX", "country": "USA"})
+    contact = await create_contact(
+        db_session,
+        company=company,
+        with_metadata=True,
+        metadata_overrides={
+            "linkedin_url": "https://linkedin.com/in/jane",
+            "website": "https://janedoe.example.com",
+            "city": "Austin",
+            "state": "TX",
+            "country": "USA",
+        },
+        first_name="Jane",
+        last_name="Doe",
+        title="Director",
+    )
+
+    response = await async_client.get("/api/v1/contacts/", params={"view": "simple", "limit": 1})
+    assert response.status_code == 200
+    payload = response.json()
+    assert isinstance(payload["results"], list)
+    assert len(payload["results"]) == 1
+    item = payload["results"][0]
+
+    assert set(item.keys()) == {
+        "id",
+        "uuid",
+        "first_name",
+        "last_name",
+        "title",
+        "location",
+        "company_name",
+        "person_linkedin_url",
+        "company_domain",
+    }
+    assert item["id"] == contact.id
+    assert item["uuid"] == contact.uuid
+    assert item["first_name"] == "Jane"
+    assert item["last_name"] == "Doe"
+    assert item["title"] == "Director"
+    assert item["company_name"] is not None
+    assert item["person_linkedin_url"] == "https://linkedin.com/in/jane"
+    assert item["company_domain"] == "https://janedoe.example.com"
+    assert item["location"] == {"city": "Austin", "state": "TX", "country": "USA"}
+
+
 def test_contact_filter_extended_exclusion_normalization():
     filters = ContactFilterParams.model_validate({"exclude_company_locations": " Austin , Dallas , , "})
     assert filters.exclude_company_locations == ["Austin", "Dallas"]
@@ -1603,3 +1651,404 @@ async def test_attribute_endpoints_accept_params(async_client, monkeypatch, endp
     filters = captured["filters"]
     assert isinstance(filters, ContactFilterParams)
     assert filters.contact_location == "Austin"
+
+
+# Comprehensive distinct parameter tests for all attribute endpoints
+ALL_ATTRIBUTE_ENDPOINTS = [
+    "title",
+    "company",
+    "industry",
+    "keywords",
+    "technologies",
+    "company_address",
+    "contact_address",
+    "city",
+    "state",
+    "country",
+    "company_city",
+    "company_state",
+    "company_country",
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ALL_ATTRIBUTE_ENDPOINTS)
+async def test_attribute_endpoints_distinct_comparison(async_client, db_session, endpoint):
+    """Test that distinct parameter correctly deduplicates results for all attribute endpoints."""
+    # Setup test data with duplicate values
+    if endpoint == "title":
+        # Create contacts with duplicate titles
+        for i in range(3):
+            await create_contact(
+                db_session,
+                first_name=f"Person{i}",
+                email=f"person{i}@example.com",
+                title="Director",
+            )
+        await create_contact(
+            db_session,
+            first_name="Manager",
+            email="manager@example.com",
+            title="Manager",
+        )
+    elif endpoint == "company":
+        # Create multiple contacts with same company
+        company = await create_company(db_session, name="Test Corp")
+        for i in range(3):
+            await create_contact(
+                db_session,
+                company=company,
+                first_name=f"Employee{i}",
+                email=f"employee{i}@example.com",
+            )
+    elif endpoint in ["industry", "keywords", "technologies"]:
+        # Create companies with duplicate array values
+        # Note: For SQLite testing, we use separated=true to avoid array_to_string function
+        company1 = await create_company(
+            db_session,
+            name="Tech Co 1",
+            industries=["Software", "Technology"] if endpoint == "industry" else None,
+            keywords=["SaaS", "Cloud"] if endpoint == "keywords" else None,
+            technologies=["Python", "AWS"] if endpoint == "technologies" else None,
+        )
+        company2 = await create_company(
+            db_session,
+            name="Tech Co 2",
+            industries=["Software", "Finance"] if endpoint == "industry" else None,
+            keywords=["SaaS", "Enterprise"] if endpoint == "keywords" else None,
+            technologies=["Python", "Docker"] if endpoint == "technologies" else None,
+        )
+        for i in range(2):
+            await create_contact(
+                db_session,
+                company=company1,
+                first_name=f"Contact{i}",
+                email=f"contact{i}@example.com",
+            )
+            await create_contact(
+                db_session,
+                company=company2,
+                first_name=f"Contact{i+2}",
+                email=f"contact{i+2}@example.com",
+            )
+    elif endpoint == "company_address":
+        # Create multiple contacts with same company address
+        company = await create_company(
+            db_session,
+            name="Address Test Co",
+            text_search="123 Main St, Austin, TX",
+        )
+        for i in range(3):
+            await create_contact(
+                db_session,
+                company=company,
+                first_name=f"Addr{i}",
+                email=f"addr{i}@example.com",
+            )
+    elif endpoint == "contact_address":
+        # Create contacts with same address
+        for i in range(3):
+            await create_contact(
+                db_session,
+                first_name=f"Contact{i}",
+                email=f"contact{i}@example.com",
+                text_search="456 Oak Ave, Denver, CO",
+            )
+    elif endpoint in ["city", "state", "country"]:
+        # Create contacts with same location metadata
+        for i in range(3):
+            await create_contact(
+                db_session,
+                first_name=f"City{i}",
+                email=f"city{i}@example.com",
+                metadata_overrides={
+                    "city": "San Francisco" if endpoint == "city" else None,
+                    "state": "CA" if endpoint == "state" else None,
+                    "country": "USA" if endpoint == "country" else None,
+                },
+            )
+    elif endpoint in ["company_city", "company_state", "company_country"]:
+        # Create companies with same location metadata
+        company = await create_company(
+            db_session,
+            name="Location Test Co",
+            metadata_overrides={
+                "city": "New York" if endpoint == "company_city" else None,
+                "state": "NY" if endpoint == "company_state" else None,
+                "country": "USA" if endpoint == "company_country" else None,
+            },
+        )
+        for i in range(3):
+            await create_contact(
+                db_session,
+                company=company,
+                first_name=f"Loc{i}",
+                email=f"loc{i}@example.com",
+            )
+
+    await db_session.commit()
+
+    # For array endpoints, use separated=true to avoid SQLite array_to_string issues
+    base_params = {}
+    if endpoint in ["industry", "keywords", "technologies"]:
+        base_params["separated"] = "true"
+
+    # Call without distinct
+    response_no_distinct = await async_client.get(
+        f"/api/v1/contacts/{endpoint}/", params=base_params
+    )
+    assert response_no_distinct.status_code == 200
+    results_no_distinct = response_no_distinct.json()
+    assert isinstance(results_no_distinct, list)
+
+    # Call with distinct=true
+    distinct_params = {**base_params, "distinct": "true"}
+    response_distinct = await async_client.get(
+        f"/api/v1/contacts/{endpoint}/", params=distinct_params
+    )
+    assert response_distinct.status_code == 200
+    results_distinct = response_distinct.json()
+    assert isinstance(results_distinct, list)
+
+    # Verify distinct returns fewer or equal items
+    assert len(results_distinct) <= len(results_no_distinct), (
+        f"Distinct should return fewer or equal items. "
+        f"Without distinct: {len(results_no_distinct)}, "
+        f"With distinct: {len(results_distinct)}"
+    )
+
+    # Verify no duplicates in distinct results (case-insensitive)
+    distinct_lower = [str(v).lower() if v else "" for v in results_distinct]
+    assert len(distinct_lower) == len(set(distinct_lower)), (
+        f"Distinct results should have no duplicates. Found: {results_distinct}"
+    )
+
+    # Verify all distinct values are present in non-distinct results
+    no_distinct_lower = [str(v).lower() if v else "" for v in results_no_distinct]
+    for distinct_val in distinct_lower:
+        assert distinct_val in no_distinct_lower, (
+            f"Distinct value '{distinct_val}' should be present in non-distinct results"
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ALL_ATTRIBUTE_ENDPOINTS)
+async def test_attribute_endpoints_distinct_with_filters(async_client, db_session, endpoint):
+    """Test distinct parameter works correctly when combined with other filters."""
+    # Setup basic test data
+    if endpoint == "title":
+        await create_contact(
+            db_session,
+            first_name="John",
+            email="john@example.com",
+            title="Director",
+        )
+        await create_contact(
+            db_session,
+            first_name="Jane",
+            email="jane@example.com",
+            title="Manager",
+        )
+    elif endpoint == "company":
+        company1 = await create_company(db_session, name="Alpha Corp")
+        company2 = await create_company(db_session, name="Beta Inc")
+        await create_contact(db_session, company=company1, first_name="John", email="john@example.com")
+        await create_contact(db_session, company=company2, first_name="Jane", email="jane@example.com")
+    elif endpoint in ["industry", "keywords", "technologies"]:
+        # For array endpoints, create test data
+        company = await create_company(
+            db_session,
+            name="Test Co",
+            industries=["Software"] if endpoint == "industry" else None,
+            keywords=["SaaS"] if endpoint == "keywords" else None,
+            technologies=["Python"] if endpoint == "technologies" else None,
+        )
+        await create_contact(db_session, company=company, first_name="Test", email="test@example.com")
+
+    await db_session.commit()
+
+    # For array endpoints, use separated=true to avoid SQLite array_to_string issues
+    base_params = {}
+    if endpoint in ["industry", "keywords", "technologies"]:
+        base_params["separated"] = "true"
+
+    # Test with search filter
+    response = await async_client.get(
+        f"/api/v1/contacts/{endpoint}/",
+        params={**base_params, "distinct": "true", "search": "test"},
+    )
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+    # Test with limit and offset
+    response = await async_client.get(
+        f"/api/v1/contacts/{endpoint}/",
+        params={**base_params, "distinct": "true", "limit": 10, "offset": 0},
+    )
+    assert response.status_code == 200
+    results = response.json()
+    assert isinstance(results, list)
+    assert len(results) <= 10
+
+
+@pytest.mark.asyncio
+async def test_attribute_endpoints_distinct_empty_results(async_client, db_session):
+    """Test distinct parameter with empty database returns empty list."""
+    endpoints_to_test = ["title", "company", "city", "state"]
+    for endpoint in endpoints_to_test:
+        response = await async_client.get(
+            f"/api/v1/contacts/{endpoint}/",
+            params={"distinct": "true"},
+        )
+        assert response.status_code == 200
+        assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_attribute_endpoints_distinct_single_value(async_client, db_session):
+    """Test distinct parameter with single unique value."""
+    await create_contact(
+        db_session,
+        first_name="Single",
+        email="single@example.com",
+        title="CEO",
+    )
+    await db_session.commit()
+
+    response = await async_client.get("/api/v1/contacts/title/", params={"distinct": "true"})
+    assert response.status_code == 200
+    results = response.json()
+    assert isinstance(results, list)
+    assert "CEO" in results
+    assert len(results) == 1
+
+
+@pytest.mark.asyncio
+async def test_attribute_endpoints_distinct_all_duplicates(async_client, db_session):
+    """Test distinct parameter when all values are duplicates."""
+    # Create multiple contacts with same title
+    for i in range(5):
+        await create_contact(
+            db_session,
+            first_name=f"Person{i}",
+            email=f"person{i}@example.com",
+            title="Director",
+        )
+    await db_session.commit()
+
+    response_no_distinct = await async_client.get("/api/v1/contacts/title/")
+    response_distinct = await async_client.get("/api/v1/contacts/title/", params={"distinct": "true"})
+
+    assert response_no_distinct.status_code == 200
+    assert response_distinct.status_code == 200
+
+    results_no_distinct = response_no_distinct.json()
+    results_distinct = response_distinct.json()
+
+    # Without distinct may have duplicates
+    assert len(results_no_distinct) >= 1
+    # With distinct should have exactly one
+    assert len(results_distinct) == 1
+    assert "Director" in results_distinct
+
+
+@pytest.mark.asyncio
+async def test_attribute_endpoints_distinct_case_insensitive(async_client, db_session):
+    """Test that distinct is case-insensitive for title endpoint."""
+    await create_contact(
+        db_session,
+        first_name="Person1",
+        email="person1@example.com",
+        title="Director",
+    )
+    await create_contact(
+        db_session,
+        first_name="Person2",
+        email="person2@example.com",
+        title="director",  # lowercase
+    )
+    await create_contact(
+        db_session,
+        first_name="Person3",
+        email="person3@example.com",
+        title="DIRECTOR",  # uppercase
+    )
+    await db_session.commit()
+
+    response = await async_client.get("/api/v1/contacts/title/", params={"distinct": "true"})
+    assert response.status_code == 200
+    results = response.json()
+    # Should treat case variations as duplicates
+    distinct_lower = [str(v).lower() for v in results]
+    assert len(set(distinct_lower)) == len(distinct_lower)
+    # Should only have one unique value (case-insensitive)
+    assert len(distinct_lower) == 1
+
+
+# Special tests for array endpoints (industry, keywords, technologies)
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ["industry", "keywords", "technologies"])
+async def test_array_endpoints_distinct_with_separated(async_client, db_session, endpoint):
+    """Test array endpoints with separated=true (which forces distinct automatically)."""
+    # Create companies with array values
+    company1 = await create_company(
+        db_session,
+        name="Tech Co 1",
+        industries=["Software", "Technology"] if endpoint == "industry" else None,
+        keywords=["SaaS", "Cloud"] if endpoint == "keywords" else None,
+        technologies=["Python", "AWS"] if endpoint == "technologies" else None,
+    )
+    company2 = await create_company(
+        db_session,
+        name="Tech Co 2",
+        industries=["Software", "Finance"] if endpoint == "industry" else None,
+        keywords=["SaaS", "Enterprise"] if endpoint == "keywords" else None,
+        technologies=["Python", "Docker"] if endpoint == "technologies" else None,
+    )
+    await create_contact(db_session, company=company1, first_name="Contact1", email="c1@example.com")
+    await create_contact(db_session, company=company2, first_name="Contact2", email="c2@example.com")
+    await db_session.commit()
+
+    # Test with separated=true (should force distinct automatically)
+    response_separated = await async_client.get(
+        f"/api/v1/contacts/{endpoint}/",
+        params={"separated": "true"},
+    )
+    assert response_separated.status_code == 200
+    results_separated = response_separated.json()
+    assert isinstance(results_separated, list)
+
+    # Verify no duplicates
+    distinct_lower = [str(v).lower() if v else "" for v in results_separated]
+    assert len(distinct_lower) == len(set(distinct_lower))
+
+    # Note: separated=false uses array_to_string which is PostgreSQL-only
+    # Skipping this test for SQLite compatibility
+    # In production with PostgreSQL, separated=false with distinct=true would also work
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ["industry", "keywords", "technologies"])
+async def test_array_endpoints_separated_forced_distinct(async_client, db_session, endpoint):
+    """Test that separated=true automatically forces distinct even if distinct=false."""
+    company = await create_company(
+        db_session,
+        name="Array Test Co",
+        industries=["Software", "Technology"] if endpoint == "industry" else None,
+        keywords=["SaaS", "Cloud"] if endpoint == "keywords" else None,
+        technologies=["Python", "AWS"] if endpoint == "technologies" else None,
+    )
+    await create_contact(db_session, company=company, first_name="Test", email="test@example.com")
+    await db_session.commit()
+
+    # Even with distinct=false, separated=true should force distinct
+    response = await async_client.get(
+        f"/api/v1/contacts/{endpoint}/",
+        params={"separated": "true", "distinct": "false"},
+    )
+    assert response.status_code == 200
+    results = response.json()
+    assert isinstance(results, list)
+    # Should still be distinct (forced by separated=true)
+    distinct_lower = [str(v).lower() if v else "" for v in results]
+    assert len(distinct_lower) == len(set(distinct_lower))
