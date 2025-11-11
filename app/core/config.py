@@ -74,7 +74,17 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[AnyHttpUrl] = [
         AnyHttpUrl("http://localhost:3000"),
         AnyHttpUrl("http://localhost:8000"),
+        AnyHttpUrl("http://54.175.34.79"),
     ]
+    TRUSTED_HOSTS: List[str] = [
+        "54.175.34.79",
+        "localhost",
+        "127.0.0.1",
+        "testserver",
+    ]
+    ROOT_PATH: str = ""
+    USE_PROXY_HEADERS: bool = True
+    FORWARDED_ALLOW_IPS: str = "*"
 
     # Celery / Redis
     REDIS_HOST: str = "localhost"
@@ -188,6 +198,30 @@ class Settings(BaseSettings):
             "Exiting Settings.default_celery_urls assembled redis_url=%s", assembled
         )
         return assembled
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, value):
+        """Allow comma-separated origin strings to be provided via environment."""
+        if isinstance(value, str):
+            items = [item.strip() for item in value.split(",") if item.strip()]
+            logger.debug(
+                "Parsing ALLOWED_ORIGINS from string count=%s", len(items)
+            )
+            return items
+        return value
+
+    @field_validator("TRUSTED_HOSTS", mode="before")
+    @classmethod
+    def parse_trusted_hosts(cls, value):
+        """Allow comma-separated trusted hosts via environment configuration."""
+        if isinstance(value, str):
+            items = [item.strip() for item in value.split(",") if item.strip()]
+            logger.debug(
+                "Parsing TRUSTED_HOSTS from string count=%s", len(items)
+            )
+            return items
+        return value
 
 
 @log_function_call(logger=logger, log_result=True)

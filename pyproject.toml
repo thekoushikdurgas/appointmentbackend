@@ -7,7 +7,7 @@ name = "appointment360-backend"
 version = "0.1.0"
 description = "Async FastAPI backend for Appointment360 data APIs and imports."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3"
 license = { text = "MIT" }
 authors = [
   { name = "Appointment360 Team", email = "engineering@example.com" }
@@ -58,7 +58,7 @@ target-version = "py311"
 select = ["E", "F", "I", "ASYNC"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3"
 plugins = ["pydantic.mypy"]
 strict = false
 warn_unused_configs = true

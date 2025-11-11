@@ -757,7 +757,7 @@ def client(db_session: AsyncSession):
 ### 14. **Dockerfile** - Container Configuration[^17][^18]
 
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3-slim
 
 WORKDIR /app
 

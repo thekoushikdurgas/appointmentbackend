@@ -312,7 +312,7 @@ The framework successfully addresses the limitations of traditional Python web f
 
 [^89]: https://arxiv.org/pdf/2405.13528.pdf
 
-[^90]: https://arxiv.org/pdf/2303.11088.pdf
+[^90]: https://arxiv.org/pdf/2303088.pdf
 
 [^91]: http://arxiv.org/pdf/2409.07360.pdf
 

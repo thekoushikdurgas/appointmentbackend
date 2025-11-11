@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api.v1.api import api_router
 from app.core.config import get_settings
@@ -35,12 +36,24 @@ async def lifespan(app: FastAPI):
     logger.debug("Exiting lifespan cleanup")
 
 
+docs_url = (
+    settings.DOCS_URL
+    if settings.DOCS_URL and (settings.DEBUG or settings.ENVIRONMENT != "production")
+    else None
+)
+redoc_url = (
+    settings.REDOC_URL
+    if settings.REDOC_URL and (settings.DEBUG or settings.ENVIRONMENT != "production")
+    else None
+)
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description=settings.DESCRIPTION,
-    docs_url=settings.DOCS_URL,
-    redoc_url=settings.REDOC_URL,
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    root_path=settings.ROOT_PATH or "",
     lifespan=lifespan,
 )
 
@@ -52,10 +65,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-if settings.ENVIRONMENT == "production":
+if settings.USE_PROXY_HEADERS:
+    app.add_middleware(
+        ProxyHeadersMiddleware,
+        trusted_hosts=set(settings.TRUSTED_HOSTS) if settings.TRUSTED_HOSTS else None,
+    )
+
+if settings.TRUSTED_HOSTS:
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["*"],
+        allowed_hosts=settings.TRUSTED_HOSTS,
     )
 
 app.add_middleware(LoggingMiddleware)

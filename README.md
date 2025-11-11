@@ -17,7 +17,7 @@ and a high-throughput CSV import pipeline backed by Celery.
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3+
 - Docker (optional, for containerized workflow)
 - Access to the Appointment360 Postgres instance
 

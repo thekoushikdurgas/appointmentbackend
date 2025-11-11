@@ -1483,7 +1483,7 @@ def test_get_users_authenticated(client, user_token):
 **Dockerfile for FastAPI application:**
 
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3-slim
 
 WORKDIR /app
 

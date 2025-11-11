@@ -391,7 +391,7 @@ This setup provides a robust, production-ready deployment of your FastAPI applic
 
 [^38]: https://zenodo.org/record/7994295/files/2023131243.pdf
 
-[^39]: http://arxiv.org/pdf/2103.11439.pdf
+[^39]: http://arxiv.org/pdf/2103439.pdf
 
 [^40]: https://arxiv.org/pdf/2502.09766.pdf
 
