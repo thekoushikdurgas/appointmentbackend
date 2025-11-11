@@ -31,8 +31,8 @@ Create your project directory and set up a virtual environment:[^3][^4][^1]
 
 ```bash
 # Create project directory
-sudo mkdir -p /var/www/gunicorn_app
-cd /var/www/gunicorn_app
+sudo mkdir -p /var/www/appointmentbackend
+cd /var/www/appointmentbackend
 
 # Create source directory
 sudo mkdir src
@@ -89,7 +89,7 @@ If successful, you should see Gunicorn starting with Uvicorn workers. Press `Ctr
 Create a systemd service to manage your FastAPI application:[^8][^3][^1]
 
 ```bash
-sudo nano /etc/systemd/system/gunicorn_app.service
+sudo nano /etc/systemd/system/appointmentbackend.service
 ```
 
 Add the following configuration:[^3][^4][^1]
@@ -102,13 +102,13 @@ After=network.target
 [Service]
 User=<username>
 Group=www-data
-WorkingDirectory=/var/www/gunicorn_app/src
-Environment="PATH=/var/www/gunicorn_app/venv/bin"
-ExecStart=/var/www/gunicorn_app/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 127.0.0.1:8000
+WorkingDirectory=/var/www/appointmentbackend/src
+Environment="PATH=/var/www/appointmentbackend/venv/bin"
+ExecStart=/var/www/appointmentbackend/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 127.0.0.1:8000
 Restart=always
 RestartSec=10
-StandardOutput=append:/var/www/gunicorn_app/logs/access.log
-StandardError=append:/var/www/gunicorn_app/logs/error.log
+StandardOutput=append:/var/www/appointmentbackend/logs/access.log
+StandardError=append:/var/www/appointmentbackend/logs/error.log
 
 [Install]
 WantedBy=multi-user.target
@@ -127,7 +127,7 @@ WantedBy=multi-user.target
 Create the logs directory:
 
 ```bash
-sudo mkdir -p /var/www/gunicorn_app/logs
+sudo mkdir -p /var/www/appointmentbackend/logs
 ```
 
 
@@ -140,13 +140,13 @@ Reload systemd, enable auto-start, and start your service:[^9][^1][^8]
 sudo systemctl daemon-reload
 
 # Enable service to start on boot
-sudo systemctl enable gunicorn_app
+sudo systemctl enable appointmentbackend
 
 # Start the service
-sudo systemctl start gunicorn_app
+sudo systemctl start appointmentbackend
 
 # Check service status
-sudo systemctl status gunicorn_app
+sudo systemctl status appointmentbackend
 ```
 
 Your FastAPI application should now be running as a background service.
@@ -156,7 +156,7 @@ Your FastAPI application should now be running as a background service.
 Create an NGINX configuration file for your application:[^5][^2][^1]
 
 ```bash
-sudo nano /etc/nginx/sites-available/gunicorn_app
+sudo nano /etc/nginx/sites-available/appointmentbackend
 ```
 
 Add the following configuration:[^10][^2][^1]
@@ -194,7 +194,7 @@ Create a symbolic link and restart NGINX:[^1][^2]
 
 ```bash
 # Create symbolic link to enable the site
-sudo ln -s /etc/nginx/sites-available/gunicorn_app /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/appointmentbackend /etc/nginx/sites-enabled/
 
 # Test NGINX configuration for syntax errors
 sudo nginx -t
@@ -266,7 +266,7 @@ proxy_send_timeout 300s;
 To reload your application with zero downtime, send a HUP signal to Gunicorn:[^14]
 
 ```bash
-sudo systemctl reload gunicorn_app
+sudo systemctl reload appointmentbackend
 # or
 sudo kill -HUP $(pgrep -f gunicorn)
 ```
@@ -277,14 +277,14 @@ sudo kill -HUP $(pgrep -f gunicorn)
 **Check service logs:**
 
 ```bash
-sudo journalctl -u gunicorn_app -f
+sudo journalctl -u appointmentbackend -f
 ```
 
 **View application logs:**
 
 ```bash
-tail -f /var/www/gunicorn_app/logs/access.log
-tail -f /var/www/gunicorn_app/logs/error.log
+tail -f /var/www/appointmentbackend/logs/access.log
+tail -f /var/www/appointmentbackend/logs/error.log
 ```
 
 **Check NGINX logs:**

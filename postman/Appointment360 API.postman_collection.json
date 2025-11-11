@@ -2419,7 +2419,7 @@
 	"variable": [
 		{
 			"key": "baseHost",
-			"value": "http://localhost:8000",
+			"value": "http://54.88.182.69:8000",
 			"description": "Default FastAPI server origin."
 		},
 		{

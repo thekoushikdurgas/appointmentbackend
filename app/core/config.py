@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     FORWARDED_ALLOW_IPS: str = "*"
 
     # Celery / Redis
-    REDIS_HOST: str = "localhost"
+    REDIS_HOST: str = "54.88.182.69"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_URL: Optional[str] = None
@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     # File uploads
     UPLOAD_DIR: str = "./uploads"
     MEDIA_URL: str = "/media"
-    BASE_URL: str = "http://localhost:8000"  # Base URL for generating full avatar URLs
+    BASE_URL: str = "http://54.88.182.69:8000"  # Base URL for generating full avatar URLs
 
     # Pagination defaults
     DEFAULT_PAGE_SIZE: int = 25

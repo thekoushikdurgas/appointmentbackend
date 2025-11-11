@@ -1,0 +1,10 @@
+{
+  "total_urls": 129,
+  "unique_urls": 127,
+  "categories": {
+    "Pagination": {
+      "param_count": {
+        "page": 128
+      },
+      "value_examples": {
+        "page": 
