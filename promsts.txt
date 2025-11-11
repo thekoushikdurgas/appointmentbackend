@@ -91,7 +91,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Appointment360 API"
     ...
     TRUSTED_HOSTS: List[str] = [
-        "54.175.34.79",
+        "54.88.182.69",
         "localhost",
         "127.0.0.1",
         "testserver",
@@ -163,7 +163,7 @@ WantedBy=multi-user.target
 ```
 server {
     listen 80;
-    server_name 54.175.34.79;
+    server_name 54.88.182.69;
 
     access_log /var/log/nginx/appointmentbackend.access.log;
     error_log  /var/log/nginx/appointmentbackend.error.log;
@@ -202,7 +202,7 @@ server {
   `sudo systemctl status gunicorn_app`  
   `sudo journalctl -u gunicorn_app -f`
 - Validate application:  
-  `curl http://54.175.34.79/health` (expect `{"status":"healthy","environment":"production"}`)
+  `curl http://54.88.182.69/health` (expect `{"status":"healthy","environment":"production"}`)
 - Deployment updates:  
   - `cd /home/ubuntu/appointmentbackend`  
   - `source venv/bin/activate`  

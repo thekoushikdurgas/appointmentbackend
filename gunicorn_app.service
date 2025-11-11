@@ -1,0 +1,17 @@
+[Unit]
+Description=Gunicorn service for Appointment360 FastAPI
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/appointmentbackend
+EnvironmentFile=/home/ubuntu/appointmentbackend/.env
+ExecStart=/home/ubuntu/appointmentbackend/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind unix:/run/appointmentbackend/appointmentbackend.sock --access-logfile - --error-logfile - app.main:app
+RuntimeDirectory=appointmentbackend
+RuntimeDirectoryMode=0755
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

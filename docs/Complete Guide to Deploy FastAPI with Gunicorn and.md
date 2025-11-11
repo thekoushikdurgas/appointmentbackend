@@ -31,8 +31,8 @@ Create your project directory and set up a virtual environment:[^3][^4][^1]
 
 ```bash
 # Create project directory
-sudo mkdir -p /var/www/myapp
-cd /var/www/myapp
+sudo mkdir -p /var/www/gunicorn_app
+cd /var/www/gunicorn_app
 
 # Create source directory
 sudo mkdir src
@@ -89,7 +89,7 @@ If successful, you should see Gunicorn starting with Uvicorn workers. Press `Ctr
 Create a systemd service to manage your FastAPI application:[^8][^3][^1]
 
 ```bash
-sudo nano /etc/systemd/system/myapp.service
+sudo nano /etc/systemd/system/gunicorn_app.service
 ```
 
 Add the following configuration:[^3][^4][^1]
@@ -102,13 +102,13 @@ After=network.target
 [Service]
 User=<username>
 Group=www-data
-WorkingDirectory=/var/www/myapp/src
-Environment="PATH=/var/www/myapp/venv/bin"
-ExecStart=/var/www/myapp/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 127.0.0.1:8000
+WorkingDirectory=/var/www/gunicorn_app/src
+Environment="PATH=/var/www/gunicorn_app/venv/bin"
+ExecStart=/var/www/gunicorn_app/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 127.0.0.1:8000
 Restart=always
 RestartSec=10
-StandardOutput=append:/var/www/myapp/logs/access.log
-StandardError=append:/var/www/myapp/logs/error.log
+StandardOutput=append:/var/www/gunicorn_app/logs/access.log
+StandardError=append:/var/www/gunicorn_app/logs/error.log
 
 [Install]
 WantedBy=multi-user.target
@@ -127,7 +127,7 @@ WantedBy=multi-user.target
 Create the logs directory:
 
 ```bash
-sudo mkdir -p /var/www/myapp/logs
+sudo mkdir -p /var/www/gunicorn_app/logs
 ```
 
 
@@ -140,13 +140,13 @@ Reload systemd, enable auto-start, and start your service:[^9][^1][^8]
 sudo systemctl daemon-reload
 
 # Enable service to start on boot
-sudo systemctl enable myapp
+sudo systemctl enable gunicorn_app
 
 # Start the service
-sudo systemctl start myapp
+sudo systemctl start gunicorn_app
 
 # Check service status
-sudo systemctl status myapp
+sudo systemctl status gunicorn_app
 ```
 
 Your FastAPI application should now be running as a background service.
@@ -156,7 +156,7 @@ Your FastAPI application should now be running as a background service.
 Create an NGINX configuration file for your application:[^5][^2][^1]
 
 ```bash
-sudo nano /etc/nginx/sites-available/myapp
+sudo nano /etc/nginx/sites-available/gunicorn_app
 ```
 
 Add the following configuration:[^10][^2][^1]
@@ -194,7 +194,7 @@ Create a symbolic link and restart NGINX:[^1][^2]
 
 ```bash
 # Create symbolic link to enable the site
-sudo ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/gunicorn_app /etc/nginx/sites-enabled/
 
 # Test NGINX configuration for syntax errors
 sudo nginx -t
@@ -266,7 +266,7 @@ proxy_send_timeout 300s;
 To reload your application with zero downtime, send a HUP signal to Gunicorn:[^14]
 
 ```bash
-sudo systemctl reload myapp
+sudo systemctl reload gunicorn_app
 # or
 sudo kill -HUP $(pgrep -f gunicorn)
 ```
@@ -277,14 +277,14 @@ sudo kill -HUP $(pgrep -f gunicorn)
 **Check service logs:**
 
 ```bash
-sudo journalctl -u myapp -f
+sudo journalctl -u gunicorn_app -f
 ```
 
 **View application logs:**
 
 ```bash
-tail -f /var/www/myapp/logs/access.log
-tail -f /var/www/myapp/logs/error.log
+tail -f /var/www/gunicorn_app/logs/access.log
+tail -f /var/www/gunicorn_app/logs/error.log
 ```
 
 **Check NGINX logs:**
@@ -310,126 +310,4 @@ sudo tail -f /var/log/nginx/access.log
 4. **Firewall**: Configure UFW or iptables to allow only necessary ports
 5. **Regular updates**: Keep system packages, Python dependencies, and NGINX updated
 
-This setup provides a robust, production-ready deployment of your FastAPI application with Gunicorn managing multiple Uvicorn workers, systemd ensuring service reliability, and NGINX efficiently handling client requests as a reverse proxy.[^2][^5][^1]
-<span style="display:none">[^16][^17][^18][^19][^20][^21][^22][^23][^24][^25][^26][^27][^28][^29][^30][^31][^32][^33][^34][^35][^36][^37][^38][^39][^40][^41][^42][^43][^44][^45][^46][^47][^48][^49][^50][^51][^52][^53][^54][^55][^56][^57][^58][^59]</span>
-
-<div align="center">⁂</div>
-
-[^1]: https://dev.to/shuv1824/deploy-fastapi-application-on-ubuntu-with-nginx-gunicorn-and-uvicorn-3mbl
-
-[^2]: https://dev.to/udara_dananjaya/setting-up-a-fastapi-project-with-nginx-reverse-proxy-on-ubuntu-883
-
-[^3]: https://gist.github.com/ShilGen/abaeafe8b130ccd8d43edde4af8d6dce
-
-[^4]: https://geekyshows.com/blog/post/deploy-fas/
-
-[^5]: https://docs.vultr.com/how-to-deploy-a-fastapi-application-with-gunicorn-and-nginx-on-ubuntu-2404
-
-[^6]: https://fastapi.xiniushu.com/sv/deployment/server-workers/
-
-[^7]: https://docs.gunicorn.org/en/stable/settings.html
-
-[^8]: https://rolisz.ro/2023/setting-up-systemd/
-
-[^9]: https://stribny.name/posts/fastapi-production/
-
-[^10]: https://github.com/fastapi/fastapi/discussions/12123
-
-[^11]: https://ubiq.co/tech-blog/increase-request-timeout-nginx/
-
-[^12]: https://dev.to/yanagisawahidetoshi/efficiently-using-environment-variables-in-fastapi-4lal
-
-[^13]: https://tecadmin.net/using-env-file-in-fastapi/
-
-[^14]: https://www.reddit.com/r/FastAPI/comments/1enitwy/fastapi_gunicorn_hup_signal_to_reload_workers/
-
-[^15]: https://dylancastillo.co/fastapi-nginx-gunicorn/
-
-[^16]: https://arxiv.org/pdf/2310.08247.pdf
-
-[^17]: https://arxiv.org/pdf/1905.07314.pdf
-
-[^18]: http://arxiv.org/pdf/2301.05522.pdf
-
-[^19]: https://arxiv.org/pdf/2212.08146.pdf
-
-[^20]: https://arxiv.org/pdf/2104.12721.pdf
-
-[^21]: https://dl.acm.org/doi/pdf/10.1145/3613424.3614280
-
-[^22]: https://arxiv.org/pdf/2403.00515.pdf
-
-[^23]: https://arxiv.org/pdf/1711.01758.pdf
-
-[^24]: https://fastapi.tiangolo.com/deployment/manually/
-
-[^25]: https://www.youtube.com/watch?v=Dh5lzOwyVAY
-
-[^26]: https://fastapi.tiangolo.com/deployment/server-workers/
-
-[^27]: https://arxiv.org/abs/2409.11413
-
-[^28]: http://www.ssc.smr.ru/media/journals/izvestia/2023/2023_6_112_124.pdf
-
-[^29]: https://academic.oup.com/healthaffairsscholar/article/doi/10.1093/haschl/qxae099/7735458
-
-[^30]: https://www.semanticscholar.org/paper/5459ee5d2ee486b05e3d57620b9d25de938232c3
-
-[^31]: https://ijsspp.yayasanwayanmarwanpulungan.com/index.php/IJSSPP/article/view/73
-
-[^32]: https://www.microbiologyresearch.org/content/journal/mgen/10.1099/mgen.0.000166
-
-[^33]: https://www.spiedigitallibrary.org/conference-proceedings-of-spie/12978/3019611/Research-on-shipping-statistics-method-based-on-AIS-big-data/10.1117/12.3019611.full
-
-[^34]: http://lj.uwpress.org/lookup/doi/10.3368/lj.43.2.35
-
-[^35]: https://ejournal.uniska-kediri.ac.id/index.php/akuntansi/article/view/5228
-
-[^36]: https://onepetro.org/OTCBRASIL/proceedings/25OTCB/25OTCB/D022S054R009/792287
-
-[^37]: https://arxiv.org/pdf/2305.05920.pdf
-
-[^38]: https://zenodo.org/record/7994295/files/2023131243.pdf
-
-[^39]: http://arxiv.org/pdf/2103439.pdf
-
-[^40]: https://arxiv.org/pdf/2502.09766.pdf
-
-[^41]: https://arxiv.org/pdf/2410.23873.pdf
-
-[^42]: https://arxiv.org/pdf/2002.04688.pdf
-
-[^43]: https://zenodo.org/record/3387092/files/main.pdf
-
-[^44]: https://arxiv.org/pdf/2502.15524.pdf
-
-[^45]: https://ieeexplore.ieee.org/document/9442035/
-
-[^46]: https://ejournal2.uika-bogor.ac.id/index.php/PROMOTOR/article/view/465
-
-[^47]: https://peerj.com/articles/20061
-
-[^48]: https://ieeexplore.ieee.org/document/11028389/
-
-[^49]: https://www.semanticscholar.org/paper/b4ea067a325b87749d8e2699c903344e140ce23f
-
-[^50]: https://scholarsjournal.net/index.php/ijier/article/view/3751
-
-[^51]: https://www.nature.com/articles/s41597-020-0453-3
-
-[^52]: https://www.semanticscholar.org/paper/1f679d1b67eb7f059f0bbcd804406f949d2a0266
-
-[^53]: https://www.ingentaconnect.com/content/10.3114/sim.2025.111.01_SUPP
-
-[^54]: https://www.beilstein-journals.org/bjnano/articles/6/183
-
-[^55]: https://arxiv.org/pdf/2502.13681.pdf
-
-[^56]: https://arxiv.org/pdf/2503.14443.pdf
-
-[^57]: https://pmc.ncbi.nlm.nih.gov/articles/PMC10577930/
-
-[^58]: http://arxiv.org/pdf/2412.18109.pdf
-
-[^59]: https://arxiv.org/pdf/2109.01002.pdf
-
+This setup provides a robust, production-ready deployment of your FastAPI application with Gunicorn managing multiple Uvicorn workers, systemd ensuring service reliability, and NGINX efficiently handling client requests as a reverse proxy.

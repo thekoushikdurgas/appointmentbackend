@@ -28,8 +28,8 @@ sudo apt install python3-pip python3-dev build-essential nginx
 Set up your project directory and virtual environment:[^1][^2]
 
 ```bash
-mkdir /var/www/myapp
-cd /var/www/myapp
+mkdir /var/www/gunicorn_app
+cd /var/www/gunicorn_app
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -90,22 +90,22 @@ gunicorn -c gunicorn_conf.py main:app
 Create a systemd service file for automatic startup and management:[^1]
 
 ```bash
-sudo nano /etc/systemd/system/myapp.service
+sudo nano /etc/systemd/system/gunicorn_app.service
 ```
 
 Add the following configuration:[^1]
 
 ```ini
 [Unit]
-Description=Gunicorn instance to serve MyApp
+Description=Gunicorn instance to serve gunicorn_app
 After=network.target
 
 [Service]
 User=<username>
 Group=www-data
-WorkingDirectory=/var/www/myapp/src
-Environment="PATH=/var/www/myapp/venv/bin"
-ExecStart=/var/www/myapp/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
+WorkingDirectory=/var/www/gunicorn_app/src
+Environment="PATH=/var/www/gunicorn_app/venv/bin"
+ExecStart=/var/www/gunicorn_app/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
 
 [Install]
 WantedBy=multi-user.target
@@ -114,9 +114,9 @@ WantedBy=multi-user.target
 Enable and start the service:[^1]
 
 ```bash
-sudo systemctl start myapp
-sudo systemctl enable myapp
-sudo systemctl status myapp
+sudo systemctl start gunicorn_app
+sudo systemctl enable gunicorn_app
+sudo systemctl status gunicorn_app
 ```
 
 
@@ -127,7 +127,7 @@ sudo systemctl status myapp
 Create a new NGINX configuration file:[^2]
 
 ```bash
-sudo nano /etc/nginx/sites-available/myapp
+sudo nano /etc/nginx/sites-available/gunicorn_app
 ```
 
 Add the reverse proxy configuration:[^2]
@@ -153,7 +153,7 @@ server {
 Create a symbolic link to enable the site:[^2]
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/gunicorn_app /etc/nginx/sites-enabled/
 ```
 
 Test and reload NGINX:[^2]
@@ -175,7 +175,7 @@ The typical worker count is **4 workers** (or 2-4 times the number of CPU cores)
 Test your deployment by accessing your server's IP address or domain in a browser. You should see your FastAPI application running. Check the service logs if you encounter issues:[^2]
 
 ```bash
-sudo journalctl -u myapp -f
+sudo journalctl -u gunicorn_app -f
 ```
 
 <span style="display:none">[^10][^11][^12][^13][^14][^15][^16][^17][^18][^7][^8][^9]</span>
