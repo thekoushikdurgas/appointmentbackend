@@ -24,8 +24,8 @@ and a high-throughput CSV import pipeline backed by Celery.
 ### Installation
 
 ```bash
-python -m venv .venv
-.venv\\Scripts\\activate  # (Windows)
+python -m venv venv
+venv\\Scripts\\activate  # (Windows)
 pip install -r requirements.txt
 ```
 

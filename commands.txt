@@ -7,9 +7,9 @@ psql "postgresql://$POSTGRES_USER:$POSTGRES_PASS@$POSTGRES_HOST:$POSTGRES_PORT/$
 # ========================================
 
 # === Environment Setup ===
-python -m venv .venv
-.venv\Scripts\activate      # Windows
-source .venv/bin/activate   # Linux/Mac
+python -m venv venv
+venv\Scripts\activate      # Windows
+source venv/bin/activate   # Linux/Mac
 
 pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
@@ -149,7 +149,7 @@ git status
 # - docker-compose.yml / Dockerfile
 
 # Common Workflow:
-# 1. Activate virtualenv (.venv\Scripts\activate)
+# 1. Activate virtualenv (venv\Scripts\activate)
 # 2. Export environment variables (see .env.example)
 # 3. Run uvicorn / celery locally
 # 4. Execute pytest before pushing

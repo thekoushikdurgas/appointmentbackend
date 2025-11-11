@@ -103,13 +103,13 @@ class Settings(BaseSettings):
 ## Server Preparation
 - Update and install base packages:  
   `sudo apt update && sudo apt upgrade -y`  
-  `sudo apt install -y python3.11 python3.11-venv python3-pip build-essential nginx git`
+  `sudo apt install -y python3 python3-venv python3-pip build-essential nginx git`
 - Create target directory and virtualenv:  
   `sudo mkdir -p /home/ubuntu/appointmentbackend`  
   `sudo chown -R ubuntu:ubuntu /home/ubuntu/appointmentbackend`  
-  `cd /home/ubuntu/appointmentbackend && python3.11 -m venv .venv`
+  `cd /home/ubuntu/appointmentbackend && python3 -m venv venv`
 - Sync code (clone or rsync) and install Python deps:  
-  `source .venv/bin/activate`  
+  `source venv/bin/activate`  
   `pip install --upgrade pip`  
   `pip install -r requirements.txt`
 
@@ -137,7 +137,7 @@ User=ubuntu
 Group=www-data
 WorkingDirectory=/home/ubuntu/appointmentbackend
 EnvironmentFile=/home/ubuntu/appointmentbackend/.env
-ExecStart=/home/ubuntu/appointmentbackend/.venv/bin/gunicorn \
+ExecStart=/home/ubuntu/appointmentbackend/venv/bin/gunicorn \
   --workers 3 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind unix:/run/appointmentbackend/appointmentbackend.sock \
@@ -205,7 +205,7 @@ server {
   `curl http://54.175.34.79/health` (expect `{"status":"healthy","environment":"production"}`)
 - Deployment updates:  
   - `cd /home/ubuntu/appointmentbackend`  
-  - `source .venv/bin/activate`  
+  - `source venv/bin/activate`  
   - `git pull` (or sync changes)  
   - `pip install -r requirements.txt` (if dependencies changed)  
   - `sudo systemctl restart gunicorn_app`

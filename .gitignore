@@ -9,9 +9,7 @@ build/
 dist/
 
 # Environment files
-.env
-.env.local
-.venv/
+venv/
 venv/
 
 # Editor/IDE
