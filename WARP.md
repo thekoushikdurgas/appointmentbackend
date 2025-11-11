@@ -39,20 +39,6 @@ Commands you’ll use often
   docker compose up --build
   ```
 
-- Database migrations (Alembic)
-  ```
-  # Create a new migration from model changes
-  alembic revision --autogenerate -m "describe change"
-
-  # Apply migrations to latest
-  alembic upgrade head
-
-  # Downgrade one step
-  alembic downgrade -1
-  ```
-  Notes:
-  - Alembic reads settings from app.core.config and swaps the async URL to sync automatically.
-  - Ensure .env has Postgres connection details before running Alembic.
 
 - Lint and type-check
   ```
@@ -97,7 +83,7 @@ High-level architecture
 
 - Persistence layer
   - SQLAlchemy async engine/session (app/db/session.py). FastAPI dependency get_db yields AsyncSession with rollback/close guarantees.
-  - Declarative Base (app/db/base.py) imports app.models to ensure metadata is populated for Alembic/autogenerate.
+  - Declarative Base (app/db/base.py) imports app.models to ensure metadata is populated.
 
 - Domain model and access patterns
   - Models in app/models define tables (contacts, companies, related metadata, etc.).
@@ -112,8 +98,6 @@ High-level architecture
 - Background processing
   - Celery app configured in app/tasks/celery_app.py; tasks live in app/tasks and are auto-discovered.
 
-- Migrations
-  - Alembic managed in alembic/ with env.py reading Settings; versions under alembic/versions/.
 
 - Testing strategy
   - httpx.AsyncClient + ASGITransport hit the in-process FastAPI app.
@@ -127,7 +111,7 @@ Operational notes for agents
   - For local unit tests, external services are not required.
 
 - Adding models/endpoints
-  - Place new models under app/models; Base imports that package so Alembic autogenerate sees changes.
+  - Place new models under app/models; Base imports that package for metadata discovery.
   - Add repository/service layers rather than querying in routers directly to keep separation of concerns.
   - Mount new routers in app/api/v1/api.py and expose under a sensible prefix.
 

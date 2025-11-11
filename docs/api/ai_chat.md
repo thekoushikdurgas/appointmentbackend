@@ -87,6 +87,7 @@ Get a list of all AI chat conversations for the current user with pagination.
 
 - `200 OK`: Chat history retrieved successfully
 - `401 Unauthorized`: Authentication required
+- `500 Internal Server Error`: An error occurred while processing the request
 
 **Example Requests:**
 
@@ -157,8 +158,25 @@ Each message in the `messages` array must be an object with:
 ```json
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
+  "user_id": "223e4567-e89b-12d3-a456-426614174001",
   "title": "Who are my most recent leads?",
-  "created_at": "2024-01-15T10:30:00Z"
+  "messages": [
+    {
+      "sender": "ai",
+      "text": "Hello! I'm NexusAI, your smart CRM assistant. How can I help you find contacts today?"
+    },
+    {
+      "sender": "user",
+      "text": "Who are my most recent leads?"
+    },
+    {
+      "sender": "ai",
+      "text": "Here are your most recent leads:",
+      "contacts": []
+    }
+  ],
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": null
 }
 ```
 
@@ -215,6 +233,7 @@ Or:
 - `201 Created`: Chat created successfully
 - `400 Bad Request`: Invalid request data
 - `401 Unauthorized`: Authentication required
+- `500 Internal Server Error`: An error occurred while processing the request
 
 **Notes:**
 
@@ -308,6 +327,7 @@ Get detailed information about a specific AI chat conversation, including all me
 - `401 Unauthorized`: Authentication required
 - `403 Forbidden`: User does not own this chat
 - `404 Not Found`: Chat not found
+- `500 Internal Server Error`: An error occurred while processing the request
 
 **Notes:**
 
@@ -477,6 +497,7 @@ Or:
 - `401 Unauthorized`: Authentication required
 - `403 Forbidden`: User does not own this chat
 - `404 Not Found`: Chat not found
+- `500 Internal Server Error`: An error occurred while processing the request
 
 **Notes:**
 
@@ -540,6 +561,7 @@ Delete an AI chat conversation.
 - `401 Unauthorized`: Authentication required
 - `403 Forbidden`: User does not own this chat
 - `404 Not Found`: Chat not found
+- `500 Internal Server Error`: An error occurred while processing the request
 
 **Notes:**
 
@@ -566,6 +588,22 @@ Messages in chat endpoints follow this structure:
 - `sender` (string, required): Must be either `"user"` or `"ai"`
 - `text` (string, required): The message content
 - `contacts` (array, optional): Array of contact objects. Typically included when the AI responds with contact search results. Each contact object contains contact details like `id`, `first_name`, `last_name`, `company`, `email`, etc.
+
+### Contact Object Fields (in messages)
+
+When a message includes a `contacts` array, each contact object may contain the following fields (all optional):
+
+- `id` (integer, optional): Contact ID
+- `first_name` (string, optional): Contact's first name
+- `last_name` (string, optional): Contact's last name
+- `title` (string, optional): Contact's job title
+- `company` (string, optional): Contact's company name
+- `email` (string, optional): Contact's email address
+- `city` (string, optional): Contact's city
+- `state` (string, optional): Contact's state/province
+- `country` (string, optional): Contact's country
+
+**Note:** The contact object uses `extra="allow"` in its schema, meaning it may contain additional fields beyond those listed above.
 
 ### Example Message with Contacts
 

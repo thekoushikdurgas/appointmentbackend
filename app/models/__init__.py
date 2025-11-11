@@ -1,8 +1,8 @@
-"""Expose SQLAlchemy models for metadata generation and Alembic discovery."""
+"""Expose SQLAlchemy models for metadata generation."""
 
 from app.db.base import Base  # noqa: F401
 
-# Import models so Alembic can detect them.
+# Import models for metadata discovery.
 from . import ai_chat  # noqa: F401
 from . import companies  # noqa: F401
 from . import contacts  # noqa: F401

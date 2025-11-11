@@ -258,12 +258,6 @@ my_fastapi_project/
 │           ├── __init__.py
 │           └── test_workflows.py
 │
-├── alembic/                      # Database migrations (Alembic)
-│   ├── versions/                # Migration version scripts
-│   ├── env.py                   # Alembic environment configuration
-│   ├── script.py.mako           # Migration script template
-│   └── README
-│
 ├── scripts/                      # Utility scripts
 │   ├── init_db.sh              # Initialize database
 │   ├── backup_db.sh            # Database backup script
@@ -283,7 +277,6 @@ my_fastapi_project/
 ├── .env                         # Environment variables (local, git-ignored)
 ├── .env.example                # Example environment file template
 ├── .gitignore                  # Git ignore patterns
-├── alembic.ini                 # Alembic configuration
 ├── docker-compose.yml          # Docker Compose for development
 ├── docker-compose.prod.yml     # Production Docker Compose
 ├── pyproject.toml              # Poetry/project configuration
@@ -1138,83 +1131,6 @@ def send_welcome_email(self: Task, email: str, username: str):
 ```
 
 
-### 13. Database Migrations with Alembic (alembic/env.py)
-
-Configure Alembic for database schema migrations:[^13][^14]
-
-```python
-from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
-from alembic import context
-
-from app.core.config import settings
-from app.db.session import Base
-from app.models import user, item  # Import all models
-
-# Alembic Config object
-config = context.config
-
-# Set SQLAlchemy URL from settings
-config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL))
-
-# Interpret the config file for Python logging
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-# Add your model's MetaData object here
-target_metadata = Base.metadata
-
-def run_migrations_offline():
-    """Run migrations in 'offline' mode."""
-    url = config.get_main_option("sqlalchemy.url")
-    context.configure(
-        url=url,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
-    )
-
-    with context.begin_transaction():
-        context.run_migrations()
-
-def run_migrations_online():
-    """Run migrations in 'online' mode."""
-    configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = str(settings.DATABASE_URL)
-    
-    connectable = engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection, 
-            target_metadata=target_metadata
-        )
-
-        with context.begin_transaction():
-            context.run_migrations()
-
-if context.is_offline_mode():
-    run_migrations_offline()
-else:
-    run_migrations_online()
-```
-
-**Creating and applying migrations:**
-
-```bash
-# Create a new migration
-alembic revision --autogenerate -m "Add users and items tables"
-
-# Apply migrations
-alembic upgrade head
-
-# Rollback migrations
-alembic downgrade -1
-```
 
 
 ### 14. Custom Middleware (app/core/middleware.py)
@@ -1493,8 +1409,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY ./app ./app
-COPY ./alembic ./alembic
-COPY alembic.ini .
 
 # Expose port
 EXPOSE 8000
@@ -1619,7 +1533,6 @@ Implement unit tests for services, integration tests for API endpoints, and end-
 
 ### 6. Database Migrations
 
-Use Alembic to manage database schema changes systematically, enabling version control for your database structure.[^14][^13]
 
 ### 7. Background Tasks
 
@@ -1645,9 +1558,6 @@ Leverage FastAPI's automatic OpenAPI documentation generation, which stays synch
 # Install dependencies
 pip install -r requirements.txt
 
-# Run database migrations
-alembic upgrade head
-
 # Start FastAPI application
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
@@ -1660,9 +1570,6 @@ celery -A app.tasks.celery_app worker --loglevel=info
 ```bash
 # Start all services
 docker-compose up -d
-
-# Run migrations
-docker-compose exec fastapi alembic upgrade head
 
 # View logs
 docker-compose logs -f fastapi
@@ -1706,9 +1613,6 @@ This comprehensive structure provides a production-ready foundation that fully u
 
 [^12]: https://www.youtube.com/watch?v=eAHAKowv6hk
 
-[^13]: https://www.nashruddinamin.com/blog/how-to-use-alembic-for-database-migrations-in-your-fastapi-application
-
-[^14]: https://notes.kodekloud.com/docs/Python-API-Development-with-FastAPI/Database-Migration/Alembic-Setup
 
 [^15]: https://sailokesh.hashnode.dev/enable-and-configure-cors-in-fastapi
 

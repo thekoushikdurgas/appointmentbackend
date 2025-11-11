@@ -75,9 +75,6 @@ pytest app/tests/integration/test_api_endpoints.py --api-base-url http://0.0.0.0
 python -m app.tasks.import_tasks --help
 python -m app.tasks.import_tasks run --file data/data.csv
 
-# === Alembic (Local) ===
-alembic revision --autogenerate -m "new table"
-alembic upgrade head
 
 
 # ========================================
@@ -147,7 +144,6 @@ git status
 # - app/services     # Domain/business logic
 # - app/tasks        # Celery configuration & background jobs
 # - app/tests        # Pytest suite
-# - alembic/         # Migration environment
 # - scripts/         # Helper shell scripts
 # - docker-compose.yml / Dockerfile
 
@@ -156,5 +152,4 @@ git status
 # 2. Export environment variables (see .env.example)
 # 3. Run uvicorn / celery locally
 # 4. Execute pytest before pushing
-# 5. Alembic revision + upgrade for schema changes
 # 6. Deploy via git pull + systemctl restart appointmentbackend-api.service

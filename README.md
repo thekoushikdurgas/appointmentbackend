@@ -9,7 +9,6 @@ and a high-throughput CSV import pipeline backed by Celery.
 - Async SQLAlchemy (`asyncpg`) database layer targeting the existing Appointment360 Postgres schema.
 - Comprehensive filtering, search, and aggregation endpoints derived from the Appointment360 Postman collection.
 - Background CSV import processing using Celery workers, Redis broker/result backend, and persistent job tracking.
-- Alembic-managed database migrations.
 - Docker Compose environment for API, Celery worker, Redis, and optional Flower monitoring.
 - Automated testing with `pytest` and async fixtures.
 

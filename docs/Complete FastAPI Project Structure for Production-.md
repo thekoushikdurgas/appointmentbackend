@@ -15,7 +15,6 @@ fastapi-project/
 ├── Dockerfile                    # Docker configuration
 ├── docker-compose.yml            # Docker Compose for multi-container setup
 ├── README.md                     # Project documentation
-├── alembic.ini                   # Database migration configuration
 ├── pytest.ini                    # Pytest configuration
 ├── .coveragerc                   # Code coverage configuration
 │
@@ -69,7 +68,7 @@ fastapi-project/
 │   │
 │   ├── db/                       # Database configuration
 │   │   ├── __init__.py
-│   │   ├── base.py               # Import all models for Alembic
+│   │   ├── base.py               # SQLAlchemy base model
 │   │   ├── session.py            # Database session management
 │   │   └── init_db.py            # Database initialization
 │   │
@@ -99,11 +98,6 @@ fastapi-project/
 │   │
 │   └── static/                   # Static files (if needed)
 │       └── images/
-│
-├── alembic/                      # Database migrations
-│   ├── versions/                 # Migration files
-│   ├── env.py                    # Alembic environment
-│   └── script.py.mako            # Migration template
 │
 ├── tests/                        # Test suite
 │   ├── __init__.py
@@ -773,8 +767,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY ./app ./app
-COPY ./alembic ./alembic
-COPY ./alembic.ini .
 
 # Expose port
 EXPOSE 8000
@@ -855,7 +847,6 @@ fastapi==0.110.0
 uvicorn[standard]==0.27.1
 sqlalchemy[asyncio]==2.0.27
 asyncpg==0.29.0
-alembic==1.13.1
 pydantic==2.6.1
 pydantic-settings==2.1.0
 python-jose[cryptography]==3.3.0
@@ -966,7 +957,6 @@ This comprehensive structure provides several key advantages:[^22][^23][^1][^2]
 
 **Containerization**: Docker and Docker Compose for consistent development and deployment[^17][^18]
 
-**Database Migrations**: Alembic integration for managing schema changes systematically[^1]
 
 **Monitoring**: Flower integration for monitoring Celery tasks in real-time[^13][^11]
 
