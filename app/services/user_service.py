@@ -460,3 +460,61 @@ class UserService:
         logger.info("Avatar uploaded successfully: user_id=%s filename=%s", user_id, filename)
         return full_avatar_url, profile_response
 
+    async def promote_user_to_admin(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> ProfileResponse:
+        """
+        Promote a user to admin role.
+        
+        Updates the user's profile role to "Admin". If the profile doesn't exist, it will be created.
+        
+        Returns: Updated ProfileResponse with role="Admin"
+        """
+        logger.info("Promoting user to admin: user_id=%s", user_id)
+        
+        user = await self.user_repo.get_by_uuid(session, user_id)
+        if not user:
+            logger.warning("Promotion failed: user not found: %s", user_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Get or create profile
+        profile = await self.profile_repo.get_by_user_id(session, user_id)
+        if not profile:
+            logger.debug("Profile not found, creating default profile: user_id=%s", user_id)
+            profile = await self.profile_repo.create_profile(
+                session,
+                user_id=user_id,
+                notifications={"weeklyReports": True, "newLeadAlerts": True},
+                role="Member",
+            )
+        
+        # Update role to Admin
+        await self.profile_repo.update_profile(session, profile, role="Admin")
+        
+        # Refresh to get updated values
+        await session.refresh(profile)
+        await session.refresh(user)
+        
+        # Build response
+        notifications = profile.notifications or {}
+        logger.info("User promoted to admin successfully: user_id=%s email=%s", user_id, user.email)
+        return ProfileResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            role=profile.role or "Admin",
+            avatar_url=get_full_avatar_url(profile.avatar_url),
+            is_active=user.is_active,
+            job_title=profile.job_title,
+            bio=profile.bio,
+            timezone=profile.timezone,
+            notifications=NotificationPreferences(**notifications) if notifications else None,
+            created_at=user.created_at,
+            updated_at=profile.updated_at or user.updated_at,
+        )
+

@@ -429,9 +429,40 @@
 						"description": "Upload an avatar image file for the currently authenticated user.\n\n**File Requirements:**\n- File Types: JPEG, PNG, GIF, or WebP\n- Maximum Size: 5MB\n- Validation: Both file extension and file content (magic bytes) are validated\n\n**Request:**\n- Content-Type: multipart/form-data (automatically set by Postman)\n- Body: Form-data with key \"avatar\" and type \"file\"\n\n**Response Codes:**\n- 200 OK: Avatar uploaded successfully\n- 400 Bad Request: Invalid file type or size\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error saving file"
 					},
 					"response": []
+				},
+				{
+					"name": "Promote to Admin",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							}
+						],
+						"url": {
+							"raw": "{{baseUrlV2}}/users/promote-to-admin/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"users",
+								"promote-to-admin",
+								""
+							]
+						},
+						"description": "Promote the currently authenticated user to admin role.\n\n**Request:**\n- No request body required\n- Uses the authenticated user from the Bearer token\n\n**Response Codes:**\n- 200 OK: User promoted to admin successfully\n- 401 Unauthorized: Authentication required\n- 400 Bad Request: User account is disabled\n- 404 Not Found: User not found\n- 500 Internal Server Error: Failed to promote user to admin\n\n**Notes:**\n- This endpoint allows authenticated users to change their role to \"Admin\"\n- The operation is logged for audit purposes\n- If a profile doesn't exist, it will be automatically created with default values before promotion"
+					},
+					"response": []
 				}
 			],
-			"description": "User profile management endpoints for retrieving, updating profiles, and uploading avatars."
+			"description": "User profile management endpoints for retrieving, updating profiles, uploading avatars, and promoting users to admin."
 		},
 		{
 			"name": "AI Chat",

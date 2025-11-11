@@ -109,3 +109,30 @@ async def upload_avatar(
             detail=f"Error saving file: {str(exc)}"
         ) from exc
 
+
+@router.post("/promote-to-admin/", response_model=ProfileResponse)
+@log_function_call(logger=logger, log_result=True)
+async def promote_to_admin(
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> ProfileResponse:
+    """
+    Promote the currently authenticated user to admin role.
+    
+    This endpoint allows authenticated users to change their role to "Admin".
+    The operation is logged for audit purposes.
+    """
+    logger.info("Promote to admin request: user_id=%s", current_user.id)
+    
+    try:
+        profile = await service.promote_user_to_admin(session, current_user.id)
+        logger.info("User promoted to admin: user_id=%s", current_user.id)
+        return profile
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Promote to admin failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to promote user to admin"
+        ) from exc

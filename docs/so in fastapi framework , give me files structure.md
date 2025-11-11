@@ -287,7 +287,6 @@ my_fastapi_project/
 └── LICENSE                     # Project license
 ```
 
-
 ## Layer-by-Layer Implementation
 
 ### 1. Application Entry Point (app/main.py)
@@ -372,7 +371,6 @@ async def shutdown_event():
     logger.info("Application shutting down...")
     # Close connections, cleanup resources
 ```
-
 
 ### 2. Configuration Management (app/core/config.py)
 
@@ -472,7 +470,6 @@ class Settings(BaseSettings):
 settings = Settings()
 ```
 
-
 ### 3. Database Layer (app/db/session.py)
 
 Configure SQLAlchemy with proper connection pooling and session management:[^8][^6]
@@ -516,7 +513,6 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 ```
-
 
 ### 4. Database Models (app/models/user.py)
 
@@ -563,7 +559,6 @@ class Item(Base):
     owner = relationship("User", back_populates="items")
 ```
 
-
 ### 5. Pydantic Schemas (app/schemas/user.py)
 
 Define request/response schemas for automatic validation and documentation:[^1][^3]
@@ -608,7 +603,6 @@ class UserResponse(UserBase):
     
     model_config = ConfigDict(from_attributes=True)
 ```
-
 
 ### 6. Repository Layer (app/repositories/base.py)
 
@@ -673,7 +667,6 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             db.commit()
         return obj
 ```
-
 
 ### 7. Service Layer (app/services/user_service.py)
 
@@ -759,7 +752,6 @@ class UserService:
         return user
 ```
 
-
 ### 8. Security Layer (app/core/security.py)
 
 Implement JWT authentication and password hashing:[^9]
@@ -830,7 +822,6 @@ def decode_token(token: str) -> Optional[dict]:
         return None
 ```
 
-
 ### 9. API Dependencies (app/api/deps.py)
 
 Define reusable dependencies for authentication and authorization:[^2][^3]
@@ -898,7 +889,6 @@ def get_current_superuser(
         )
     return current_user
 ```
-
 
 ### 10. API Endpoints (app/api/v1/endpoints/users.py)
 
@@ -1009,7 +999,6 @@ def delete_user(
     return None
 ```
 
-
 ### 11. WebSocket Implementation (app/api/v1/endpoints/websockets.py)
 
 Implement real-time communication with WebSockets:[^10][^11]
@@ -1067,7 +1056,6 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
         await manager.broadcast("A client disconnected")
 ```
-
 
 ### 12. Background Tasks with Celery (app/tasks/celery_app.py)
 
@@ -1130,9 +1118,6 @@ def send_welcome_email(self: Task, email: str, username: str):
         raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
 ```
 
-
-
-
 ### 14. Custom Middleware (app/core/middleware.py)
 
 Implement custom middleware for logging, timing, and monitoring:[^15][^16]
@@ -1183,7 +1168,6 @@ class TimingMiddleware(BaseHTTPMiddleware):
         
         return response
 ```
-
 
 ### 15. Custom Exception Handling (app/core/exceptions.py)
 
@@ -1239,7 +1223,6 @@ class ValidationException(CustomException):
             error_code="VALIDATION_ERROR"
         )
 ```
-
 
 ### 16. Testing Configuration (app/tests/conftest.py)
 
@@ -1393,7 +1376,6 @@ def test_get_users_authenticated(client, user_token):
     assert isinstance(response.json(), list)
 ```
 
-
 ### 17. Docker Configuration
 
 **Dockerfile for FastAPI application:**
@@ -1467,7 +1449,6 @@ volumes:
   postgres_data:
 ```
 
-
 ### 18. Environment Variables (.env.example)
 
 ```env
@@ -1508,7 +1489,6 @@ ALLOWED_ORIGINS=["http://localhost:3000","http://localhost:8000"]
 ALLOWED_HOSTS=["localhost","127.0.0.1"]
 ```
 
-
 ## Key Best Practices
 
 ### 1. Separation of Concerns
@@ -1532,7 +1512,6 @@ Store all configuration in environment variables using Pydantic Settings for typ
 Implement unit tests for services, integration tests for API endpoints, and end-to-end tests for complete workflows.[^19][^18]
 
 ### 6. Database Migrations
-
 
 ### 7. Background Tasks
 
@@ -1584,235 +1563,4 @@ docker-compose -f docker-compose.prod.yml up -d
 # Nginx will handle SSL/TLS termination and reverse proxy
 ```
 
-This comprehensive structure provides a production-ready foundation that fully utilizes FastAPI's capabilities while maintaining scalability, maintainability, and adherence to industry best practices.[^24][^5][^2][^3]
-<span style="display:none">[^100][^101][^102][^103][^104][^105][^106][^107][^108][^109][^110][^111][^112][^113][^114][^115][^25][^26][^27][^28][^29][^30][^31][^32][^33][^34][^35][^36][^37][^38][^39][^40][^41][^42][^43][^44][^45][^46][^47][^48][^49][^50][^51][^52][^53][^54][^55][^56][^57][^58][^59][^60][^61][^62][^63][^64][^65][^66][^67][^68][^69][^70][^71][^72][^73][^74][^75][^76][^77][^78][^79][^80][^81][^82][^83][^84][^85][^86][^87][^88][^89][^90][^91][^92][^93][^94][^95][^96][^97][^98][^99]</span>
-
-<div align="center">⁂</div>
-
-[^1]: https://fastapi.tiangolo.com
-
-[^2]: https://fastapi.tiangolo.com/tutorial/bigger-applications/
-
-[^3]: https://dev.to/mohammad222pr/structuring-a-fastapi-project-best-practices-53l6
-
-[^4]: https://camillovisini.com/coding/abstracting-fastapi-services
-
-[^5]: https://github.com/iam-abbas/FastAPI-Production-Boilerplate
-
-[^6]: https://python.plainenglish.io/adding-a-production-grade-database-to-your-fastapi-project-local-setup-50107b10d539
-
-[^7]: https://stackoverflow.com/questions/61582142/test-pydantic-settings-in-fastapi
-
-[^8]: https://notes.kodekloud.com/docs/Python-API-Development-with-FastAPI/Databases-with-Python/Sqlalchemy-Setup
-
-[^9]: https://www.geeksforgeeks.org/python/login-registration-system-with-jwt-in-fastapi/
-
-[^10]: https://www.videosdk.live/developer-hub/websocket/fastapi-websocket
-
-[^11]: https://testdriven.io/blog/fastapi-postgres-websockets/
-
-[^12]: https://www.youtube.com/watch?v=eAHAKowv6hk
-
-
-[^15]: https://sailokesh.hashnode.dev/enable-and-configure-cors-in-fastapi
-
-[^16]: https://blog.stackademic.com/taking-fastapi-to-the-next-level-writing-custom-middleware-for-logging-monitoring-and-enhanced-e960cdeea281
-
-[^17]: https://stackoverflow.com/questions/72831952/how-do-i-integrate-custom-exception-handling-with-the-fastapi-exception-handling
-
-[^18]: https://stackoverflow.com/questions/77375047/unit-tests-vs-integration-tests-for-fastapi
-
-[^19]: https://www.augustinfotech.com/blogs/how-to-use-coverage-unit-testing-in-fastapi-using-pytest/
-
-[^20]: https://www.projectpro.io/article/fastapi-projects/847
-
-[^21]: https://www.reddit.com/r/FastAPI/comments/1hf1cd2/better_dependency_injection_in_fastapi/
-
-[^22]: https://www.siddhatech.com/fastapi-python-framework/
-
-[^23]: https://kinsta.com/blog/fastapi/
-
-[^24]: https://github.com/fastapi/full-stack-fastapi-template
-
-[^25]: https://fepbl.com/index.php/ijmer/article/view/936
-
-[^26]: https://www.cambridge.org/core/product/identifier/S2059866123005666/type/journal_article
-
-[^27]: https://journals.lww.com/10.34067/KID.0000000000000277
-
-[^28]: https://www.euppublishing.com/doi/10.3366/ijhac.2024.0325
-
-[^29]: https://www.c5k.com/9-1-19-article/jitmbh24002
-
-[^30]: https://allacademicresearch.com/index.php/AJAIMLDSMIS/article/view/128/
-
-[^31]: https://link.springer.com/10.1007/978-1-0716-2883-6_1
-
-[^32]: http://www.tandfonline.com/doi/abs/10.1080/09544120100000011
-
-[^33]: https://www.frontiersin.org/articles/10.3389/frsle.2023.1329405/full
-
-[^34]: https://cdnsciencepub.com/doi/10.1139/cjfr-2024-0085
-
-[^35]: https://zenodo.org/record/4550441/files/MAP-EuroPlop2020aPaper.pdf
-
-[^36]: http://arxiv.org/pdf/2401.07053.pdf
-
-[^37]: https://arxiv.org/pdf/2201.13243.pdf
-
-[^38]: https://joss.theoj.org/papers/10.21105/joss.05350.pdf
-
-[^39]: https://zenodo.org/record/4550449/files/MAP-EuroPlop2020bPaper.pdf
-
-[^40]: https://www.mdpi.com/2078-2489/11/2/108/pdf
-
-[^41]: https://arxiv.org/pdf/2303.13828.pdf
-
-[^42]: https://arxiv.org/pdf/2502.09766.pdf
-
-[^43]: https://realpython.com/fastapi-python-web-apis/
-
-[^44]: https://www.geeksforgeeks.org/python/fastapi-introduction/
-
-[^45]: https://dev.to/mrchike/fastapi-in-production-build-scale-deploy-series-a-codebase-design-ao3
-
-[^46]: https://iopscience.iop.org/article/10.1088/1361-6641/abc3da
-
-[^47]: https://www.semanticscholar.org/paper/be3c67e01742633e29826371a601d4398bd79662
-
-[^48]: https://www.ewadirect.com/proceedings/chr/article/view/1762
-
-[^49]: https://ieeexplore.ieee.org/document/11133103/
-
-[^50]: https://www.taylorfrancis.com/books/9781466504516
-
-[^51]: https://iopscience.iop.org/article/10.1149/MA2023-01362075mtgabs
-
-[^52]: https://link.springer.com/10.1007/s00114-021-01761-x
-
-[^53]: http://bctp.knuba.edu.ua/article/view/306859
-
-[^54]: https://www.ijraset.com/best-journal/why-cad-cam-software-is-essential-in-industrial-3d-printing-and-additive-manufacturing
-
-[^55]: https://www.mdpi.com/2227-9717/13/3/670
-
-[^56]: http://arxiv.org/pdf/1204.5402.pdf
-
-[^57]: http://arxiv.org/pdf/2410.19215.pdf
-
-[^58]: https://zenodo.org/record/5727094/files/main.pdf
-
-[^59]: https://zenodo.org/record/3387092/files/main.pdf
-
-[^60]: https://pmc.ncbi.nlm.nih.gov/articles/PMC9734375/
-
-[^61]: https://prama.ai/building-microservices-with-fastapi-a-comprehensive-guide/
-
-[^62]: https://www.semanticscholar.org/paper/46391bbfa9271f550bfa37d248e2a17ba3b4ad65
-
-[^63]: https://arxiv.org/html/2407.11004v2
-
-[^64]: https://arxiv.org/pdf/2306.08891.pdf
-
-[^65]: https://arxiv.org/pdf/2408.16151.pdf
-
-[^66]: https://arxiv.org/pdf/2502.15980.pdf
-
-[^67]: http://arxiv.org/pdf/2410.11457.pdf
-
-[^68]: https://aclanthology.org/2022.gem-1.23.pdf
-
-[^69]: https://arxiv.org/html/2408.07930v3
-
-[^70]: http://arxiv.org/pdf/2406.08426v3.pdf
-
-[^71]: https://arxiv.org/abs/2306.17407
-
-[^72]: https://ieeexplore.ieee.org/document/10479442/
-
-[^73]: https://www.spiedigitallibrary.org/conference-proceedings-of-spie/12184/2627344/Integration-test-of-dual-unit-arrayed-wide-angle-camera-system/10.1117/12.2627344.full
-
-[^74]: https://link.springer.com/10.1007/s00181-023-02540-5
-
-[^75]: https://ieeexplore.ieee.org/document/9140778/
-
-[^76]: https://dl.acm.org/doi/10.1145/3533767.3543290
-
-[^77]: https://ejournal.itn.ac.id/index.php/jati/article/view/13969
-
-[^78]: https://www.spiedigitallibrary.org/conference-proceedings-of-spie/12184/2627345/Mix-and-match-as-you-go--integration-test-of/10.1117/12.2627345.full
-
-[^79]: https://ej-math.org/index.php/ejmath/article/view/22
-
-[^80]: https://linkinghub.elsevier.com/retrieve/pii/S0164121219301955
-
-[^81]: http://arxiv.org/pdf/2502.05143.pdf
-
-[^82]: https://arxiv.org/pdf/2110.13575.pdf
-
-[^83]: http://arxiv.org/pdf/2501.08598.pdf
-
-[^84]: https://arxiv.org/pdf/2306.17407.pdf
-
-[^85]: https://arxiv.org/pdf/2305.14692.pdf
-
-[^86]: https://arxiv.org/pdf/2305.13486.pdf
-
-[^87]: http://arxiv.org/pdf/2404.19614.pdf
-
-[^88]: http://arxiv.org/pdf/2209.06315v1.pdf
-
-[^89]: https://arxiv.org/pdf/2412.05075.pdf
-
-[^90]: https://arxiv.org/pdf/2105.02389.pdf
-
-[^91]: https://arxiv.org/pdf/2309.11406.pdf
-
-[^92]: http://arxiv.org/pdf/2308.14687.pdf
-
-[^93]: https://arxiv.org/html/2503.17685v1
-
-[^94]: https://arxiv.org/html/2502.05311
-
-[^95]: https://sciresol.s3.us-east-2.amazonaws.com/IJST/Articles/2018/Issue-21/Article2.pdf
-
-[^96]: https://arxiv.org/pdf/2008.12118.pdf
-
-[^97]: https://www.codearmo.com/python-tutorial/ultimate-guide-deploy-fastapi-app-nginx-linux
-
-[^98]: https://journalajrcos.com/index.php/AJRCOS/article/view/722
-
-[^99]: https://ijsrem.com/download/i-n-t-e-l-park-intelligent-networked-technology-enabled-car-parking-system-with-ai-powered-face-recognition/
-
-[^100]: https://ieeexplore.ieee.org/document/11010474/
-
-[^101]: https://nbpublish.com/library_read_article.php?id=70173
-
-[^102]: https://ieeexplore.ieee.org/document/10334760/
-
-[^103]: http://link.springer.com/10.1007/978-3-030-57548-9_20
-
-[^104]: https://ieeexplore.ieee.org/document/9032640/
-
-[^105]: https://ieeexplore.ieee.org/document/11156646/
-
-[^106]: https://ieeexplore.ieee.org/document/11042223/
-
-[^107]: https://www.atlantis-press.com/article/25848184
-
-[^108]: https://linkinghub.elsevier.com/retrieve/pii/S0920548921000994
-
-[^109]: http://journals.sagepub.com/doi/10.1155/2013/867693
-
-[^110]: http://arxiv.org/pdf/2409.07360.pdf
-
-[^111]: https://annals-csis.org/proceedings/2023/drp/pdf/8513.pdf
-
-[^112]: https://zenodo.org/record/4061184/files/43 11Nov17 27Sep 9020-10384-1-SM (Edit A).pdf
-
-[^113]: http://arxiv.org/pdf/2407.03027.pdf
-
-[^114]: https://zenodo.org/records/3908289/files/Low-Latency Communication for Fast DBMS Using RDMA and Shared Memory.pdf
-
-[^115]: https://arxiv.org/pdf/2306.06624.pdf
-
+This comprehensive structure provides a production-ready foundation that fully utilizes FastAPI's capabilities while maintaining scalability, maintainability, and adherence to industry best practices.

@@ -726,6 +726,94 @@ Note: The `avatar_url` in the response is a full URL (includes base URL). The fi
 
 ---
 
+### POST /api/v2/users/promote-to-admin/ - Promote User to Admin
+
+Promote the currently authenticated user to admin role. This endpoint allows authenticated users to change their role to "Admin". The operation is logged for audit purposes.
+
+**Headers:**
+
+- `Authorization: Bearer <access_token>` (required)
+- `Accept: application/json`
+
+**Request Body:**
+
+No request body required. The endpoint uses the authenticated user from the Bearer token.
+
+**Response:**
+
+**Success (200 OK):**
+
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "John Doe",
+  "email": "user@example.com",
+  "role": "Admin",
+  "avatar_url": null,
+  "is_active": true,
+  "job_title": "Software Engineer",
+  "bio": "Passionate developer",
+  "timezone": "America/New_York",
+  "notifications": {
+    "weeklyReports": true,
+    "newLeadAlerts": true
+  },
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-15T12:00:00Z"
+}
+```
+
+**Error (400 Bad Request) - User Account Disabled:**
+
+```json
+{
+  "non_field_errors": ["User account is disabled"]
+}
+```
+
+**Error (401 Unauthorized):**
+
+```json
+{
+  "detail": "Authentication credentials were not provided."
+}
+```
+
+**Error (404 Not Found):**
+
+```json
+{
+  "detail": "User not found"
+}
+```
+
+**Error (500 Internal Server Error):**
+
+```json
+{
+  "detail": "Failed to promote user to admin"
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: User promoted to admin successfully
+- `400 Bad Request`: User account is disabled
+- `401 Unauthorized`: Authentication required
+- `404 Not Found`: User not found
+- `500 Internal Server Error`: Server error while promoting user
+
+**Notes:**
+
+- This endpoint allows authenticated users to self-promote to admin role
+- The operation is logged for audit purposes (all promotion attempts are recorded)
+- If a profile doesn't exist, it will be automatically created with default values before promotion
+- The `role` field in the profile is updated to "Admin"
+- The `updated_at` timestamp is automatically updated
+- This is a self-service endpoint with no additional security checks (consider adding rate limiting or admin approval workflow in production)
+
+---
+
 ## Error Responses
 
 All endpoints may return the following common error responses:
