@@ -1,0 +1,157 @@
+# Check database connectivity from host
+psql "postgresql://$POSTGRES_USER:$POSTGRES_PASS@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB" -c '\dt'
+
+
+# ========================================
+# DEVELOPMENT WORKFLOW (LOCAL)
+# ========================================
+
+# === Environment Setup ===
+python -m venv .venv
+.venv\Scripts\activate      # Windows
+source .venv/bin/activate   # Linux/Mac
+
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+pip install -e ".[dev]"
+
+
+
+
+# Copy environment template
+copy .env.example .env      # Windows
+cp .env.example .env        # Linux/Mac
+
+# === Start Services ===
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn app.main:app --reload
+
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > test.txt
+
+python -m pytest > test_results.txt
+
+python -m json.tool "postman/Appointment360 API.postman_collection.json"
+
+
+python -m pytest > test_results.txt
+
+
+
+celery -A app.tasks.celery_app worker --loglevel=info
+celery -A app.tasks.celery_app beat --loglevel=info
+
+# === Code Quality ===
+# Clean Python cache files (Windows)
+python -Bc "import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]"
+python -Bc "import pathlib; [p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')]"
+
+# Docker Compose workflow
+docker compose up --build
+docker compose logs -f api
+docker compose logs -f worker
+
+# Run background tasks monitor (Flower)
+celery -A app.tasks.celery_app flower --port=5555
+
+# === Formatting & Static Analysis ===
+ruff check app
+ruff format app
+mypy app
+
+# === Tests ===
+pytest
+pytest app/tests/test_contacts.py -vv
+pytest --cov=app --cov-report=term-missing
+pytest app/tests/integration/test_api_endpoints.py --api-base-url http://0.0.0.0:8000
+pytest app/tests/integration/test_api_endpoints.py --api-base-url http://0.0.0.0:8000 --api-admin-username admin --api-admin-password secret
+
+# === Data Import Utilities ===
+python -m app.tasks.import_tasks --help
+python -m app.tasks.import_tasks run --file data/data.csv
+
+# === Alembic (Local) ===
+alembic revision --autogenerate -m "new table"
+alembic upgrade head
+
+
+# ========================================
+# GIT COMMANDS
+# ========================================
+
+git init
+git add .
+git commit -m "05-11-2025"
+git remote add origin https://github.com/thekoushikdurgas/appointmentbackend.git
+git branch -M main
+git push -u origin main -f
+
+# Initialize git repository
+git init
+
+
+git stash
+
+
+# Add remote repository
+git remote add origin https://github.com/thekoushikdurgas/appointmentbackend.git
+
+# Set branch to main
+git branch -M main
+
+# Configure git user
+git config --global user.email "koushik.btech.cse.19@nitap.ac.in"
+git config --global user.name "thekoushikdurgas"
+
+# Add all files
+git add .
+
+# Commit changes
+git commit -m "Your commit message here"
+
+# Push to remote (force if needed)
+git push -u origin main -f
+
+# Pull latest changes
+git pull origin main
+
+# Check git status
+git status
+
+# ========================================
+# QUICK REFERENCE
+# ========================================
+
+# Application Entrypoints:
+# - API:        uvicorn app.main:app
+# - Worker:     celery -A app.tasks.celery_app worker --loglevel=info
+# - Scheduler:  celery -A app.tasks.celery_app beat --loglevel=info
+
+# Service URLs:
+# - Docs:       http://localhost:8000/docs
+# - ReDoc:      http://localhost:8000/redoc
+# - Health:     http://localhost:8000/health
+# - API v1:     http://localhost:8000/api/v1
+
+# Project Structure:
+# - app/api          # FastAPI routers
+# - app/core         # Settings, logging, middleware
+# - app/db           # Database session & base model setup
+# - app/models       # SQLAlchemy models
+# - app/repositories # Query layer
+# - app/services     # Domain/business logic
+# - app/tasks        # Celery configuration & background jobs
+# - app/tests        # Pytest suite
+# - alembic/         # Migration environment
+# - scripts/         # Helper shell scripts
+# - docker-compose.yml / Dockerfile
+
+# Common Workflow:
+# 1. Activate virtualenv (.venv\Scripts\activate)
+# 2. Export environment variables (see .env.example)
+# 3. Run uvicorn / celery locally
+# 4. Execute pytest before pushing
+# 5. Alembic revision + upgrade for schema changes
+# 6. Deploy via git pull + systemctl restart appointmentbackend-api.service

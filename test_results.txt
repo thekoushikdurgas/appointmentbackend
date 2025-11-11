@@ -1,0 +1,22 @@
+.s...................................................................... [ 23%]
+............................x........................................... [ 46%]
+.......................................................................s [ 69%]
+ssssssss.s.............................................................. [ 92%]
+........................API report: D:\code\ayan\appoinmentbackend\@results\20251110_185736\api_test_report.txt
+API results JSON: D:\code\ayan\appoinmentbackend\@results\20251110_185736\api_test_results.json
+API responses directory: D:\code\ayan\appoinmentbackend\@results\20251110_185736\responses
+                                                                         [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:489: Versioned health endpoint not available
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:818: Admin credentials required for CSV upload tests
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:836: Admin credentials required for CSV upload tests
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:853: Admin credentials required for CSV upload tests
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:866: Admin credentials required for CSV upload tests
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:881: Admin credentials required for CSV upload tests
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:899: Admin credentials required to create import jobs
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:908: Admin credentials required for import detail tests
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:918: Admin credentials required to create import jobs
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:928: Admin credentials required for import error download tests
+SKIPPED [1] app\tests\integration\test_api_endpoints.py:950: Admin credentials required for authenticated admin tests
+XFAIL app/tests/integration/test_api_endpoints.py::TestContactsList::test_special_character_search - Expected timeout for GET /api/v1/contacts/
+300 passed, 11 skipped, 1 xfailed in 1112.51s (0:18:32)
