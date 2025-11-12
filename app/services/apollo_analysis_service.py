@@ -286,3 +286,232 @@ class ApolloAnalysisService:
                 detail="An error occurred while analyzing the URL",
             ) from exc
 
+    def map_to_contact_filters(
+        self, raw_parameters: dict[str, list[str]], include_unmapped: bool = False
+    ) -> tuple[dict[str, any], dict[str, tuple[list[str], str]]] | dict[str, any]:
+        """
+        Map Apollo.io URL parameters to ContactFilterParams.
+
+        Args:
+            raw_parameters: Dictionary of parameter names to lists of values from Apollo URL
+            include_unmapped: If True, returns tuple of (filters, unmapped_params)
+
+        Returns:
+            If include_unmapped is False: Dictionary that can be used to construct ContactFilterParams
+            If include_unmapped is True: Tuple of (filters dict, unmapped params dict)
+                unmapped params dict format: {param_name: (values, reason)}
+
+        Note:
+            - Multiple values are combined with OR logic (comma-separated for text filters)
+            - Exclusion filters are passed as lists
+            - ID-based parameters are skipped (no mapping available)
+        """
+        logger.info("Mapping Apollo parameters to contact filters: params=%d", len(raw_parameters))
+
+        contact_filters = {}
+        mapped_params = set()
+        unmapped_params = {}
+
+        # Pagination: page → page
+        if "page" in raw_parameters:
+            try:
+                contact_filters["page"] = int(raw_parameters["page"][0])
+                mapped_params.add("page")
+            except (ValueError, IndexError):
+                pass
+
+        # Sorting: sortByField + sortAscending → ordering
+        if "sortByField" in raw_parameters:
+            sort_field = raw_parameters["sortByField"][0]
+            sort_ascending = raw_parameters.get("sortAscending", ["true"])[0].lower()
+
+            # Map Apollo field names to contacts ordering fields
+            field_map = {
+                "contact_name": "first_name",
+                "title": "title",
+                "company": "company",
+                "employees": "employees",
+                "revenue": "annual_revenue",
+                "funding": "total_funding",
+                "location": "city",
+                "recommendations_score": "created_at",  # Default fallback
+            }
+
+            mapped_field = field_map.get(sort_field, sort_field)
+            # Prepend '-' for descending (when sortAscending is false)
+            if sort_ascending == "false":
+                contact_filters["ordering"] = f"-{mapped_field}"
+            else:
+                contact_filters["ordering"] = mapped_field
+            
+            mapped_params.add("sortByField")
+            if "sortAscending" in raw_parameters:
+                mapped_params.add("sortAscending")
+
+        # Person Filters - personTitles[] → title (combine with comma)
+        if "personTitles[]" in raw_parameters:
+            titles = raw_parameters["personTitles[]"]
+            if titles:
+                contact_filters["title"] = ",".join(titles)
+                mapped_params.add("personTitles[]")
+
+        # Person Filters - personNotTitles[] → exclude_titles (list)
+        if "personNotTitles[]" in raw_parameters:
+            exclude_titles = raw_parameters["personNotTitles[]"]
+            if exclude_titles:
+                contact_filters["exclude_titles"] = exclude_titles
+                mapped_params.add("personNotTitles[]")
+
+        # Person Filters - personSeniorities[] → seniority (combine with comma)
+        if "personSeniorities[]" in raw_parameters:
+            seniorities = raw_parameters["personSeniorities[]"]
+            if seniorities:
+                contact_filters["seniority"] = ",".join(seniorities)
+                mapped_params.add("personSeniorities[]")
+
+        # Person Filters - personDepartmentOrSubdepartments[] → department (combine with comma)
+        if "personDepartmentOrSubdepartments[]" in raw_parameters:
+            departments = raw_parameters["personDepartmentOrSubdepartments[]"]
+            if departments:
+                contact_filters["department"] = ",".join(departments)
+                mapped_params.add("personDepartmentOrSubdepartments[]")
+
+        # Person Filters - personLocations[] → contact_location (combine with comma)
+        if "personLocations[]" in raw_parameters:
+            locations = raw_parameters["personLocations[]"]
+            if locations:
+                contact_filters["contact_location"] = ",".join(locations)
+                mapped_params.add("personLocations[]")
+
+        # Person Filters - personNotLocations[] → exclude_contact_locations (list)
+        if "personNotLocations[]" in raw_parameters:
+            exclude_locations = raw_parameters["personNotLocations[]"]
+            if exclude_locations:
+                contact_filters["exclude_contact_locations"] = exclude_locations
+                mapped_params.add("personNotLocations[]")
+
+        # Organization Filters - organizationNumEmployeesRanges[] → employees_min/max
+        if "organizationNumEmployeesRanges[]" in raw_parameters:
+            ranges = raw_parameters["organizationNumEmployeesRanges[]"]
+            all_mins = []
+            all_maxs = []
+
+            for range_str in ranges:
+                # Parse ranges like "11,50" or "1,10"
+                parts = range_str.split(",")
+                if len(parts) == 2:
+                    try:
+                        min_val = int(parts[0].strip())
+                        max_val = int(parts[1].strip())
+                        all_mins.append(min_val)
+                        all_maxs.append(max_val)
+                    except ValueError:
+                        logger.warning("Invalid employee range format: %s", range_str)
+
+            if all_mins:
+                contact_filters["employees_min"] = min(all_mins)
+            if all_maxs:
+                contact_filters["employees_max"] = max(all_maxs)
+            
+            if all_mins or all_maxs:
+                mapped_params.add("organizationNumEmployeesRanges[]")
+
+        # Organization Filters - organizationLocations[] → company_location (combine with comma)
+        if "organizationLocations[]" in raw_parameters:
+            locations = raw_parameters["organizationLocations[]"]
+            if locations:
+                contact_filters["company_location"] = ",".join(locations)
+                mapped_params.add("organizationLocations[]")
+
+        # Organization Filters - organizationNotLocations[] → exclude_company_locations (list)
+        if "organizationNotLocations[]" in raw_parameters:
+            exclude_locations = raw_parameters["organizationNotLocations[]"]
+            if exclude_locations:
+                contact_filters["exclude_company_locations"] = exclude_locations
+                mapped_params.add("organizationNotLocations[]")
+
+        # Organization Filters - revenueRange[min] → annual_revenue_min
+        if "revenueRange[min]" in raw_parameters:
+            try:
+                contact_filters["annual_revenue_min"] = int(raw_parameters["revenueRange[min]"][0])
+                mapped_params.add("revenueRange[min]")
+            except (ValueError, IndexError):
+                pass
+
+        # Organization Filters - revenueRange[max] → annual_revenue_max
+        if "revenueRange[max]" in raw_parameters:
+            try:
+                contact_filters["annual_revenue_max"] = int(raw_parameters["revenueRange[max]"][0])
+                mapped_params.add("revenueRange[max]")
+            except (ValueError, IndexError):
+                pass
+
+        # Email Filters - contactEmailStatusV2[] → email_status (combine with comma)
+        if "contactEmailStatusV2[]" in raw_parameters:
+            statuses = raw_parameters["contactEmailStatusV2[]"]
+            if statuses:
+                contact_filters["email_status"] = ",".join(statuses)
+                mapped_params.add("contactEmailStatusV2[]")
+
+        # Keywords - qOrganizationKeywordTags[] → keywords (combine with comma)
+        if "qOrganizationKeywordTags[]" in raw_parameters:
+            keywords = raw_parameters["qOrganizationKeywordTags[]"]
+            if keywords:
+                contact_filters["keywords"] = ",".join(keywords)
+                mapped_params.add("qOrganizationKeywordTags[]")
+
+        # Keywords - qNotOrganizationKeywordTags[] → exclude_keywords (list)
+        if "qNotOrganizationKeywordTags[]" in raw_parameters:
+            exclude_keywords = raw_parameters["qNotOrganizationKeywordTags[]"]
+            if exclude_keywords:
+                contact_filters["exclude_keywords"] = exclude_keywords
+                mapped_params.add("qNotOrganizationKeywordTags[]")
+
+        # Search - qKeywords → search
+        if "qKeywords" in raw_parameters:
+            search_term = raw_parameters["qKeywords"][0]
+            if search_term:
+                contact_filters["search"] = search_term
+                mapped_params.add("qKeywords")
+
+        # Build unmapped parameters dictionary with reasons
+        for param_name, param_values in raw_parameters.items():
+            if param_name not in mapped_params:
+                # Categorize the reason for not mapping
+                if param_name in ["organizationIndustryTagIds[]", "currentlyUsingAnyOfTechnologyUids[]", 
+                                  "organizationNotIndustryTagIds[]"]:
+                    reason = "ID-based filter (no name mapping available)"
+                elif param_name in ["qOrganizationSearchListId", "qNotOrganizationSearchListId", 
+                                    "qPersonPersonaIds[]"]:
+                    reason = "Apollo-specific feature (search lists, personas)"
+                elif param_name in ["marketSegments[]", "intentStrengths[]", "lookalikeOrganizationIds[]"]:
+                    reason = "Apollo-specific feature (market segments, intent, lookalike)"
+                elif param_name in ["prospectedByCurrentTeam[]"]:
+                    reason = "Apollo-specific feature (prospecting status)"
+                elif param_name in ["organizationJobLocations[]", "organizationNumJobsRange[min]", 
+                                    "organizationJobPostedAtRange[min]", "organizationTradingStatus[]"]:
+                    reason = "Unmapped filter (job postings, trading status)"
+                elif param_name in ["contactEmailExcludeCatchAll"]:
+                    reason = "Unmapped filter (email catch-all exclusion)"
+                elif param_name in ["includedOrganizationKeywordFields[]", "excludedOrganizationKeywordFields[]",
+                                    "includedAndedOrganizationKeywordFields[]"]:
+                    reason = "Keyword field control (not applicable)"
+                elif param_name in ["uniqueUrlId", "tour", "includeSimilarTitles", "existFields[]",
+                                    "notOrganizationIds[]", "organizationIds[]", "qAndedOrganizationKeywordTags[]"]:
+                    reason = "UI flag or advanced filter (not applicable)"
+                else:
+                    reason = "Unknown parameter (no mapping defined)"
+                
+                unmapped_params[param_name] = (param_values, reason)
+
+        logger.info(
+            "Mapped Apollo parameters: input_params=%d mapped_params=%d unmapped_params=%d",
+            len(raw_parameters),
+            len(contact_filters),
+            len(unmapped_params),
+        )
+
+        if include_unmapped:
+            return contact_filters, unmapped_params
+        return contact_filters
+

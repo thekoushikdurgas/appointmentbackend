@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "4e5fd9cf-5bdf-4450-aac7-78ee5fecc18d",
 		"name": "Appointment360 API",
-		"description": "Postman collection for the Appointment360 FastAPI backend. Includes v1 endpoints (Contacts, Imports) and v2 endpoints (Authentication, Users, AI Chat). All endpoints require Bearer token authentication. Sample parameters align with docs/apis.md, docs/api/user.md, and docs/api/ai_chat.md.",
+		"description": "Postman collection for the Appointment360 FastAPI backend. Includes v1 endpoints (Contacts, Imports) and v2 endpoints (Authentication, Users, AI Chat, Apollo). All endpoints require Bearer token authentication. Sample parameters align with docs/apis.md, docs/api/user.md, docs/api/ai_chat.md, and docs/api/apollo.md.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "20572666",
 		"_collection_link": "https://prbal5-1003.postman.co/workspace/prbal~38626842-f3c9-4a6f-a7bc-0367cd9a6824/collection/20572666-4e5fd9cf-5bdf-4450-aac7-78ee5fecc18d?action=share&source=collection_link&creator=20572666"
@@ -824,9 +824,80 @@
 						"description": "Analyze an Apollo.io URL and return structured parameter breakdown.\n\nThis endpoint parses Apollo.io search URLs (typically from the People Search page) and extracts all query parameters, categorizing them into logical groups such as:\n- Pagination (page numbers)\n- Sorting (sort field and direction)\n- Person Filters (titles, locations, seniorities, departments)\n- Organization Filters (employee ranges, locations, industries, revenue)\n- Email Filters (verification status, catch-all exclusion)\n- Keyword Filters (organization keywords, search fields)\n- And more...\n\nThe analysis includes:\n- URL structure breakdown (base URL, hash path, query string)\n- Categorized parameters with descriptions\n- Parameter values (URL-decoded)\n- Statistics about the search criteria\n\n**Field Requirements:**\n- url (string, required): Apollo.io URL to analyze (must be from apollo.io domain)\n\n**Response Codes:**\n- 200 OK: URL analyzed successfully\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or missing URL field\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while analyzing the URL"
 					},
 					"response": []
+				},
+				{
+					"name": "Search Contacts from Apollo URL",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?personTitles[]=CEO&personLocations[]=California&organizationNumEmployeesRanges[]=11,50&contactEmailStatusV2[]=verified&page=1&sortByField=employees&sortAscending=false\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/apollo/contacts?limit=25&offset=0",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"apollo",
+								"contacts"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "25",
+									"description": "Maximum number of results per page (>=1)",
+									"disabled": true
+								},
+								{
+									"key": "offset",
+									"value": "0",
+									"description": "Starting offset for results (default: 0, >=0)",
+									"disabled": true
+								},
+								{
+									"key": "cursor",
+									"value": "",
+									"description": "Opaque cursor token for pagination",
+									"disabled": true
+								},
+								{
+									"key": "view",
+									"value": "simple",
+									"description": "When set to 'simple', returns ContactSimpleItem. Omit for full ContactListItem.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Search contacts using Apollo.io URL parameters. This endpoint converts an Apollo.io People Search URL into contact filter parameters and returns matching contacts from your database.\n\n**Response Format:**\nThe endpoint returns an enhanced response that includes:\n- Contact results (paginated list of ContactListItem or ContactSimpleItem)\n- mapping_summary: Statistics about parameter mapping (total, mapped, unmapped counts)\n- unmapped_categories: Detailed information about parameters that were not mapped, grouped by category with reasons\n\nThis transparency helps you understand which Apollo filters were applied and which were skipped.\n\n**Parameter Mappings:**\n- page → page\n- sortByField + sortAscending → ordering (with '-' prefix for descending)\n- personTitles[] → title (comma-separated for OR logic)\n- personNotTitles[] → exclude_titles\n- personSeniorities[] → seniority (comma-separated)\n- personDepartmentOrSubdepartments[] → department (comma-separated)\n- personLocations[] → contact_location (comma-separated)\n- personNotLocations[] → exclude_contact_locations\n- organizationNumEmployeesRanges[] → employees_min, employees_max\n- organizationLocations[] → company_location (comma-separated)\n- organizationNotLocations[] → exclude_company_locations\n- revenueRange[min/max] → annual_revenue_min, annual_revenue_max\n- contactEmailStatusV2[] → email_status (comma-separated)\n- qOrganizationKeywordTags[] → keywords (comma-separated)\n- qNotOrganizationKeywordTags[] → exclude_keywords\n- qKeywords → search\n\n**Unmapped Parameter Reasons:**\n- ID-based filter (no name mapping available): Industry tags, technology UIDs\n- Apollo-specific feature: Search lists, personas, intent, lookalike, market segments\n- Unmapped filter: Job postings, trading status, email catch-all exclusion\n- Keyword field control: Fields to search for keywords (not applicable)\n- UI flag or advanced filter: tour, uniqueUrlId, includeSimilarTitles, etc.\n\n**Request Body:**\n- url (string, required): Apollo.io URL to convert and search\n\n**Query Parameters:**\n- limit (integer, optional, >=1): Maximum number of results per page\n- offset (integer, optional, >=0): Starting offset for results (default: 0)\n- cursor (string, optional): Opaque cursor token for pagination\n- view (string, optional): When 'simple', returns ContactSimpleItem, otherwise ContactListItem\n\n**Response Codes:**\n- 200 OK: Contacts retrieved successfully with mapping metadata\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or invalid filter parameters\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while searching contacts\n\n**Use Cases:**\n1. Apollo to Database Migration: Convert Apollo searches to database queries seamlessly\n2. Search Replication: Replicate Apollo.io searches in your own system with transparency\n3. Workflow Integration: Integrate Apollo URLs with full visibility into parameter mapping\n4. Parameter Analysis: Understand which Apollo filters are applicable to your database"
+					},
+					"response": []
 				}
 			],
-			"description": "Apollo.io URL analysis endpoints for parsing and categorizing Apollo search URL parameters."
+			"description": "Apollo.io integration endpoints for parsing Apollo search URLs and searching contacts using Apollo URL parameters. Includes URL analysis for parameter breakdown and contact search for converting Apollo searches to database queries."
 		},
 		{
 			"name": "Contacts",
