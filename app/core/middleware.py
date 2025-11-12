@@ -12,6 +12,58 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+class CORSFriendlyTrustedHostMiddleware(BaseHTTPMiddleware):
+    """
+    TrustedHostMiddleware that allows OPTIONS requests to pass through.
+    
+    This ensures CORS preflight requests are not blocked by host validation,
+    allowing CORS middleware to properly handle them.
+    """
+
+    def __init__(self, app, allowed_hosts):
+        """Initialize the middleware with allowed hosts."""
+        super().__init__(app)
+        self.allowed_hosts = set(allowed_hosts) if allowed_hosts else None
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        """
+        Dispatch request, bypassing host validation for OPTIONS requests.
+        
+        OPTIONS requests (CORS preflight) are allowed through without host validation
+        so that CORS middleware can add proper headers.
+        """
+        # Allow OPTIONS requests to bypass host validation for CORS preflight
+        if request.method == "OPTIONS":
+            logger.debug(
+                "Bypassing host validation for OPTIONS request: path=%s origin=%s",
+                request.url.path,
+                request.headers.get("origin"),
+            )
+            return await call_next(request)
+        
+        # For non-OPTIONS requests, apply host validation
+        if self.allowed_hosts is None:
+            return await call_next(request)
+        
+        # Get the host from the request
+        host = request.headers.get("host", "").split(":")[0]
+        
+        # Check if host is in allowed hosts
+        if host not in self.allowed_hosts:
+            logger.warning(
+                "Host validation failed: host=%s allowed_hosts=%s path=%s",
+                host,
+                self.allowed_hosts,
+                request.url.path,
+            )
+            return JSONResponse(
+                status_code=400,
+                content={"detail": f"Invalid host header: {host}"},
+            )
+        
+        return await call_next(request)
+
+
 class LoggingMiddleware(BaseHTTPMiddleware):
     """Logs incoming requests and outgoing responses."""
 

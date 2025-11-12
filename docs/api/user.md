@@ -20,6 +20,26 @@ Tokens are obtained through the login or register endpoints.
 
 ---
 
+## CORS Testing
+
+All endpoints support CORS (Cross-Origin Resource Sharing) for browser-based requests. For testing CORS headers, you can include an optional `Origin` header in your requests:
+
+**Optional Header:**
+
+- `Origin: http://localhost:3000` (or your frontend origin)
+
+**Expected CORS Response Headers:**
+
+- `Access-Control-Allow-Origin: http://localhost:3000` (matches the Origin header)
+- `Access-Control-Allow-Credentials: true`
+- `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH`
+- `Access-Control-Allow-Headers: *`
+- `Access-Control-Max-Age: 3600`
+
+**Note:** The Origin header is optional and only needed when testing CORS behavior. The API automatically handles CORS preflight (OPTIONS) requests.
+
+---
+
 ## Authentication Endpoints
 
 ### POST /api/v2/auth/register/ - User Registration

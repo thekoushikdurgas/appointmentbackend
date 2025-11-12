@@ -20,6 +20,12 @@
 								"key": "Accept",
 								"value": "application/json",
 								"description": "Expected response content type."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -44,6 +50,12 @@
 								"key": "Accept",
 								"value": "application/json",
 								"description": "Expected response content type."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -69,6 +81,12 @@
 								"key": "Accept",
 								"value": "application/json",
 								"description": "Expected response content type."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -104,6 +122,12 @@
 								"key": "Content-Type",
 								"value": "application/json",
 								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -154,6 +178,12 @@
 								"key": "Content-Type",
 								"value": "application/json",
 								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -204,6 +234,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -235,6 +271,12 @@
 								"key": "Content-Type",
 								"value": "application/json",
 								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -290,6 +332,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -331,6 +379,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -367,6 +421,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -402,6 +462,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -444,6 +510,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -481,6 +553,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -536,6 +614,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -584,6 +668,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -620,6 +710,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -655,6 +751,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -676,6 +778,57 @@
 			"description": "AI chat conversation endpoints for listing, creating, retrieving, updating, and deleting chat conversations. All endpoints require JWT authentication and verify ownership before allowing access."
 		},
 		{
+			"name": "Apollo",
+			"item": [
+				{
+					"name": "Analyze Apollo URL",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?contactEmailStatusV2[]=verified&personLocations[]=california&personTitles[]=CEO&organizationNumEmployeesRanges[]=11,50&page=1&sortByField=recommendations_score&sortAscending=false\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/apollo/analyze",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"apollo",
+								"analyze"
+							]
+						},
+						"description": "Analyze an Apollo.io URL and return structured parameter breakdown.\n\nThis endpoint parses Apollo.io search URLs (typically from the People Search page) and extracts all query parameters, categorizing them into logical groups such as:\n- Pagination (page numbers)\n- Sorting (sort field and direction)\n- Person Filters (titles, locations, seniorities, departments)\n- Organization Filters (employee ranges, locations, industries, revenue)\n- Email Filters (verification status, catch-all exclusion)\n- Keyword Filters (organization keywords, search fields)\n- And more...\n\nThe analysis includes:\n- URL structure breakdown (base URL, hash path, query string)\n- Categorized parameters with descriptions\n- Parameter values (URL-decoded)\n- Statistics about the search criteria\n\n**Field Requirements:**\n- url (string, required): Apollo.io URL to analyze (must be from apollo.io domain)\n\n**Response Codes:**\n- 200 OK: URL analyzed successfully\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or missing URL field\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while analyzing the URL"
+					},
+					"response": []
+				}
+			],
+			"description": "Apollo.io URL analysis endpoints for parsing and categorizing Apollo search URL parameters."
+		},
+		{
 			"name": "Contacts",
 			"item": [
 				{
@@ -693,6 +846,12 @@
 									{
 										"key": "Authorization",
 										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"url": {
@@ -1149,6 +1308,12 @@
 									{
 										"key": "Authorization",
 										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"url": {
@@ -1324,6 +1489,12 @@
 									{
 										"key": "Authorization",
 										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"url": {
@@ -1362,6 +1533,12 @@
 										"key": "X-Contacts-Write-Key",
 										"value": "{{contactsWriteKey}}",
 										"description": "Required header for write operations. Must match the configured CONTACTS_WRITE_KEY value. Used to authorize contact creation, updates, and deletions."
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"body": {
@@ -1399,6 +1576,12 @@
 									{
 										"key": "Authorization",
 										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"url": {
@@ -1460,6 +1643,12 @@
 									{
 										"key": "Authorization",
 										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"url": {
@@ -1521,6 +1710,12 @@
 									{
 										"key": "Authorization",
 										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"url": {
@@ -1587,6 +1782,12 @@
 									{
 										"key": "Authorization",
 										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"url": {
@@ -1653,6 +1854,12 @@
 									{
 										"key": "Authorization",
 										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"url": {
@@ -1719,6 +1926,12 @@
 									{
 										"key": "Authorization",
 										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
 									}
 								],
 								"url": {
@@ -2218,6 +2431,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {
@@ -2249,6 +2468,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -2291,6 +2516,12 @@
 								"key": "Authorization",
 								"value": "Bearer {{accessToken}}",
 								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
 							}
 						],
 						"url": {

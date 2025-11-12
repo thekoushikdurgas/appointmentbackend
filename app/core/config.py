@@ -75,10 +75,14 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[AnyHttpUrl] = [
         AnyHttpUrl("http://localhost:3000"),
         AnyHttpUrl("http://localhost:8000"),
+        AnyHttpUrl("http://127.0.0.1:3000"),
+        AnyHttpUrl("http://127.0.0.1:8000"),
         AnyHttpUrl("http://54.88.182.69"),
+        AnyHttpUrl("http://54.88.182.69:8000"),
     ]
     TRUSTED_HOSTS: List[str] = [
         "54.88.182.69",
+        "54.88.182.69:8000",
         "localhost",
         "127.0.0.1",
         "testserver",

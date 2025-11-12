@@ -32,6 +32,21 @@ X-Contacts-Write-Key: <write_key>  (required for POST /api/v1/contacts/)
 ## Common Headers
 
 - `X-Request-Id` (optional): Request tracking ID that will be echoed back in the response header
+- `Origin` (optional): Origin header for CORS testing. Include this header to verify CORS response headers. Example: `Origin: http://localhost:3000`
+
+### CORS Testing
+
+All endpoints support CORS (Cross-Origin Resource Sharing) for browser-based requests. When testing CORS, include an `Origin` header in your requests.
+
+**Expected CORS Response Headers:**
+
+- `Access-Control-Allow-Origin: <origin>` (matches the Origin header value)
+- `Access-Control-Allow-Credentials: true`
+- `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH`
+- `Access-Control-Allow-Headers: *`
+- `Access-Control-Max-Age: 3600`
+
+**Note:** The Origin header is optional and only needed when testing CORS behavior. The API automatically handles CORS preflight (OPTIONS) requests.
 
 ---
 
