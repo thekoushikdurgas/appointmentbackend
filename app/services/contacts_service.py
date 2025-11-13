@@ -481,3 +481,155 @@ class ContactsService:
         )
         return metadata
 
+    async def list_contacts_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        filters: "CompanyContactFilterParams",
+        limit: int,
+        offset: int,
+        request_url: str,
+        use_cursor: bool = False,
+    ) -> CursorPage[ContactListItem]:
+        """List contacts for a specific company with pagination."""
+        from app.schemas.filters import CompanyContactFilterParams
+        from app.repositories.companies import CompanyRepository
+        from app.utils.pagination import build_cursor_link, build_pagination_link
+        
+        self.logger.info(
+            "Listing contacts for company %s: limit=%d offset=%d use_cursor=%s",
+            company_uuid,
+            limit,
+            offset,
+            use_cursor,
+        )
+        
+        # Verify company exists
+        company_repo = CompanyRepository()
+        company = await company_repo.get_by_uuid(session, company_uuid)
+        if not company:
+            self.logger.warning("Company not found: %s", company_uuid)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+        
+        # Fetch contacts
+        rows = await self.repository.list_contacts_by_company(
+            session,
+            company_uuid,
+            filters,
+            limit,
+            offset,
+        )
+        
+        # Transform to schemas
+        items: list[ContactListItem] = []
+        for contact, company_row, contact_meta, company_meta in rows:
+            item = self._hydrate_contact(contact, company_row, contact_meta, company_meta)
+            items.append(item)
+        
+        # Build pagination URLs
+        next_link = None
+        if len(items) == limit:
+            if use_cursor:
+                next_offset = offset + limit
+                next_cursor = encode_offset_cursor(next_offset)
+                next_link = build_cursor_link(request_url, next_cursor)
+            else:
+                next_offset = offset + limit
+                next_link = build_pagination_link(request_url, limit=limit, offset=next_offset)
+        
+        previous_link = None
+        if offset > 0:
+            if use_cursor:
+                prev_offset = max(offset - limit, 0)
+                prev_cursor = encode_offset_cursor(prev_offset)
+                previous_link = build_cursor_link(request_url, prev_cursor)
+            else:
+                prev_offset = max(offset - limit, 0)
+                previous_link = build_pagination_link(request_url, limit=limit, offset=prev_offset)
+        
+        self.logger.info(
+            "Listed %d contacts for company %s (offset=%d, next=%s, previous=%s)",
+            len(items),
+            company_uuid,
+            offset,
+            bool(next_link),
+            bool(previous_link),
+        )
+        
+        return CursorPage(
+            next=next_link,
+            previous=previous_link,
+            results=items,
+        )
+
+    async def count_contacts_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        filters: "CompanyContactFilterParams",
+    ) -> CountResponse:
+        """Count contacts for a specific company matching filters."""
+        from app.schemas.filters import CompanyContactFilterParams
+        from app.repositories.companies import CompanyRepository
+        
+        self.logger.info("Counting contacts for company %s", company_uuid)
+        
+        # Verify company exists
+        company_repo = CompanyRepository()
+        company = await company_repo.get_by_uuid(session, company_uuid)
+        if not company:
+            self.logger.warning("Company not found: %s", company_uuid)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+        
+        # Count contacts
+        count = await self.repository.count_contacts_by_company(
+            session,
+            company_uuid,
+            filters,
+        )
+        
+        self.logger.info("Counted %d contacts for company %s", count, company_uuid)
+        return CountResponse(count=count)
+
+    async def list_attribute_values_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        attribute: str,
+        filters: "CompanyContactFilterParams",
+        params: AttributeListParams,
+    ) -> List[str]:
+        """List distinct attribute values for contacts within a specific company."""
+        from app.schemas.filters import CompanyContactFilterParams
+        from app.repositories.companies import CompanyRepository
+        
+        self.logger.info(
+            "Listing attribute %s values for company %s",
+            attribute,
+            company_uuid,
+        )
+        
+        # Verify company exists
+        company_repo = CompanyRepository()
+        company = await company_repo.get_by_uuid(session, company_uuid)
+        if not company:
+            self.logger.warning("Company not found: %s", company_uuid)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+        
+        # Fetch attribute values
+        values = await self.repository.list_attribute_values_by_company(
+            session,
+            company_uuid,
+            attribute,
+            filters,
+            params,
+        )
+        
+        self.logger.info(
+            "Listed %d distinct %s values for company %s",
+            len(values),
+            attribute,
+            company_uuid,
+        )
+        return list(values)
+

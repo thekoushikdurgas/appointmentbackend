@@ -725,3 +725,414 @@ class ContactRepository(AsyncRepository[Contact]):
         )
         return row
 
+    async def list_contacts_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        filters: "CompanyContactFilterParams",
+        limit: int,
+        offset: int,
+    ) -> Sequence[tuple[Contact, Company, ContactMetadata, CompanyMetadata]]:
+        """Return contacts for a specific company with associated metadata rows."""
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Listing contacts for company %s: limit=%d offset=%d ordering=%s filters=%s",
+            company_uuid,
+            limit,
+            offset,
+            filters.ordering,
+            active_filter_keys,
+        )
+        stmt, company_alias, contact_meta_alias, company_meta_alias = self.base_query()
+        
+        # Filter by company UUID
+        stmt = stmt.where(Contact.company_id == company_uuid)
+        
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        stmt = self._apply_company_contact_filters(
+            stmt,
+            filters,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+        stmt = self._apply_company_contact_search(
+            stmt,
+            filters.search,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+        
+        # Apply ordering
+        ordering_map = {
+            "created_at": Contact.created_at,
+            "updated_at": Contact.updated_at,
+            "first_name": Contact.first_name,
+            "last_name": Contact.last_name,
+            "title": Contact.title,
+            "email": Contact.email,
+            "email_status": Contact.email_status,
+            "seniority": Contact.seniority,
+            "departments": cast(Contact.departments, Text),
+            "work_direct_phone": contact_meta_alias.work_direct_phone,
+            "home_phone": contact_meta_alias.home_phone,
+            "mobile_phone": Contact.mobile_phone,
+            "other_phone": contact_meta_alias.other_phone,
+            "stage": contact_meta_alias.stage,
+            "person_linkedin_url": contact_meta_alias.linkedin_url,
+            "website": contact_meta_alias.website,
+            "facebook_url": contact_meta_alias.facebook_url,
+            "twitter_url": contact_meta_alias.twitter_url,
+            "city": contact_meta_alias.city,
+            "state": contact_meta_alias.state,
+            "country": contact_meta_alias.country,
+        }
+        stmt = apply_ordering(stmt, filters.ordering, ordering_map)
+        stmt = stmt.limit(limit).offset(offset)
+        result = await session.execute(stmt)
+        rows = result.fetchall()
+        logger.debug("Retrieved %d contacts for company %s", len(rows), company_uuid)
+        return rows
+
+    async def count_contacts_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        filters: "CompanyContactFilterParams",
+    ) -> int:
+        """Count contacts for a specific company that match the supplied filters."""
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug("Counting contacts for company %s with filters=%s", company_uuid, active_filter_keys)
+        
+        company_alias = aliased(Company, name="company_for_count")
+        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata_for_count")
+        company_meta_alias = aliased(CompanyMetadata, name="company_metadata_for_count")
+
+        stmt = (
+            select(func.count(Contact.id))
+            .select_from(Contact)
+            .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+            .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+        )
+        
+        # Filter by company UUID
+        stmt = stmt.where(Contact.company_id == company_uuid)
+        
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        stmt = self._apply_company_contact_filters(
+            stmt,
+            filters,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+        stmt = self._apply_company_contact_search(
+            stmt,
+            filters.search,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+        
+        result = await session.execute(stmt)
+        count = result.scalar() or 0
+        logger.debug("Counted %d contacts for company %s", count, company_uuid)
+        return count
+
+    async def list_attribute_values_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        attribute: str,
+        filters: "CompanyContactFilterParams",
+        params: AttributeListParams,
+    ) -> Sequence[str]:
+        """Return distinct attribute values for contacts within a specific company."""
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        logger.debug(
+            "Listing attribute %s values for company %s with filters=%s params=%s",
+            attribute,
+            company_uuid,
+            sorted(filters.model_dump(exclude_none=True).keys()),
+            params.model_dump(exclude_none=True),
+        )
+        
+        company_alias = aliased(Company, name="company_for_attr")
+        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata_for_attr")
+        company_meta_alias = aliased(CompanyMetadata, name="company_metadata_for_attr")
+        
+        # Map attribute names to columns
+        column_map = {
+            "first_name": Contact.first_name,
+            "last_name": Contact.last_name,
+            "title": Contact.title,
+            "seniority": Contact.seniority,
+            "email_status": Contact.email_status,
+            "department": Contact.departments,  # Array field
+            "city": contact_meta_alias.city,
+            "state": contact_meta_alias.state,
+            "country": contact_meta_alias.country,
+        }
+        
+        if attribute not in column_map:
+            logger.warning("Unknown attribute %s requested", attribute)
+            return []
+        
+        column = column_map[attribute]
+        
+        # Handle array fields specially
+        if attribute == "department":
+            # Use lateral unnest for array fields
+            unnest_subquery = (
+                select(func.unnest(Contact.departments).label("value"))
+                .select_from(Contact)
+                .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+                .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+                .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+                .where(Contact.company_id == company_uuid)
+            )
+            
+            dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+            unnest_subquery = self._apply_company_contact_filters(
+                unnest_subquery,
+                filters,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            unnest_subquery = self._apply_company_contact_search(
+                unnest_subquery,
+                filters.search,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            
+            stmt = (
+                select(unnest_subquery.c.value)
+                .where(unnest_subquery.c.value.isnot(None))
+                .where(unnest_subquery.c.value != "")
+            )
+            
+            if params.search:
+                stmt = stmt.where(unnest_subquery.c.value.ilike(f"%{params.search}%"))
+            
+            if params.distinct:
+                stmt = stmt.distinct()
+            
+            # Apply ordering
+            if params.ordering:
+                if params.ordering.startswith("-"):
+                    stmt = stmt.order_by(unnest_subquery.c.value.desc())
+                else:
+                    stmt = stmt.order_by(unnest_subquery.c.value.asc())
+            else:
+                stmt = stmt.order_by(unnest_subquery.c.value.asc())
+            
+            if params.limit:
+                stmt = stmt.limit(params.limit)
+            if params.offset:
+                stmt = stmt.offset(params.offset)
+        else:
+            # Regular scalar fields
+            stmt = (
+                select(column)
+                .select_from(Contact)
+                .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+                .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+                .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+                .where(Contact.company_id == company_uuid)
+                .where(column.isnot(None))
+                .where(column != "")
+            )
+            
+            dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+            stmt = self._apply_company_contact_filters(
+                stmt,
+                filters,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            stmt = self._apply_company_contact_search(
+                stmt,
+                filters.search,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            
+            if params.search:
+                stmt = stmt.where(column.ilike(f"%{params.search}%"))
+            
+            if params.distinct:
+                stmt = stmt.distinct()
+            
+            # Apply ordering
+            if params.ordering:
+                if params.ordering.startswith("-"):
+                    stmt = stmt.order_by(column.desc())
+                else:
+                    stmt = stmt.order_by(column.asc())
+            else:
+                stmt = stmt.order_by(column.asc())
+            
+            if params.limit:
+                stmt = stmt.limit(params.limit)
+            if params.offset:
+                stmt = stmt.offset(params.offset)
+        
+        result = await session.execute(stmt)
+        values = [row[0] for row in result.fetchall() if row[0]]
+        logger.debug("Retrieved %d distinct %s values for company %s", len(values), attribute, company_uuid)
+        return values
+
+    def _apply_company_contact_filters(
+        self,
+        stmt: Select,
+        filters: "CompanyContactFilterParams",
+        company: Company,
+        company_meta: CompanyMetadata | None = None,
+        contact_meta: ContactMetadata | None = None,
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """Apply CompanyContactFilterParams to the given SQLAlchemy statement."""
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        logger.debug(
+            "Applying company contact filters: %s",
+            sorted(filters.model_dump(exclude_none=True).keys()),
+        )
+        
+        # Contact identity fields
+        stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name)
+        stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name)
+        stmt = self._apply_multi_value_filter(stmt, Contact.title, filters.title)
+        stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority)
+        stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
+        stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
+        stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
+        
+        # Department filter (array field)
+        if filters.department:
+            dialect = (dialect_name or "").lower()
+            if dialect == "postgresql":
+                stmt = stmt.where(
+                    func.array_to_string(Contact.departments, ",").ilike(f"%{filters.department}%")
+                )
+            else:
+                stmt = stmt.where(
+                    cast(Contact.departments, Text).ilike(f"%{filters.department}%")
+                )
+        
+        # Contact metadata fields
+        if contact_meta is not None:
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.work_direct_phone, filters.work_direct_phone)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.home_phone, filters.home_phone)
+            stmt = self._apply_multi_value_filter(stmt, Contact.mobile_phone, filters.mobile_phone)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.other_phone, filters.other_phone)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.city, filters.city)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.state, filters.state)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.country, filters.country)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.linkedin_url, filters.person_linkedin_url)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.website, filters.website)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.facebook_url, filters.facebook_url)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.twitter_url, filters.twitter_url)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.stage, filters.stage)
+        
+        # Exclusion filters
+        if filters.exclude_titles:
+            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
+            if lowered_titles:
+                stmt = stmt.where(
+                    or_(
+                        Contact.title.is_(None),
+                        func.lower(Contact.title).notin_(lowered_titles),
+                    )
+                )
+        
+        if filters.exclude_contact_locations:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
+        
+        if filters.exclude_seniorities:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
+        
+        if filters.exclude_departments:
+            dialect = (dialect_name or "").lower()
+            stmt = self._apply_array_text_exclusion(
+                stmt,
+                Contact.departments,
+                filters.exclude_departments,
+                dialect,
+            )
+        
+        # Temporal filters
+        if filters.created_at_after is not None:
+            stmt = stmt.where(Contact.created_at >= filters.created_at_after)
+        if filters.created_at_before is not None:
+            stmt = stmt.where(Contact.created_at <= filters.created_at_before)
+        if filters.updated_at_after is not None:
+            stmt = stmt.where(Contact.updated_at >= filters.updated_at_after)
+        if filters.updated_at_before is not None:
+            stmt = stmt.where(Contact.updated_at <= filters.updated_at_before)
+        
+        logger.debug("Company contact filters applied")
+        return stmt
+
+    def _apply_company_contact_search(
+        self,
+        stmt: Select,
+        search: Optional[str],
+        company: Company,
+        company_meta: CompanyMetadata | None = None,
+        contact_meta: ContactMetadata | None = None,
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """Apply case-insensitive search across contact text columns for company contacts."""
+        logger.debug("Applying company contact search: search_present=%s", bool(search))
+        
+        if not search:
+            return stmt
+        
+        dialect = (dialect_name or "").lower()
+        columns: list[Any] = [
+            Contact.first_name,
+            Contact.last_name,
+            Contact.email,
+            Contact.title,
+            Contact.seniority,
+            Contact.text_search,
+        ]
+        
+        if contact_meta is not None:
+            columns.extend([
+                contact_meta.city,
+                contact_meta.state,
+                contact_meta.country,
+                contact_meta.linkedin_url,
+                contact_meta.website,
+                contact_meta.facebook_url,
+                contact_meta.twitter_url,
+            ])
+        
+        stmt = apply_search(stmt, search, columns)
+        logger.debug("Company contact search applied")
+        return stmt
+

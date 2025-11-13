@@ -94,7 +94,6 @@ class MappingSummary(BaseModel):
 class ApolloContactsSearchResponse(BaseModel, Generic[T]):
     """Schema for Apollo contacts search response with mapping metadata."""
 
-    count: Optional[int] = Field(None, description="Total count of results (null for cursor pagination)")
     next: Optional[str] = Field(None, description="URL for next page of results")
     previous: Optional[str] = Field(None, description="URL for previous page of results")
     results: List[T] = Field(..., description="List of contact results")

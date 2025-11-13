@@ -292,7 +292,6 @@ async def search_contacts_from_apollo_url(
         
         # Step 8: Build final response with mapping metadata
         response = ApolloContactsSearchResponse[Union[ContactListItem, ContactSimpleItem]](
-            count=page.count,
             next=page.next,
             previous=page.previous,
             results=page.results,

@@ -423,6 +423,276 @@ class ContactFilterParams(BaseModel):
         return cls._coerce_bool(value, default=False)
 
 
+class CompanyContactFilterParams(BaseModel):
+    """Filter parameters for contacts within a specific company context.
+    
+    Includes only contact-specific filters, excluding company-level filters
+    since the company is already determined by the URL path parameter.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    # Contact identity fields
+    first_name: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against Contact.first_name.",
+    )
+    last_name: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against Contact.last_name.",
+    )
+    title: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against Contact.title.",
+    )
+    seniority: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against Contact.seniority.",
+    )
+    department: Optional[str] = Field(
+        default=None,
+        alias="departments",
+        description="Substring match against Contact.departments array (stored as comma-delimited text).",
+    )
+    email_status: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against Contact.email_status.",
+    )
+    email: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against Contact.email.",
+    )
+    contact_location: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("contact_location", "text_search"),
+        description="Contact text-search column (Contact.text_search) covering person-level location metadata.",
+    )
+    
+    # Contact metadata fields
+    work_direct_phone: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.work_direct_phone.",
+    )
+    home_phone: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.home_phone.",
+    )
+    mobile_phone: Optional[str] = Field(
+        default=None,
+        description="Substring match against Contact.mobile_phone.",
+    )
+    other_phone: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.other_phone.",
+    )
+    city: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.city.",
+    )
+    state: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.state.",
+    )
+    country: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.country.",
+    )
+    person_linkedin_url: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.linkedin_url.",
+    )
+    website: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.website.",
+    )
+    facebook_url: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.facebook_url.",
+    )
+    twitter_url: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.twitter_url.",
+    )
+    stage: Optional[str] = Field(
+        default=None,
+        description="Substring match against ContactMetadata.stage.",
+    )
+    
+    # Exclusion filters
+    exclude_titles: Optional[list[str]] = Field(
+        default=None,
+        description="Exclude contacts whose title matches any provided value (case-insensitive).",
+    )
+    exclude_contact_locations: Optional[list[str]] = Field(
+        default=None,
+        description="Exclude contacts whose contact location text matches any provided value (case-insensitive).",
+    )
+    exclude_seniorities: Optional[list[str]] = Field(
+        default=None,
+        description="Exclude contacts whose seniority matches any provided value (case-insensitive).",
+    )
+    exclude_departments: Optional[list[str]] = Field(
+        default=None,
+        description="Exclude contacts whose departments include any provided value (case-insensitive).",
+    )
+    
+    # Temporal filters
+    created_at_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter contacts created after the provided ISO timestamp (inclusive).",
+    )
+    created_at_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter contacts created before the provided ISO timestamp (inclusive).",
+    )
+    updated_at_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter contacts updated after the provided ISO timestamp (inclusive).",
+    )
+    updated_at_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter contacts updated before the provided ISO timestamp (inclusive).",
+    )
+    
+    # Search and ordering
+    search: Optional[str] = Field(
+        default=None,
+        description="General-purpose search term applied across contact text columns.",
+    )
+    ordering: Optional[str] = Field(
+        default=None,
+        description="Ordering key referencing exposed Contact columns (see repository ordering_map).",
+    )
+    
+    # Pagination
+    page: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="1-indexed page number converted to an offset when pagination parameters are supplied.",
+    )
+    distinct: bool = Field(
+        default=False,
+        description="When true, request distinct contacts based on primary key.",
+    )
+    page_size: Optional[int] = Field(
+        default=None,
+        description="Explicit page size override (bounded by settings.MAX_PAGE_SIZE).",
+        ge=1,
+    )
+    cursor: Optional[str] = Field(
+        default=None,
+        description="Opaque cursor token representing the next offset.",
+    )
+
+    @staticmethod
+    def _normalize_multi_value(raw, *, case_insensitive: bool = False) -> Optional[list[str]]:
+        """Normalize heterogeneous inputs into a deduplicated list of non-empty strings."""
+        def _coerce(value) -> list[str]:
+            if value is None:
+                return []
+            if isinstance(value, str):
+                stripped = value.strip()
+                if not stripped:
+                    return []
+                if stripped.startswith("[") and stripped.endswith("]"):
+                    try:
+                        parsed = json.loads(stripped)
+                        return _coerce(parsed)
+                    except json.JSONDecodeError:
+                        pass
+                tokens: list[str] = []
+                for fragment in stripped.split(","):
+                    token = fragment.strip()
+                    if token:
+                        tokens.append(token)
+                return tokens
+            if isinstance(value, (list, tuple, set)):
+                tokens: list[str] = []
+                for item in value:
+                    tokens.extend(_coerce(item))
+                return tokens
+            text = str(value).strip()
+            return [text] if text else []
+
+        tokens = _coerce(raw)
+        if not tokens:
+            return None
+        deduped: dict[str, str] = {}
+        for token in tokens:
+            key = token.lower() if case_insensitive else token
+            if key not in deduped:
+                deduped[key] = token
+        return list(deduped.values()) or None
+
+    @staticmethod
+    def _coerce_datetime_to_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+        """Convert aware datetimes to UTC naive to align with DB columns."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    @field_validator(
+        "created_at_after",
+        "created_at_before",
+        "updated_at_after",
+        "updated_at_before",
+        mode="after",
+    )
+    @classmethod
+    def _normalize_datetimes(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Ensure datetime filters are timezone-naive UTC to match storage."""
+        return cls._coerce_datetime_to_utc_naive(value)
+
+    @field_validator("exclude_titles", mode="before")
+    @classmethod
+    def _normalize_exclude_titles(cls, value):
+        """Normalize exclude_titles into a list of strings."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @field_validator("exclude_contact_locations", mode="before")
+    @classmethod
+    def _normalize_exclude_contact_locations(cls, value):
+        """Normalize exclude_contact_locations into a list of strings."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @field_validator("exclude_seniorities", mode="before")
+    @classmethod
+    def _normalize_exclude_seniorities(cls, value):
+        """Normalize exclude_seniorities into a list of strings."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @field_validator("exclude_departments", mode="before")
+    @classmethod
+    def _normalize_exclude_departments(cls, value):
+        """Normalize exclude_departments into a list of strings."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @staticmethod
+    def _coerce_bool(value, *, default: bool = False) -> bool:
+        """Best-effort conversion of common truthy/falsey representations to bool."""
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return default
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "n", "off", ""}:
+                return False
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return default
+
+    @field_validator("distinct", mode="before")
+    @classmethod
+    def _normalize_distinct(cls, value):
+        """Coerce truthy/falsey query parameters into bool without raising."""
+        return cls._coerce_bool(value, default=False)
+
+
 # Mapping of filter field names to their associated storage column or behavior.
 # This is used for documentation, validation, and to keep tests in sync with the contract.
 CONTACT_FILTER_COLUMN_MAP: dict[str, str] = {
@@ -508,6 +778,297 @@ class AttributeListParams(BaseModel):
     def _normalize_distinct(cls, value):
         """Avoid validation errors for unconventional truthy/falsey values."""
         return ContactFilterParams._coerce_bool(value, default=False)
+
+
+class CompanyFilterParams(BaseModel):
+    """Full set of filterable fields accepted by the companies endpoints."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against Company.name.",
+    )
+    employees_count: Optional[int] = Field(
+        default=None,
+        validation_alias=AliasChoices("employees_count", "employees"),
+        description="Exact match against Company.employees_count.",
+        ge=0,
+    )
+    employees_min: Optional[int] = Field(
+        default=None,
+        description="Lower-bound filter applied to Company.employees_count.",
+        ge=0,
+    )
+    employees_max: Optional[int] = Field(
+        default=None,
+        description="Upper-bound filter applied to Company.employees_count.",
+        ge=0,
+    )
+    annual_revenue: Optional[int] = Field(
+        default=None,
+        description="Exact match against Company.annual_revenue (stored as integer dollars).",
+        ge=0,
+    )
+    annual_revenue_min: Optional[int] = Field(
+        default=None,
+        description="Lower-bound filter applied to Company.annual_revenue.",
+        ge=0,
+    )
+    annual_revenue_max: Optional[int] = Field(
+        default=None,
+        description="Upper-bound filter applied to Company.annual_revenue.",
+        ge=0,
+    )
+    total_funding: Optional[int] = Field(
+        default=None,
+        description="Exact match against Company.total_funding.",
+        ge=0,
+    )
+    total_funding_min: Optional[int] = Field(
+        default=None,
+        description="Lower-bound filter applied to Company.total_funding.",
+        ge=0,
+    )
+    total_funding_max: Optional[int] = Field(
+        default=None,
+        description="Upper-bound filter applied to Company.total_funding.",
+        ge=0,
+    )
+    industries: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("industries", "industry"),
+        description="Substring match within Company.industries (stored as text array).",
+    )
+    keywords: Optional[str] = Field(
+        default=None,
+        description="Substring match within Company.keywords (stored as text array).",
+    )
+    technologies: Optional[str] = Field(
+        default=None,
+        description="Substring match within Company.technologies (stored as text array).",
+    )
+    address: Optional[str] = Field(
+        default=None,
+        description="Substring match against Company.address.",
+    )
+    company_location: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("company_location", "text_search"),
+        description="Company text-search column (Company.text_search) covering address, city, state, and country.",
+    )
+    city: Optional[str] = Field(
+        default=None,
+        description="Substring match against CompanyMetadata.city.",
+    )
+    state: Optional[str] = Field(
+        default=None,
+        description="Substring match against CompanyMetadata.state.",
+    )
+    country: Optional[str] = Field(
+        default=None,
+        description="Substring match against CompanyMetadata.country.",
+    )
+    phone_number: Optional[str] = Field(
+        default=None,
+        description="Substring match against CompanyMetadata.phone_number.",
+    )
+    website: Optional[str] = Field(
+        default=None,
+        description="Substring match against CompanyMetadata.website.",
+    )
+    linkedin_url: Optional[str] = Field(
+        default=None,
+        description="Substring match against CompanyMetadata.linkedin_url.",
+    )
+    facebook_url: Optional[str] = Field(
+        default=None,
+        description="Substring match against CompanyMetadata.facebook_url.",
+    )
+    twitter_url: Optional[str] = Field(
+        default=None,
+        description="Substring match against CompanyMetadata.twitter_url.",
+    )
+    latest_funding: Optional[str] = Field(
+        default=None,
+        description="Substring match against CompanyMetadata.latest_funding.",
+    )
+    latest_funding_amount_min: Optional[int] = Field(
+        default=None,
+        description="Lower-bound filter applied to CompanyMetadata.latest_funding_amount.",
+        ge=0,
+    )
+    latest_funding_amount_max: Optional[int] = Field(
+        default=None,
+        description="Upper-bound filter applied to CompanyMetadata.latest_funding_amount.",
+        ge=0,
+    )
+    search: Optional[str] = Field(
+        default=None,
+        description="General-purpose search term applied across company text columns.",
+    )
+    ordering: Optional[str] = Field(
+        default=None,
+        description="Ordering key referencing exposed Company columns (see repository ordering_map).",
+    )
+    page: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="1-indexed page number converted to an offset when pagination parameters are supplied.",
+    )
+    distinct: bool = Field(
+        default=False,
+        description="When true, request distinct companies based on primary key.",
+    )
+    page_size: Optional[int] = Field(
+        default=None,
+        description="Explicit page size override (bounded by settings.MAX_PAGE_SIZE).",
+        ge=1,
+    )
+    cursor: Optional[str] = Field(
+        default=None,
+        description="Opaque cursor token representing the next offset.",
+    )
+    exclude_industries: Optional[list[str]] = Field(
+        default=None,
+        description="Exclude companies whose industries include any provided value (case-insensitive).",
+    )
+    exclude_keywords: Optional[list[str]] = Field(
+        default=None,
+        description="Exclude companies whose keywords include any provided value (case-insensitive).",
+    )
+    exclude_technologies: Optional[list[str]] = Field(
+        default=None,
+        description="Exclude companies whose technologies include any provided value (case-insensitive).",
+    )
+    exclude_locations: Optional[list[str]] = Field(
+        default=None,
+        description="Exclude companies whose location text matches any provided value (case-insensitive).",
+    )
+    created_at_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter companies created after the provided ISO timestamp (inclusive).",
+    )
+    created_at_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter companies created before the provided ISO timestamp (inclusive).",
+    )
+    updated_at_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter companies updated after the provided ISO timestamp (inclusive).",
+    )
+    updated_at_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter companies updated before the provided ISO timestamp (inclusive).",
+    )
+
+    @staticmethod
+    def _normalize_multi_value(raw, *, case_insensitive: bool = False) -> Optional[list[str]]:
+        """Normalize heterogeneous inputs into a deduplicated list of non-empty strings."""
+        def _coerce(value) -> list[str]:
+            if value is None:
+                return []
+            if isinstance(value, str):
+                stripped = value.strip()
+                if not stripped:
+                    return []
+                if stripped.startswith("[") and stripped.endswith("]"):
+                    try:
+                        parsed = json.loads(stripped)
+                        return _coerce(parsed)
+                    except json.JSONDecodeError:
+                        pass
+                tokens: list[str] = []
+                for fragment in stripped.split(","):
+                    token = fragment.strip()
+                    if token:
+                        tokens.append(token)
+                return tokens
+            if isinstance(value, (list, tuple, set)):
+                tokens: list[str] = []
+                for item in value:
+                    tokens.extend(_coerce(item))
+                return tokens
+            text = str(value).strip()
+            return [text] if text else []
+
+        tokens = _coerce(raw)
+        if not tokens:
+            return None
+        deduped: dict[str, str] = {}
+        for token in tokens:
+            key = token.lower() if case_insensitive else token
+            if key not in deduped:
+                deduped[key] = token
+        return list(deduped.values()) or None
+
+    @staticmethod
+    def _coerce_datetime_to_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+        """Convert aware datetimes to UTC naive to align with DB columns."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    @field_validator(
+        "created_at_after",
+        "created_at_before",
+        "updated_at_after",
+        "updated_at_before",
+        mode="after",
+    )
+    @classmethod
+    def _normalize_datetimes(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Ensure datetime filters are timezone-naive UTC to match storage."""
+        return cls._coerce_datetime_to_utc_naive(value)
+
+    @field_validator("exclude_industries", mode="before")
+    @classmethod
+    def _normalize_exclude_industries(cls, value):
+        """Normalize exclusion inputs for industries."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @field_validator("exclude_keywords", mode="before")
+    @classmethod
+    def _normalize_exclude_keywords(cls, value):
+        """Normalize exclusion inputs for keywords."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @field_validator("exclude_technologies", mode="before")
+    @classmethod
+    def _normalize_exclude_technologies(cls, value):
+        """Normalize exclusion inputs for technologies."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @field_validator("exclude_locations", mode="before")
+    @classmethod
+    def _normalize_exclude_locations(cls, value):
+        """Normalize exclusion inputs for locations."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @staticmethod
+    def _coerce_bool(value, *, default: bool = False) -> bool:
+        """Best-effort conversion of common truthy/falsey representations to bool."""
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return default
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "n", "off", ""}:
+                return False
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return default
+
+    @field_validator("distinct", mode="before")
+    @classmethod
+    def _normalize_distinct(cls, value):
+        """Coerce truthy/falsey query parameters into bool without raising."""
+        return cls._coerce_bool(value, default=False)
 
 
 class CountParams(BaseModel):

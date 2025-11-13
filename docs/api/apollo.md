@@ -377,7 +377,6 @@ Returns an extended response format that includes:
 
 ```json
 {
-  "count": null,
   "next": "http://localhost:8000/api/v2/apollo/contacts?limit=25&offset=25",
   "previous": null,
   "results": [
@@ -557,7 +556,7 @@ Authorization: Bearer <access_token>
 
 **Response Fields:**
 
-In addition to the standard pagination fields (`count`, `next`, `previous`, `results`), the response includes:
+In addition to the standard pagination fields (`next`, `previous`, `results`), the response includes:
 
 - **apollo_url** (string): The original Apollo.io URL that was converted
 - **mapping_summary** (object): Summary statistics about parameter mapping:

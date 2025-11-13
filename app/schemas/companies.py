@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CompanyBase(BaseModel):
@@ -75,3 +75,43 @@ class CompanyListItem(CompanySummary):
     keywords: Optional[list[str]] = None
     metadata: Optional[CompanyMetadataOut] = None
 
+
+class CompanyCreate(BaseModel):
+    """Payload for creating a new company."""
+
+    uuid: Optional[str] = None
+    name: Optional[str] = None
+    employees_count: Optional[int] = None
+    industries: Optional[list[str]] = None
+    keywords: Optional[list[str]] = None
+    address: Optional[str] = None
+    annual_revenue: Optional[int] = None
+    total_funding: Optional[int] = None
+    technologies: Optional[list[str]] = None
+    text_search: Optional[str] = Field(None, description="Free-form search text for location")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CompanyUpdate(BaseModel):
+    """Payload for updating an existing company."""
+
+    name: Optional[str] = None
+    employees_count: Optional[int] = None
+    industries: Optional[list[str]] = None
+    keywords: Optional[list[str]] = None
+    address: Optional[str] = None
+    annual_revenue: Optional[int] = None
+    total_funding: Optional[int] = None
+    technologies: Optional[list[str]] = None
+    text_search: Optional[str] = Field(None, description="Free-form search text for location")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CompanyDetail(CompanyListItem):
+    """Company list item augmented with full metadata and timestamps."""
+
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
