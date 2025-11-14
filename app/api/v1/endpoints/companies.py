@@ -229,40 +229,40 @@ async def create_company(
     """Create a new company with optional fields."""
     logger.info("Creating company via API")
     company = await service.create_company(session, payload)
-    logger.info("Created company via API: company_id=%d", company.id)
+    logger.info("Created company via API: uuid=%s", company.uuid)
     return company
 
 
-@router.put("/{company_id:int}/", response_model=CompanyDetail)
+@router.put("/{company_uuid}/", response_model=CompanyDetail)
 async def update_company(
-    company_id: int,
+    company_uuid: str,
     payload: CompanyUpdate,
     current_user: User = Depends(get_current_admin),
     _: None = Depends(require_companies_write_key),
     session: AsyncSession = Depends(get_db),
 ) -> CompanyDetail:
     """Update an existing company."""
-    logger.info("Updating company via API: company_id=%d", company_id)
-    company = await service.update_company(session, company_id, payload)
-    logger.info("Updated company via API: company_id=%d", company_id)
+    logger.info("Updating company via API: company_uuid=%s", company_uuid)
+    company = await service.update_company(session, company_uuid, payload)
+    logger.info("Updated company via API: company_uuid=%s", company_uuid)
     return company
 
 
 @router.delete(
-    "/{company_id:int}/",
+    "/{company_uuid}/",
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
 )
 async def delete_company(
-    company_id: int,
+    company_uuid: str,
     current_user: User = Depends(get_current_admin),
     _: None = Depends(require_companies_write_key),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete a company."""
-    logger.info("Deleting company via API: company_id=%d", company_id)
-    await service.delete_company(session, company_id)
-    logger.info("Deleted company via API: company_id=%d", company_id)
+    logger.info("Deleting company via API: company_uuid=%s", company_uuid)
+    await service.delete_company(session, company_uuid)
+    logger.info("Deleted company via API: company_uuid=%s", company_uuid)
 
 
 async def _attribute_endpoint(
@@ -547,29 +547,19 @@ async def list_company_countries(
     )
 
 
-@router.get("/{company_id:int}/", response_model=CompanyDetail)
-async def retrieve_company_with_trailing_slash(
-    company_id: int,
+@router.get("/{company_uuid}/", response_model=CompanyDetail)
+async def retrieve_company_by_uuid(
+    company_uuid: str,
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CompanyDetail:
-    """Retrieve a single company by primary key."""
-    logger.info("Retrieving company detail: company_id=%d", company_id)
-    company = await service.get_company(session, company_id)
-    logger.info("Retrieved company detail: company_id=%d", company_id)
-    return company
-
-
-@router.get("/{company_id:int}", include_in_schema=False)
-async def retrieve_company_without_trailing_slash(
-    company_id: int,
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> CompanyDetail:
-    """Retrieve a single company by primary key."""
-    logger.info("Retrieving company detail: company_id=%d", company_id)
-    company = await service.get_company(session, company_id)
-    logger.info("Retrieved company detail: company_id=%d", company_id)
+    """Retrieve a single company by UUID."""
+    # Skip if this looks like it might be a company contacts route
+    if company_uuid == "company":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    logger.info("Retrieving company detail: company_uuid=%s", company_uuid)
+    company = await service.get_company_by_uuid(session, company_uuid)
+    logger.info("Retrieved company detail: company_uuid=%s", company_uuid)
     return company
 
 

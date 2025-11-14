@@ -121,8 +121,8 @@ class ContactsService:
         contact = await self.repository.create_contact(session, data)
         await session.commit()
         self.logger.debug("Created contact persisted: id=%s uuid=%s", contact.id, contact.uuid)
-        detail = await self.get_contact(session, contact.id)
-        self.logger.debug("Returning created contact detail: id=%s", contact.id)
+        detail = await self.get_contact(session, contact.uuid)
+        self.logger.debug("Returning created contact detail: uuid=%s", contact.uuid)
         return detail
 
     async def list_contacts(
@@ -226,7 +226,6 @@ class ContactsService:
             location_value = location if any([location.city, location.state, location.country]) else None
             simple_results.append(
                 ContactSimpleItem(
-                    id=contact.id,
                     uuid=contact.uuid,
                     first_name=_normalize_text(contact.first_name),
                     last_name=_normalize_text(contact.last_name),
@@ -277,23 +276,23 @@ class ContactsService:
     async def get_contact(
         self,
         session: AsyncSession,
-        contact_id: int,
+        contact_uuid: str,
     ) -> ContactDetail:
         """Fetch a single contact with related data."""
-        self.logger.info("Service retrieving contact: contact_id=%d", contact_id)
-        row = await self.repository.get_contact_with_relations(session, contact_id)
+        self.logger.info("Service retrieving contact: contact_uuid=%s", contact_uuid)
+        row = await self.repository.get_contact_with_relations(session, contact_uuid)
         if not row:
-            self.logger.info("Contact not found: contact_id=%d", contact_id)
+            self.logger.info("Contact not found: contact_uuid=%s", contact_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
         contact, company, contact_meta, company_meta = row
         item = self._hydrate_contact(contact, company, contact_meta, company_meta)
-        self.logger.debug("Hydrated contact detail for contact_id=%d", contact_id)
+        self.logger.debug("Hydrated contact detail for contact_uuid=%s", contact_uuid)
         detail = ContactDetail(
             **item.model_dump(),
             company_detail=self._company_summary(company, company_meta),
             metadata=self._contact_metadata(contact_meta),
         )
-        self.logger.debug("Exiting ContactsService.get_contact contact_id=%d", contact_id)
+        self.logger.debug("Exiting ContactsService.get_contact contact_uuid=%s", contact_uuid)
         return detail
 
     async def list_attribute_values(
@@ -356,7 +355,6 @@ class ContactsService:
             metadata_dict["latest_funding_amount"] = str(company_meta.latest_funding_amount)
 
         item = ContactListItem(
-            id=contact.id,
             first_name=_normalize_text(contact.first_name),
             last_name=_normalize_text(contact.last_name),
             title=_normalize_text(contact.title),

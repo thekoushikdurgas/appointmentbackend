@@ -5,7 +5,7 @@ Complete API documentation for company management endpoints, including listing, 
 ## Base URL
 
 ```txt
-http://107.21.188.21:8000
+http://54.88.182.69:8000
 ```
 
 **API Version:** All endpoints are under `/api/v1/companies/`
@@ -139,7 +139,7 @@ These filters exclude companies matching any of the provided values:
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/v1/companies/?cursor=...",
+  "next": "http://54.88.182.69:8000/api/v1/companies/?cursor=...",
   "previous": null,
   "results": [
     {
@@ -203,9 +203,9 @@ GET /api/v1/companies/?keywords=saas&technologies=AWS&ordering=-total_funding
 
 ---
 
-### GET /api/v1/companies/{id}/ - Retrieve Company
+### GET /api/v1/companies/{uuid}/ - Retrieve Company
 
-Get detailed information about a specific company by ID.
+Get detailed information about a specific company by UUID.
 
 **Headers:**
 
@@ -213,7 +213,7 @@ Get detailed information about a specific company by ID.
 
 **Path Parameters:**
 
-- `id` (integer): Company ID
+- `uuid` (string): Company UUID
 
 **Response:**
 
@@ -260,6 +260,14 @@ Get detailed information about a specific company by ID.
 - `200 OK`: Success
 - `401 Unauthorized`: Authentication required
 - `404 Not Found`: Company not found
+
+**Example Requests:**
+
+```bash
+# Retrieve by UUID
+curl -X GET "http://54.88.182.69:8000/api/v1/companies/398cce44-233d-5f7c-aea1-e4a6a79df10c/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
 
 ---
 
@@ -344,7 +352,7 @@ All fields are optional:
 
 **Success (201 Created):**
 
-Returns a `CompanyDetail` object (same structure as GET /api/v1/companies/{id}/).
+Returns a `CompanyDetail` object (same structure as GET /api/v1/companies/{uuid}/).
 
 **Error (403 Forbidden):**
 
@@ -363,7 +371,7 @@ Returns a `CompanyDetail` object (same structure as GET /api/v1/companies/{id}/)
 
 ---
 
-### PUT /api/v1/companies/{id}/ - Update Company
+### PUT /api/v1/companies/{company_uuid}/ - Update Company
 
 Update an existing company. Requires admin authentication and the `X-Companies-Write-Key` header.
 
@@ -375,7 +383,7 @@ Update an existing company. Requires admin authentication and the `X-Companies-W
 
 **Path Parameters:**
 
-- `id` (integer): Company ID
+- `company_uuid` (string): Company UUID
 
 **Request Body:**
 
@@ -419,7 +427,7 @@ Returns the updated `CompanyDetail` object.
 
 ---
 
-### DELETE /api/v1/companies/{id}/ - Delete Company
+### DELETE /api/v1/companies/{company_uuid}/ - Delete Company
 
 Delete a company. Requires admin authentication and the `X-Companies-Write-Key` header.
 
@@ -431,7 +439,7 @@ Delete a company. Requires admin authentication and the `X-Companies-Write-Key` 
 
 **Path Parameters:**
 
-- `id` (integer): Company ID
+- `company_uuid` (string): Company UUID
 
 **Response:**
 
@@ -801,11 +809,13 @@ List and filter contacts belonging to a specific company.
 **Authentication:** Required (Bearer token)
 
 **Path Parameters:**
+
 - `company_uuid` (string, required): Company UUID identifier
 
 **Query Parameters:**
 
 *Contact Identity Filters:*
+
 - `first_name` (string): Case-insensitive substring match against Contact.first_name
 - `last_name` (string): Case-insensitive substring match against Contact.last_name
 - `title` (string): Case-insensitive substring match against Contact.title
@@ -816,6 +826,7 @@ List and filter contacts belonging to a specific company.
 - `contact_location` (string): Contact text-search column covering person-level location metadata
 
 *Contact Metadata Filters:*
+
 - `work_direct_phone` (string): Substring match against ContactMetadata.work_direct_phone
 - `home_phone` (string): Substring match against ContactMetadata.home_phone
 - `mobile_phone` (string): Substring match against Contact.mobile_phone
@@ -830,22 +841,26 @@ List and filter contacts belonging to a specific company.
 - `stage` (string): Substring match against ContactMetadata.stage
 
 *Exclusion Filters:*
+
 - `exclude_titles` (array[string]): Exclude contacts whose title matches any provided value
 - `exclude_contact_locations` (array[string]): Exclude contacts whose contact location matches
 - `exclude_seniorities` (array[string]): Exclude contacts whose seniority matches
 - `exclude_departments` (array[string]): Exclude contacts whose departments include any value
 
 *Temporal Filters:*
+
 - `created_at_after` (datetime): Filter contacts created after timestamp (inclusive)
 - `created_at_before` (datetime): Filter contacts created before timestamp (inclusive)
 - `updated_at_after` (datetime): Filter contacts updated after timestamp (inclusive)
 - `updated_at_before` (datetime): Filter contacts updated before timestamp (inclusive)
 
 *Search and Ordering:*
+
 - `search` (string): General-purpose search term applied across contact text columns
 - `ordering` (string): Sort field (e.g., `first_name`, `-created_at`, `title`)
 
 *Pagination:*
+
 - `limit` (integer, >=1): Number of items per page
 - `offset` (integer, >=0): Zero-based offset into result set
 - `cursor` (string): Opaque cursor token for pagination
@@ -857,7 +872,7 @@ List and filter contacts belonging to a specific company.
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/v1/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25&offset=25",
+  "next": "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25&offset=25",
   "previous": null,
   "results": [
     {
@@ -889,6 +904,7 @@ List and filter contacts belonging to a specific company.
 ```
 
 **Pagination Notes:**
+
 - `next`: Full URL to fetch the next page of results (null if no more results)
 - `previous`: Full URL to fetch the previous page of results (null if on first page)
 - `results`: Array of contact items
@@ -898,8 +914,8 @@ When using cursor-based pagination (by providing a `cursor` parameter), the URLs
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/v1/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjI1fQ==",
-  "previous": "http://107.21.188.21:8000/api/v1/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjB9",
+  "next": "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjI1fQ==",
+  "previous": "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjB9",
   "results": [...]
 }
 ```
@@ -907,7 +923,7 @@ When using cursor-based pagination (by providing a `cursor` parameter), the URLs
 **Example Request:**
 
 ```bash
-curl -X GET "http://107.21.188.21:8000/api/v1/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25" \
+curl -X GET "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -922,6 +938,7 @@ curl -X GET "http://107.21.188.21:8000/api/v1/companies/company/abc-123-uuid/con
 **Authentication:** Required (Bearer token)
 
 **Path Parameters:**
+
 - `company_uuid` (string, required): Company UUID identifier
 
 **Query Parameters:** Same as List Contacts endpoint (all filter parameters supported)
@@ -937,7 +954,7 @@ curl -X GET "http://107.21.188.21:8000/api/v1/companies/company/abc-123-uuid/con
 **Example Request:**
 
 ```bash
-curl -X GET "http://107.21.188.21:8000/api/v1/companies/company/abc-123-uuid/contacts/count/?title=engineer" \
+curl -X GET "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/count/?title=engineer" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -956,9 +973,11 @@ Retrieve distinct values for specific contact attributes within a company.
 **Authentication:** Required (Bearer token)
 
 **Path Parameters:**
+
 - `company_uuid` (string, required): Company UUID identifier
 
 **Query Parameters:**
+
 - All CompanyContactFilterParams for filtering base contacts
 - `distinct` (boolean, default: true): Return unique values
 - `limit` (integer, default: 25): Maximum number of results

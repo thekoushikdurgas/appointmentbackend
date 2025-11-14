@@ -710,18 +710,18 @@ class ContactRepository(AsyncRepository[Contact]):
     async def get_contact_with_relations(
         self,
         session: AsyncSession,
-        contact_id: int,
+        contact_uuid: str,
     ) -> Optional[tuple[Contact, Company, ContactMetadata, CompanyMetadata]]:
         """Fetch a contact and its related company metadata."""
-        logger.debug("Getting contact with relations: contact_id=%d", contact_id)
+        logger.debug("Getting contact with relations: contact_uuid=%s", contact_uuid)
         stmt, _, _, _ = self.base_query()
-        stmt = stmt.where(Contact.id == contact_id)
+        stmt = stmt.where(Contact.uuid == contact_uuid)
         result = await session.execute(stmt)
         row = result.first()
         logger.debug(
-            "Contact with relations %sfound for contact_id=%d",
+            "Contact with relations %sfound for contact_uuid=%s",
             "" if row else "not ",
-            contact_id,
+            contact_uuid,
         )
         return row
 

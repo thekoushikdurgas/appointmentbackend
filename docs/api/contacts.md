@@ -5,7 +5,7 @@ Complete API documentation for contact management endpoints, including listing, 
 ## Base URL
 
 ```txt
-http://107.21.188.21:8000
+http://54.88.182.69:8000
 ```
 
 **API Version:** All endpoints are under `/api/v1/contacts/`
@@ -169,7 +169,7 @@ These filters exclude contacts matching any of the provided values:
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/v1/contacts/?cursor=cj0xJnN1YiI6IjE2ODAwMDAwMDAwMDAwMDAwMDAwMCJ9",
+  "next": "http://54.88.182.69:8000/api/v1/contacts/?cursor=cj0xJnN1YiI6IjE2ODAwMDAwMDAwMDAwMDAwMDAwMCJ9",
   "previous": null,
   "results": [
     {
@@ -241,8 +241,8 @@ Every list response now ships with a `meta` section describing how the data was 
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/v1/contacts/?ordering=-employees&limit=25&offset=25",
-  "previous": "http://107.21.188.21:8000/api/v1/contacts/?ordering=-employees&limit=25&offset=0",
+  "next": "http://54.88.182.69:8000/api/v1/contacts/?ordering=-employees&limit=25&offset=25",
+  "previous": "http://54.88.182.69:8000/api/v1/contacts/?ordering=-employees&limit=25&offset=0",
   "results": [
     {
       "id": 1,
@@ -258,7 +258,7 @@ Every list response now ships with a `meta` section describing how the data was 
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/v1/contacts/?view=simple&cursor=...",
+  "next": "http://54.88.182.69:8000/api/v1/contacts/?view=simple&cursor=...",
   "previous": null,
   "results": [
     {
@@ -325,9 +325,9 @@ GET /api/v1/contacts/?view=simple&company=Acme&limit=10
 
 ---
 
-### GET /api/v1/contacts/{id}/ - Retrieve Contact
+### GET /api/v1/contacts/{contact_uuid}/ - Retrieve Contact
 
-Get detailed information about a specific contact by ID.
+Get detailed information about a specific contact by UUID.
 
 **Headers:**
 
@@ -335,7 +335,7 @@ Get detailed information about a specific contact by ID.
 
 **Path Parameters:**
 
-- `id` (integer): Contact ID
+- `contact_uuid` (string): Contact UUID
 
 **Query Parameters:**
 
@@ -347,7 +347,7 @@ Get detailed information about a specific contact by ID.
 
 ```json
 {
-  "id": 1,
+  "uuid": "abc123-def456-ghi789",
   "first_name": "John",
   "last_name": "Doe",
   "title": "CEO",
@@ -559,7 +559,7 @@ Get list of contacts with only id and title field.
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/v1/contacts/title/?limit=25&offset=25",
+  "next": "http://54.88.182.69:8000/api/v1/contacts/title/?limit=25&offset=25",
   "previous": null,
   "results": [
     {
@@ -608,7 +608,7 @@ Get list of contacts with only id and company field.
 
 ```json
 {
-  "next": "http://107.21.188.21:8000/api/v1/contacts/company/?limit=25&offset=25",
+  "next": "http://54.88.182.69:8000/api/v1/contacts/company/?limit=25&offset=25",
   "previous": null,
   "results": [
     {
@@ -1250,7 +1250,7 @@ file: [CSV file]
 
 ```bash
 curl -X POST \
-  http://107.21.188.21:8000/api/v1/contacts/import/ \
+  http://54.88.182.69:8000/api/v1/contacts/import/ \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -F "file=@contacts.csv"
 ```
@@ -1454,7 +1454,7 @@ Returns a JSON array of error records:
 
 ```bash
 curl -X GET \
-  http://107.21.188.21:8000/api/v1/contacts/import/abc123def456/errors/ \
+  http://54.88.182.69:8000/api/v1/contacts/import/abc123def456/errors/ \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
 

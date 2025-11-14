@@ -254,7 +254,7 @@ async def create_contact(
     """Create a new contact with optional fields."""
     logger.info("Creating contact via API")
     contact = await service.create_contact(session, payload)
-    logger.info("Created contact via API: contact_id=%d", contact.id)
+    logger.info("Created contact via API: uuid=%s", contact.uuid)
     return contact
 
 
@@ -627,28 +627,15 @@ async def list_company_countries(
     )
 
 
-@router.get("/{contact_id:int}/", response_model=ContactDetail)
-async def retrieve_contact_with_trailing_slash(
-    contact_id: int,
+@router.get("/{contact_uuid}/", response_model=ContactDetail)
+async def retrieve_contact(
+    contact_uuid: str,
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ContactDetail:
-    """Retrieve a single contact by primary key."""
-    logger.info("Retrieving contact detail: contact_id=%d", contact_id)
-    contact = await service.get_contact(session, contact_id)
-    logger.info("Retrieved contact detail: contact_id=%d", contact_id)
-    return contact
-
-
-@router.get("/{contact_id:int}", include_in_schema=False)
-async def retrieve_contact_without_trailing_slash(
-    contact_id: int,
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> ContactDetail:
-    """Retrieve a single contact by primary key."""
-    logger.info("Retrieving contact detail: contact_id=%d", contact_id)
-    contact = await service.get_contact(session, contact_id)
-    logger.info("Retrieved contact detail: contact_id=%d", contact_id)
+    """Retrieve a single contact by UUID."""
+    logger.info("Retrieving contact detail: contact_uuid=%s", contact_uuid)
+    contact = await service.get_contact(session, contact_uuid)
+    logger.info("Retrieved contact detail: contact_uuid=%s", contact_uuid)
     return contact
 

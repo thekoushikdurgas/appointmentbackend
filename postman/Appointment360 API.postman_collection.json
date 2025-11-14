@@ -1569,17 +1569,17 @@
 									}
 								],
 								"url": {
-									"raw": "{{baseUrl}}/contacts/{{sampleContactId}}/",
+									"raw": "{{baseUrl}}/contacts/{{sampleContactUuid}}/",
 									"host": [
 										"{{baseUrl}}"
 									],
 									"path": [
 										"contacts",
-										"{{sampleContactId}}",
+										"{{sampleContactUuid}}",
 										""
 									]
 								},
-								"description": "Fetch details for a single contact by primary key."
+								"description": "Fetch details for a single contact by UUID."
 							},
 							"response": []
 						},
@@ -2841,17 +2841,17 @@
 									}
 								],
 								"url": {
-									"raw": "{{baseUrl}}/companies/{{sampleCompanyId}}/",
+									"raw": "{{baseUrl}}/companies/{{sampleCompanyUuid}}/",
 									"host": [
 										"{{baseUrl}}"
 									],
 									"path": [
 										"companies",
-										"{{sampleCompanyId}}",
+										"{{sampleCompanyUuid}}",
 										""
 									]
 								},
-								"description": "Fetch details for a single company by primary key."
+								"description": "Fetch details for a single company by UUID."
 							},
 							"response": []
 						},
@@ -2936,13 +2936,13 @@
 									"raw": "{\n  \"name\": \"Acme Corporation Updated\",\n  \"employees_count\": 300,\n  \"annual_revenue\": 60000000,\n  \"industries\": [\n    \"Technology\",\n    \"Software\",\n    \"AI\"\n  ],\n  \"metadata\": {\n    \"city\": \"San Francisco\",\n    \"state\": \"California\",\n    \"phone_number\": \"+1-415-555-0200\"\n  }\n}"
 								},
 								"url": {
-									"raw": "{{baseUrl}}/companies/{{sampleCompanyId}}/",
+									"raw": "{{baseUrl}}/companies/{{sampleCompanyUuid}}/",
 									"host": [
 										"{{baseUrl}}"
 									],
 									"path": [
 										"companies",
-										"{{sampleCompanyId}}",
+										"{{sampleCompanyUuid}}",
 										""
 									]
 								},
@@ -2976,13 +2976,13 @@
 									}
 								],
 								"url": {
-									"raw": "{{baseUrl}}/companies/{{sampleCompanyId}}/",
+									"raw": "{{baseUrl}}/companies/{{sampleCompanyUuid}}/",
 									"host": [
 										"{{baseUrl}}"
 									],
 									"path": [
 										"companies",
-										"{{sampleCompanyId}}",
+										"{{sampleCompanyUuid}}",
 										""
 									]
 								},
@@ -4177,9 +4177,9 @@
 			"description": "Sample value for the X-Contacts-Write-Key header. Must match the configured CONTACTS_WRITE_KEY value in the backend. Required for contact write operations (create, update, delete)."
 		},
 		{
-			"key": "sampleContactId",
-			"value": "1",
-			"description": "Example contact identifier for detail routes."
+			"key": "sampleContactUuid",
+			"value": "abc123-def456-ghi789",
+			"description": "Example contact UUID for detail routes."
 		},
 		{
 			"key": "sampleImportJobId",
@@ -4228,8 +4228,8 @@
 		},
 		{
 			"key": "sampleCompanyId",
-			"value": "1",
-			"description": "Example company identifier for detail routes."
+			"value": "abc-123-company-uuid",
+			"description": "Example company UUID for detail routes (deprecated, use sampleCompanyUuid)."
 		},
 		{
 			"key": "sampleCompanyUuid",

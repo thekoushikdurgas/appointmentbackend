@@ -275,13 +275,13 @@ class CompanyRepository(AsyncRepository[Company]):
         return company
 
     async def update_company(
-        self, session: AsyncSession, company_id: int, data: dict[str, Any]
+        self, session: AsyncSession, company_uuid: str, data: dict[str, Any]
     ) -> Optional[Company]:
         """Update an existing company record."""
-        logger.debug("Updating company: company_id=%d fields=%s", company_id, sorted(data.keys()))
-        company = await self.get(session, company_id)
+        logger.debug("Updating company: company_uuid=%s fields=%s", company_uuid, sorted(data.keys()))
+        company = await self.get_by_uuid(session, company_uuid)
         if not company:
-            logger.debug("Company not found for update: company_id=%d", company_id)
+            logger.debug("Company not found for update: company_uuid=%s", company_uuid)
             return None
         for key, value in data.items():
             if hasattr(company, key):
@@ -291,16 +291,16 @@ class CompanyRepository(AsyncRepository[Company]):
         logger.debug("Updated company: id=%s uuid=%s", company.id, company.uuid)
         return company
 
-    async def delete_company(self, session: AsyncSession, company_id: int) -> bool:
+    async def delete_company(self, session: AsyncSession, company_uuid: str) -> bool:
         """Delete a company record."""
-        logger.debug("Deleting company: company_id=%d", company_id)
-        company = await self.get(session, company_id)
+        logger.debug("Deleting company: company_uuid=%s", company_uuid)
+        company = await self.get_by_uuid(session, company_uuid)
         if not company:
-            logger.debug("Company not found for deletion: company_id=%d", company_id)
+            logger.debug("Company not found for deletion: company_uuid=%s", company_uuid)
             return False
         await session.delete(company)
         await session.flush()
-        logger.debug("Deleted company: company_id=%d", company_id)
+        logger.debug("Deleted company: company_uuid=%s", company_uuid)
         return True
 
     async def count_companies(
@@ -486,18 +486,36 @@ class CompanyRepository(AsyncRepository[Company]):
     async def get_company_with_metadata(
         self,
         session: AsyncSession,
-        company_id: int,
+        company_uuid: str,
     ) -> Optional[tuple[Company, CompanyMetadata]]:
         """Fetch a company and its related metadata."""
-        logger.debug("Getting company with metadata: company_id=%d", company_id)
+        logger.debug("Getting company with metadata: company_uuid=%s", company_uuid)
         stmt, _ = self.base_query()
-        stmt = stmt.where(Company.id == company_id)
+        stmt = stmt.where(Company.uuid == company_uuid)
         result = await session.execute(stmt)
         row = result.first()
         logger.debug(
-            "Company with metadata %sfound for company_id=%d",
+            "Company with metadata %sfound for company_uuid=%s",
             "" if row else "not ",
-            company_id,
+            company_uuid,
+        )
+        return row
+
+    async def get_company_by_uuid_with_metadata(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+    ) -> Optional[tuple[Company, CompanyMetadata]]:
+        """Fetch a company and its related metadata by UUID."""
+        logger.debug("Getting company with metadata: company_uuid=%s", company_uuid)
+        stmt, _ = self.base_query()
+        stmt = stmt.where(Company.uuid == company_uuid)
+        result = await session.execute(stmt)
+        row = result.first()
+        logger.debug(
+            "Company with metadata %sfound for company_uuid=%s",
+            "" if row else "not ",
+            company_uuid,
         )
         return row
 

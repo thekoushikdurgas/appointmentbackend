@@ -120,14 +120,14 @@ class CompaniesService:
         company = await self.repository.create_company(session, data)
         await session.commit()
         self.logger.debug("Created company persisted: id=%s uuid=%s", company.id, company.uuid)
-        detail = await self.get_company(session, company.id)
-        self.logger.debug("Returning created company detail: id=%s", company.id)
+        detail = await self.get_company_by_uuid(session, company.uuid)
+        self.logger.debug("Returning created company detail: uuid=%s", company.uuid)
         return detail
 
     async def update_company(
         self,
         session: AsyncSession,
-        company_id: int,
+        company_uuid: str,
         payload: CompanyUpdate,
     ) -> CompanyDetail:
         """Update an existing company and return the hydrated detail schema."""
@@ -155,30 +155,30 @@ class CompaniesService:
 
         data["updated_at"] = datetime.now(UTC).replace(tzinfo=None)
 
-        self.logger.info("Service updating company: company_id=%d", company_id)
-        company = await self.repository.update_company(session, company_id, data)
+        self.logger.info("Service updating company: company_uuid=%s", company_uuid)
+        company = await self.repository.update_company(session, company_uuid, data)
         if not company:
-            self.logger.info("Company not found for update: company_id=%d", company_id)
+            self.logger.info("Company not found for update: company_uuid=%s", company_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         await session.commit()
         self.logger.debug("Updated company persisted: id=%s uuid=%s", company.id, company.uuid)
-        detail = await self.get_company(session, company.id)
-        self.logger.debug("Returning updated company detail: id=%s", company.id)
+        detail = await self.get_company_by_uuid(session, company.uuid)
+        self.logger.debug("Returning updated company detail: uuid=%s", company.uuid)
         return detail
 
     async def delete_company(
         self,
         session: AsyncSession,
-        company_id: int,
+        company_uuid: str,
     ) -> None:
-        """Delete a company by ID."""
-        self.logger.info("Service deleting company: company_id=%d", company_id)
-        deleted = await self.repository.delete_company(session, company_id)
+        """Delete a company by UUID."""
+        self.logger.info("Service deleting company: company_uuid=%s", company_uuid)
+        deleted = await self.repository.delete_company(session, company_uuid)
         if not deleted:
-            self.logger.info("Company not found for deletion: company_id=%d", company_id)
+            self.logger.info("Company not found for deletion: company_uuid=%s", company_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         await session.commit()
-        self.logger.debug("Deleted company: company_id=%d", company_id)
+        self.logger.debug("Deleted company: company_uuid=%s", company_uuid)
 
     async def list_companies(
         self,
@@ -260,24 +260,45 @@ class CompaniesService:
     async def get_company(
         self,
         session: AsyncSession,
-        company_id: int,
+        company_uuid: str,
     ) -> CompanyDetail:
         """Fetch a single company with related data."""
-        self.logger.info("Service retrieving company: company_id=%d", company_id)
-        row = await self.repository.get_company_with_metadata(session, company_id)
+        self.logger.info("Service retrieving company: company_uuid=%s", company_uuid)
+        row = await self.repository.get_company_with_metadata(session, company_uuid)
         if not row:
-            self.logger.info("Company not found: company_id=%d", company_id)
+            self.logger.info("Company not found: company_uuid=%s", company_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         company, company_meta = row
         item = self._hydrate_company(company, company_meta)
-        self.logger.debug("Hydrated company detail for company_id=%d", company_id)
+        self.logger.debug("Hydrated company detail for company_uuid=%s", company_uuid)
         detail = CompanyDetail(
             **item.model_dump(),
-            id=company.id,
             created_at=company.created_at,
             updated_at=company.updated_at,
         )
-        self.logger.debug("Exiting CompaniesService.get_company company_id=%d", company_id)
+        self.logger.debug("Exiting CompaniesService.get_company company_uuid=%s", company_uuid)
+        return detail
+
+    async def get_company_by_uuid(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+    ) -> CompanyDetail:
+        """Fetch a single company by UUID with related data."""
+        self.logger.info("Service retrieving company: company_uuid=%s", company_uuid)
+        row = await self.repository.get_company_by_uuid_with_metadata(session, company_uuid)
+        if not row:
+            self.logger.info("Company not found: company_uuid=%s", company_uuid)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+        company, company_meta = row
+        item = self._hydrate_company(company, company_meta)
+        self.logger.debug("Hydrated company detail for company_uuid=%s", company_uuid)
+        detail = CompanyDetail(
+            **item.model_dump(),
+            created_at=company.created_at,
+            updated_at=company.updated_at,
+        )
+        self.logger.debug("Exiting CompaniesService.get_company_by_uuid company_uuid=%s", company_uuid)
         return detail
 
     async def list_attribute_values(

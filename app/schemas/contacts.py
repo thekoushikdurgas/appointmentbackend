@@ -46,7 +46,6 @@ class ContactCreate(BaseModel):
 class ContactDB(ContactBase):
     """Database representation of a contact record."""
 
-    id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -54,7 +53,6 @@ class ContactDB(ContactBase):
 class ContactListItem(BaseModel):
     """Flattened contact representation used for list endpoints."""
 
-    id: int
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     title: Optional[str] = None
@@ -116,7 +114,6 @@ class ContactLocation(BaseModel):
 class ContactSimpleItem(BaseModel):
     """Simplified contact representation for view=simple."""
 
-    id: int
     uuid: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None

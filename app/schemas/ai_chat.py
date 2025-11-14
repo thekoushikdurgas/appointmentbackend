@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class ContactInMessage(BaseModel):
     """Contact object included in AI message responses."""
 
-    id: Optional[int] = None
+    uuid: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     title: Optional[str] = None

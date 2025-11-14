@@ -26,7 +26,6 @@ class CompanyBase(BaseModel):
 class CompanyDB(CompanyBase):
     """Representation of a company row retrieved from persistence."""
 
-    id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -112,6 +111,5 @@ class CompanyUpdate(BaseModel):
 class CompanyDetail(CompanyListItem):
     """Company list item augmented with full metadata and timestamps."""
 
-    id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
