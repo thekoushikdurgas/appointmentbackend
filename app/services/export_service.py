@@ -1,0 +1,314 @@
+"""Service layer for managing contact export jobs."""
+
+import csv
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import get_settings
+from app.core.logging import get_logger
+from app.models.exports import ExportStatus, UserExport
+from app.repositories.contacts import ContactRepository
+from app.utils.signed_url import generate_signed_url
+
+settings = get_settings()
+logger = get_logger(__name__)
+
+
+class ExportService:
+    """Encapsulate export job orchestration."""
+
+    def __init__(self) -> None:
+        """Initialize the export service."""
+        self.contact_repo = ContactRepository()
+        logger.debug("Initialized ExportService")
+
+    async def create_export(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        contact_uuids: list[str],
+    ) -> UserExport:
+        """Create a new export record in the database."""
+        logger.info(
+            "Creating export: user_id=%s contact_count=%d",
+            user_id,
+            len(contact_uuids),
+        )
+        
+        export = UserExport(
+            user_id=user_id,
+            contact_uuids=contact_uuids,
+            contact_count=len(contact_uuids),
+            status=ExportStatus.pending,
+        )
+        
+        session.add(export)
+        await session.flush()
+        await session.refresh(export)
+        await session.commit()
+        
+        logger.debug("Created export: export_id=%s", export.export_id)
+        return export
+
+    async def generate_csv(
+        self,
+        session: AsyncSession,
+        export_id: str,
+        contact_uuids: list[str],
+    ) -> str:
+        """
+        Fetch contacts with all relations and generate CSV file.
+        
+        Returns:
+            Path to the generated CSV file
+        """
+        logger.info("Generating CSV: export_id=%s contact_count=%d", export_id, len(contact_uuids))
+        
+        # Create exports directory
+        exports_dir = Path(settings.UPLOAD_DIR) / "exports"
+        exports_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_path = exports_dir / f"{export_id}.csv"
+        
+        # Define CSV fieldnames (all fields from contact, company, and metadata)
+        fieldnames = [
+            # Contact fields
+            "contact_uuid",
+            "contact_first_name",
+            "contact_last_name",
+            "contact_company_id",
+            "contact_email",
+            "contact_title",
+            "contact_departments",
+            "contact_mobile_phone",
+            "contact_email_status",
+            "contact_text_search",
+            "contact_seniority",
+            "contact_created_at",
+            "contact_updated_at",
+            # Contact Metadata fields
+            "contact_metadata_linkedin_url",
+            "contact_metadata_facebook_url",
+            "contact_metadata_twitter_url",
+            "contact_metadata_website",
+            "contact_metadata_work_direct_phone",
+            "contact_metadata_home_phone",
+            "contact_metadata_city",
+            "contact_metadata_state",
+            "contact_metadata_country",
+            "contact_metadata_other_phone",
+            "contact_metadata_stage",
+            # Company fields
+            "company_uuid",
+            "company_name",
+            "company_employees_count",
+            "company_industries",
+            "company_keywords",
+            "company_address",
+            "company_annual_revenue",
+            "company_total_funding",
+            "company_technologies",
+            "company_text_search",
+            "company_created_at",
+            "company_updated_at",
+            # Company Metadata fields
+            "company_metadata_linkedin_url",
+            "company_metadata_facebook_url",
+            "company_metadata_twitter_url",
+            "company_metadata_website",
+            "company_metadata_company_name_for_emails",
+            "company_metadata_phone_number",
+            "company_metadata_latest_funding",
+            "company_metadata_latest_funding_amount",
+            "company_metadata_last_raised_at",
+            "company_metadata_city",
+            "company_metadata_state",
+            "company_metadata_country",
+        ]
+        
+        # Fetch contacts and write to CSV
+        with file_path.open("w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for contact_uuid in contact_uuids:
+                try:
+                    result = await self.contact_repo.get_contact_with_relations(
+                        session, contact_uuid
+                    )
+                    
+                    if not result:
+                        logger.warning("Contact not found: contact_uuid=%s", contact_uuid)
+                        continue
+                    
+                    contact, company, contact_meta, company_meta = result
+                    
+                    # Helper function to format array fields
+                    def format_array(value):
+                        if value is None:
+                            return ""
+                        if isinstance(value, list):
+                            return ",".join(str(v) for v in value if v)
+                        return str(value) if value else ""
+                    
+                    # Helper function to format datetime
+                    def format_datetime(value):
+                        if value is None:
+                            return ""
+                        if isinstance(value, datetime):
+                            return value.isoformat()
+                        return str(value) if value else ""
+                    
+                    # Helper function to get value or empty string
+                    def get_value(value, default=""):
+                        if value is None:
+                            return default
+                        if value == "_":  # Default placeholder in metadata
+                            return ""
+                        return str(value)
+                    
+                    row = {
+                        # Contact fields
+                        "contact_uuid": contact.uuid or "",
+                        "contact_first_name": contact.first_name or "",
+                        "contact_last_name": contact.last_name or "",
+                        "contact_company_id": contact.company_id or "",
+                        "contact_email": contact.email or "",
+                        "contact_title": contact.title or "",
+                        "contact_departments": format_array(contact.departments),
+                        "contact_mobile_phone": contact.mobile_phone or "",
+                        "contact_email_status": contact.email_status or "",
+                        "contact_text_search": contact.text_search or "",
+                        "contact_seniority": contact.seniority or "",
+                        "contact_created_at": format_datetime(contact.created_at),
+                        "contact_updated_at": format_datetime(contact.updated_at),
+                        # Contact Metadata fields
+                        "contact_metadata_linkedin_url": get_value(contact_meta.linkedin_url if contact_meta else None),
+                        "contact_metadata_facebook_url": get_value(contact_meta.facebook_url if contact_meta else None),
+                        "contact_metadata_twitter_url": get_value(contact_meta.twitter_url if contact_meta else None),
+                        "contact_metadata_website": get_value(contact_meta.website if contact_meta else None),
+                        "contact_metadata_work_direct_phone": get_value(contact_meta.work_direct_phone if contact_meta else None),
+                        "contact_metadata_home_phone": get_value(contact_meta.home_phone if contact_meta else None),
+                        "contact_metadata_city": get_value(contact_meta.city if contact_meta else None),
+                        "contact_metadata_state": get_value(contact_meta.state if contact_meta else None),
+                        "contact_metadata_country": get_value(contact_meta.country if contact_meta else None),
+                        "contact_metadata_other_phone": get_value(contact_meta.other_phone if contact_meta else None),
+                        "contact_metadata_stage": get_value(contact_meta.stage if contact_meta else None),
+                        # Company fields
+                        "company_uuid": company.uuid if company else "",
+                        "company_name": company.name if company else "",
+                        "company_employees_count": str(company.employees_count) if company and company.employees_count else "",
+                        "company_industries": format_array(company.industries if company else None),
+                        "company_keywords": format_array(company.keywords if company else None),
+                        "company_address": company.address if company else "",
+                        "company_annual_revenue": str(company.annual_revenue) if company and company.annual_revenue else "",
+                        "company_total_funding": str(company.total_funding) if company and company.total_funding else "",
+                        "company_technologies": format_array(company.technologies if company else None),
+                        "company_text_search": company.text_search if company else "",
+                        "company_created_at": format_datetime(company.created_at if company else None),
+                        "company_updated_at": format_datetime(company.updated_at if company else None),
+                        # Company Metadata fields
+                        "company_metadata_linkedin_url": company_meta.linkedin_url if company_meta else "",
+                        "company_metadata_facebook_url": company_meta.facebook_url if company_meta else "",
+                        "company_metadata_twitter_url": company_meta.twitter_url if company_meta else "",
+                        "company_metadata_website": company_meta.website if company_meta else "",
+                        "company_metadata_company_name_for_emails": company_meta.company_name_for_emails if company_meta else "",
+                        "company_metadata_phone_number": company_meta.phone_number if company_meta else "",
+                        "company_metadata_latest_funding": company_meta.latest_funding if company_meta else "",
+                        "company_metadata_latest_funding_amount": str(company_meta.latest_funding_amount) if company_meta and company_meta.latest_funding_amount else "",
+                        "company_metadata_last_raised_at": company_meta.last_raised_at if company_meta else "",
+                        "company_metadata_city": company_meta.city if company_meta else "",
+                        "company_metadata_state": company_meta.state if company_meta else "",
+                        "company_metadata_country": company_meta.country if company_meta else "",
+                    }
+                    
+                    writer.writerow(row)
+                    
+                except Exception as exc:
+                    logger.exception(
+                        "Failed to process contact for export: contact_uuid=%s error=%s",
+                        contact_uuid,
+                        str(exc),
+                    )
+                    # Continue with next contact even if one fails
+                    continue
+        
+        logger.info("Generated CSV: export_id=%s file_path=%s", export_id, file_path)
+        return str(file_path)
+
+    async def update_export_status(
+        self,
+        session: AsyncSession,
+        export_id: str,
+        status: ExportStatus,
+        file_path: str,
+        contact_count: int,
+    ) -> UserExport:
+        """Update export record with file path, status, and generate signed URL."""
+        logger.info(
+            "Updating export status: export_id=%s status=%s file_path=%s",
+            export_id,
+            status,
+            file_path,
+        )
+        
+        # Get export record
+        from sqlalchemy import select
+        stmt = select(UserExport).where(UserExport.export_id == export_id)
+        result = await session.execute(stmt)
+        export = result.scalar_one_or_none()
+        
+        if not export:
+            raise ValueError(f"Export not found: {export_id}")
+        
+        # Update fields
+        export.file_path = file_path
+        export.file_name = Path(file_path).name
+        export.status = status
+        export.contact_count = contact_count
+        
+        # Set expiration (24 hours from now)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+        export.expires_at = expires_at
+        
+        # Generate signed URL token
+        download_token = generate_signed_url(export.export_id, export.user_id, expires_at)
+        export.download_token = download_token
+        
+        # Generate full download URL
+        base_url = settings.BASE_URL.rstrip("/")
+        export.download_url = f"{base_url}/api/v2/exports/{export_id}/download?token={download_token}"
+        
+        await session.commit()
+        await session.refresh(export)
+        
+        logger.debug("Updated export: export_id=%s status=%s", export_id, status)
+        return export
+
+    async def get_export(
+        self,
+        session: AsyncSession,
+        export_id: str,
+        user_id: str,
+    ) -> Optional[UserExport]:
+        """Retrieve export record with user validation."""
+        logger.debug("Getting export: export_id=%s user_id=%s", export_id, user_id)
+        
+        from sqlalchemy import select
+        stmt = select(UserExport).where(
+            UserExport.export_id == export_id,
+            UserExport.user_id == user_id,
+        )
+        result = await session.execute(stmt)
+        export = result.scalar_one_or_none()
+        
+        if export:
+            logger.debug("Found export: export_id=%s", export_id)
+        else:
+            logger.warning("Export not found or access denied: export_id=%s user_id=%s", export_id, user_id)
+        
+        return export
+

@@ -355,6 +355,7 @@ class ContactsService:
             metadata_dict["latest_funding_amount"] = str(company_meta.latest_funding_amount)
 
         item = ContactListItem(
+            uuid=contact.uuid,
             first_name=_normalize_text(contact.first_name),
             last_name=_normalize_text(contact.last_name),
             title=_normalize_text(contact.title),

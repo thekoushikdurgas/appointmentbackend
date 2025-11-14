@@ -46,6 +46,10 @@ class ContactFilterParams(BaseModel):
         validation_alias=AliasChoices("company", "name"),
         description="Case-insensitive substring match against Company.name.",
     )
+    include_company_name: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against Company.name (inclusion filter).",
+    )
     company_name_for_emails: Optional[str] = Field(
         default=None,
         description="Case-insensitive substring match against CompanyMetadata.company_name_for_emails.",
@@ -110,9 +114,25 @@ class ContactFilterParams(BaseModel):
         default=None,
         description="Substring match within Company.technologies (stored as text array).",
     )
+    technologies_uids: Optional[str] = Field(
+        default=None,
+        description="Technology UIDs for substring matching within Company.technologies (stored as text array).",
+    )
     keywords: Optional[str] = Field(
         default=None,
         description="Substring match within Company.keywords (stored as text array).",
+    )
+    keywords_and: Optional[str] = Field(
+        default=None,
+        description="Keywords with AND logic (all keywords must match within Company.keywords).",
+    )
+    keyword_search_fields: Optional[list[str]] = Field(
+        default=None,
+        description="Fields to include in keyword search: 'company', 'industries', 'keywords'.",
+    )
+    keyword_exclude_fields: Optional[list[str]] = Field(
+        default=None,
+        description="Fields to exclude from keyword search: 'company', 'industries', 'keywords'.",
     )
     industries: Optional[str] = Field(
         default=None,
@@ -156,6 +176,10 @@ class ContactFilterParams(BaseModel):
     exclude_company_locations: Optional[list[str]] = Field(
         default=None,
         description="Exclude contacts whose company location text matches any provided value (case-insensitive).",
+    )
+    exclude_company_name: Optional[list[str]] = Field(
+        default=None,
+        description="Exclude contacts whose company name matches any provided value (case-insensitive).",
     )
     exclude_contact_locations: Optional[list[str]] = Field(
         default=None,
@@ -363,6 +387,12 @@ class ContactFilterParams(BaseModel):
         """Normalize exclusion inputs for company locations."""
         return cls._normalize_multi_value(value, case_insensitive=True)
 
+    @field_validator("exclude_company_name", mode="before")
+    @classmethod
+    def _normalize_exclude_company_name(cls, value):
+        """Normalize exclusion inputs for company names."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
     @field_validator("exclude_contact_locations", mode="before")
     @classmethod
     def _normalize_exclude_contact_locations(cls, value):
@@ -397,6 +427,18 @@ class ContactFilterParams(BaseModel):
     @classmethod
     def _normalize_exclude_industries(cls, value):
         """Normalize exclusion inputs for industries."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @field_validator("keyword_search_fields", mode="before")
+    @classmethod
+    def _normalize_keyword_search_fields(cls, value):
+        """Normalize keyword search fields list."""
+        return cls._normalize_multi_value(value, case_insensitive=True)
+
+    @field_validator("keyword_exclude_fields", mode="before")
+    @classmethod
+    def _normalize_keyword_exclude_fields(cls, value):
+        """Normalize keyword exclude fields list."""
         return cls._normalize_multi_value(value, case_insensitive=True)
 
     @staticmethod
@@ -704,6 +746,7 @@ CONTACT_FILTER_COLUMN_MAP: dict[str, str] = {
     "email_status": "Contact.email_status",
     "email": "Contact.email",
     "company": "Company.name",
+    "include_company_name": "Company.name (inclusion filter)",
     "company_name_for_emails": "CompanyMetadata.company_name_for_emails",
     "company_location": "Company.text_search",
     "contact_location": "Contact.text_search",
@@ -717,7 +760,11 @@ CONTACT_FILTER_COLUMN_MAP: dict[str, str] = {
     "total_funding_min": "Company.total_funding (minimum)",
     "total_funding_max": "Company.total_funding (maximum)",
     "technologies": "Company.technologies",
+    "technologies_uids": "Company.technologies (UID-based)",
     "keywords": "Company.keywords",
+    "keywords_and": "Company.keywords (AND logic)",
+    "keyword_search_fields": "Field control for keyword search",
+    "keyword_exclude_fields": "Field exclusion for keyword search",
     "industries": "Company.industries",
     "search": "Multi-column search helper",
     "ordering": "Ordering key applied in repository ordering_map",
@@ -728,6 +775,7 @@ CONTACT_FILTER_COLUMN_MAP: dict[str, str] = {
     "exclude_company_ids": "Contact.company_id (exclusion list)",
     "exclude_titles": "Contact.title (exclusion list)",
     "exclude_company_locations": "Company.text_search (exclusion list)",
+    "exclude_company_name": "Company.name (exclusion list)",
     "exclude_contact_locations": "Contact.text_search (exclusion list)",
     "exclude_seniorities": "Contact.seniority (exclusion list)",
     "exclude_departments": "Contact.departments (exclusion list)",

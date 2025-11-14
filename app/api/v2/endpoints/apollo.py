@@ -19,7 +19,7 @@ from app.schemas.apollo import (
     UnmappedCategory,
     UnmappedParameter,
 )
-from app.schemas.common import CursorPage
+from app.schemas.common import CountResponse, CursorPage
 from app.schemas.contacts import ContactListItem, ContactSimpleItem
 from app.schemas.filters import ContactFilterParams
 from app.services.apollo_analysis_service import ApolloAnalysisService
@@ -103,6 +103,8 @@ async def search_contacts_from_apollo_url(
     offset: Optional[int] = Query(0, ge=0),
     cursor: Optional[str] = Query(None),
     view: Optional[str] = Query(None),
+    include_company_name: Optional[str] = Query(None, description="Include contacts whose company name matches (case-insensitive substring)"),
+    exclude_company_name: Optional[list[str]] = Query(None, description="Exclude contacts whose company name matches any provided value (case-insensitive)"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> ApolloContactsSearchResponse[Union[ContactListItem, ContactSimpleItem]]:
@@ -139,10 +141,12 @@ async def search_contacts_from_apollo_url(
     Args:
         request_data: Request containing the Apollo.io URL to convert
         request: FastAPI request object for URL construction
-        limit: Maximum number of results per page
+        limit: Maximum number of results per page. If not provided, returns all matching contacts (no pagination limit).
         offset: Starting offset for results
         cursor: Opaque cursor token for pagination
         view: When "simple", returns ContactSimpleItem, otherwise ContactListItem
+        include_company_name: Include contacts whose company name matches (case-insensitive substring)
+        exclude_company_name: Exclude contacts whose company name matches any provided value (case-insensitive)
         current_user: Authenticated user (from dependency)
         session: Database session (from dependency)
 
@@ -172,6 +176,12 @@ async def search_contacts_from_apollo_url(
         logger.debug("Mapped filter dictionary: %s", filter_dict)
         logger.debug("Unmapped parameters: %d", len(unmapped_dict))
 
+        # Step 2.5: Apply company name filters from query parameters
+        if include_company_name is not None:
+            filter_dict["include_company_name"] = include_company_name
+        if exclude_company_name is not None:
+            filter_dict["exclude_company_name"] = exclude_company_name
+
         # Step 3: Validate and construct ContactFilterParams
         try:
             filters = ContactFilterParams.model_validate(filter_dict)
@@ -183,8 +193,13 @@ async def search_contacts_from_apollo_url(
             ) from exc
 
         # Step 4: Determine pagination settings
-        page_size = filters.page_size if filters.page_size is not None else limit or settings.DEFAULT_PAGE_SIZE
-        page_limit = min(page_size, settings.MAX_PAGE_SIZE)
+        # Default behavior: return all data (no limit) unless limit is explicitly provided
+        if limit is not None:
+            page_size = filters.page_size if filters.page_size is not None else limit
+            page_limit = min(page_size, settings.MAX_PAGE_SIZE)
+        else:
+            # No limit provided - return all results
+            page_limit = None
 
         use_cursor = False
         resolved_offset = offset or 0
@@ -201,24 +216,27 @@ async def search_contacts_from_apollo_url(
                     detail="Invalid cursor value",
                 ) from exc
             use_cursor = True
-        elif filters.page is not None:
+        elif filters.page is not None and page_limit is not None:
             resolved_offset = (filters.page - 1) * page_limit
 
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         logger.info(
-            "Searching contacts with Apollo filters: limit=%d offset=%d use_cursor=%s filters=%s",
-            page_limit,
+            "Searching contacts with Apollo filters: limit=%s offset=%d use_cursor=%s filters=%s",
+            page_limit if page_limit is not None else "unlimited",
             resolved_offset,
             use_cursor,
             active_filter_keys,
         )
 
         # Step 5: Query contacts based on view parameter
+        # Use a very large limit if page_limit is None to return all results
+        effective_limit = page_limit if page_limit is not None else 999999
+        
         if (view or "").strip().lower() == "simple":
             page = await contacts_service.list_contacts_simple(
                 session,
                 filters,
-                limit=page_limit,
+                limit=effective_limit,
                 offset=resolved_offset,
                 request_url=str(request.url),
                 use_cursor=use_cursor,
@@ -227,7 +245,7 @@ async def search_contacts_from_apollo_url(
             page = await contacts_service.list_contacts(
                 session,
                 filters,
-                limit=page_limit,
+                limit=effective_limit,
                 offset=resolved_offset,
                 request_url=str(request.url),
                 use_cursor=use_cursor,
@@ -316,5 +334,103 @@ async def search_contacts_from_apollo_url(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while searching contacts",
+        ) from exc
+
+
+@router.post("/contacts/count", response_model=CountResponse)
+@log_function_call(logger=logger, log_arguments=True, log_result=True)
+async def count_contacts_from_apollo_url(
+    request_data: ApolloUrlAnalysisRequest,
+    include_company_name: Optional[str] = Query(None, description="Include contacts whose company name matches (case-insensitive substring)"),
+    exclude_company_name: Optional[list[str]] = Query(None, description="Exclude contacts whose company name matches any provided value (case-insensitive)"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> CountResponse:
+    """
+    Count contacts matching Apollo.io URL parameters.
+
+    This endpoint converts an Apollo.io People Search URL into contact filter
+    parameters and returns the total count of matching contacts from the database.
+
+    **Parameter Mappings:**
+    Same as `/api/v2/apollo/contacts` endpoint - all Apollo URL parameters are
+    mapped to contact filters using the same logic.
+
+    **Query Parameters:**
+    - `include_company_name`: Include contacts whose company name matches (case-insensitive substring)
+    - `exclude_company_name`: Exclude contacts whose company name matches any provided value (case-insensitive)
+
+    Args:
+        request_data: Request containing the Apollo.io URL to convert
+        include_company_name: Optional company name inclusion filter
+        exclude_company_name: Optional list of company names to exclude
+        current_user: Authenticated user (from dependency)
+        session: Database session (from dependency)
+
+    Returns:
+        CountResponse with total count of matching contacts
+
+    Raises:
+        HTTPException: If URL is invalid, not from Apollo.io, or query fails
+    """
+    logger.info(
+        "Apollo contacts count request: user_id=%s url_length=%d",
+        current_user.id,
+        len(request_data.url),
+    )
+
+    try:
+        # Step 1: Analyze the Apollo URL to extract parameters
+        analysis = service.analyze_url(request_data.url)
+        logger.info(
+            "Apollo URL analyzed: total_params=%d categories=%d",
+            analysis.statistics.total_parameters,
+            analysis.statistics.categories_used,
+        )
+
+        # Step 2: Map Apollo parameters to contact filter parameters
+        filter_dict, unmapped_dict = service.map_to_contact_filters(analysis.raw_parameters, include_unmapped=True)
+        logger.debug("Mapped filter dictionary: %s", filter_dict)
+
+        # Step 2.5: Apply company name filters from query parameters
+        if include_company_name is not None:
+            filter_dict["include_company_name"] = include_company_name
+        if exclude_company_name is not None:
+            filter_dict["exclude_company_name"] = exclude_company_name
+
+        # Step 3: Validate and construct ContactFilterParams
+        try:
+            filters = ContactFilterParams.model_validate(filter_dict)
+        except ValidationError as exc:
+            logger.warning("Invalid contact filter parameters: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid filter parameters: {exc.errors()[0].get('msg', 'Validation error')}",
+            ) from exc
+
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.info(
+            "Counting contacts with Apollo filters: filters=%s",
+            active_filter_keys,
+        )
+
+        # Step 4: Count contacts
+        count_response = await contacts_service.count_contacts(session, filters)
+
+        logger.info(
+            "Apollo contacts count completed: user_id=%s count=%d",
+            current_user.id,
+            count_response.count,
+        )
+
+        return count_response
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Apollo contacts count failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while counting contacts",
         ) from exc
 

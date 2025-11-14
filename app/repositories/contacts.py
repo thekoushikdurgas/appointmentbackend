@@ -72,6 +72,7 @@ class ContactRepository(AsyncRepository[Contact]):
         stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
         stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
         stmt = self._apply_multi_value_filter(stmt, company.name, filters.company)
+        stmt = self._apply_multi_value_filter(stmt, company.name, filters.include_company_name)
         stmt = self._apply_multi_value_filter(stmt, company.text_search, filters.company_location)
         stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
         if filters.employees_count is not None:
@@ -79,6 +80,8 @@ class ContactRepository(AsyncRepository[Contact]):
         stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority)
         if filters.exclude_company_locations:
             stmt = self._apply_multi_value_exclusion(stmt, company.text_search, filters.exclude_company_locations)
+        if filters.exclude_company_name:
+            stmt = self._apply_multi_value_exclusion(stmt, company.name, filters.exclude_company_name)
         if filters.exclude_contact_locations:
             stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
         if filters.exclude_seniorities:
@@ -133,6 +136,14 @@ class ContactRepository(AsyncRepository[Contact]):
                 filters.technologies,
                 dialect=dialect,
             )
+        if filters.technologies_uids:
+            # Technology UIDs are passed as comma-separated string for substring matching
+            stmt = self._apply_array_text_filter(
+                stmt,
+                company.technologies,
+                filters.technologies_uids,
+                dialect=dialect,
+            )
         if filters.exclude_technologies:
             stmt = self._apply_array_text_exclusion(
                 stmt,
@@ -141,12 +152,44 @@ class ContactRepository(AsyncRepository[Contact]):
                 dialect=dialect,
             )
         if filters.keywords:
-            stmt = self._apply_array_text_filter(
-                stmt,
-                company.keywords,
-                filters.keywords,
-                dialect=dialect,
-            )
+            # Apply keyword filter with field control if specified
+            if filters.keyword_search_fields or filters.keyword_exclude_fields:
+                stmt = self._apply_keyword_search_with_fields(
+                    stmt,
+                    filters.keywords,
+                    company,
+                    filters.keyword_search_fields,
+                    filters.keyword_exclude_fields,
+                    dialect=dialect,
+                )
+            else:
+                # Standard keyword filter (OR logic)
+                stmt = self._apply_array_text_filter(
+                    stmt,
+                    company.keywords,
+                    filters.keywords,
+                    dialect=dialect,
+                )
+        if filters.keywords_and:
+            # AND logic keywords with optional field control
+            if filters.keyword_search_fields or filters.keyword_exclude_fields:
+                stmt = self._apply_keyword_search_with_fields(
+                    stmt,
+                    filters.keywords_and,
+                    company,
+                    filters.keyword_search_fields,
+                    filters.keyword_exclude_fields,
+                    dialect=dialect,
+                    use_and_logic=True,
+                )
+            else:
+                # AND logic on keywords field only
+                stmt = self._apply_array_text_filter_and(
+                    stmt,
+                    company.keywords,
+                    filters.keywords_and,
+                    dialect=dialect,
+                )
         if filters.exclude_keywords:
             stmt = self._apply_array_text_exclusion(
                 stmt,
@@ -706,6 +749,88 @@ class ContactRepository(AsyncRepository[Contact]):
         if dialect == "postgresql":
             return func.array_to_string(column, ",")
         return cast(column, Text)
+
+    @staticmethod
+    def _apply_array_text_filter_and(
+        stmt: Select,
+        column,
+        raw_value: str,
+        *,
+        dialect: str,
+    ) -> Select:
+        """Apply substring matching to a text-array column with AND logic (all keywords must match)."""
+        normalized_values = ContactRepository._split_filter_values(raw_value)
+        search_terms = normalized_values or ([raw_value] if raw_value else [])
+        if not search_terms:
+            return stmt
+
+        array_text = ContactRepository._array_column_as_text(column, dialect)
+        conditions = [array_text.ilike(f"%{value}%") for value in search_terms]
+        return stmt.where(and_(*conditions))
+
+    @staticmethod
+    def _apply_keyword_search_with_fields(
+        stmt: Select,
+        keywords: str,
+        company: Company,
+        search_fields: list[str] | None,
+        exclude_fields: list[str] | None,
+        *,
+        dialect: str,
+        use_and_logic: bool = False,
+    ) -> Select:
+        """Apply keyword search to specific fields (company.name, industries, keywords) with optional AND logic."""
+        normalized_values = ContactRepository._split_filter_values(keywords)
+        search_terms = normalized_values or ([keywords] if keywords else [])
+        if not search_terms:
+            return stmt
+
+        # Determine which fields to search
+        fields_to_search = []
+        if search_fields:
+            # Only search in specified fields
+            search_fields_lower = [f.lower() for f in search_fields]
+            if "company" in search_fields_lower:
+                fields_to_search.append(("company", company.name))
+            if "industries" in search_fields_lower:
+                fields_to_search.append(("industries", ContactRepository._array_column_as_text(company.industries, dialect)))
+            if "keywords" in search_fields_lower:
+                fields_to_search.append(("keywords", ContactRepository._array_column_as_text(company.keywords, dialect)))
+        else:
+            # Default: search all fields
+            fields_to_search = [
+                ("company", company.name),
+                ("industries", ContactRepository._array_column_as_text(company.industries, dialect)),
+                ("keywords", ContactRepository._array_column_as_text(company.keywords, dialect)),
+            ]
+
+        # Remove excluded fields
+        if exclude_fields:
+            exclude_fields_lower = [f.lower() for f in exclude_fields]
+            fields_to_search = [
+                (name, col) for name, col in fields_to_search
+                if name not in exclude_fields_lower
+            ]
+
+        if not fields_to_search:
+            return stmt
+
+        # Build conditions for each keyword term
+        if use_and_logic:
+            # AND logic: all keywords must match in at least one field
+            field_conditions = []
+            for field_name, field_column in fields_to_search:
+                term_conditions = [field_column.ilike(f"%{term}%") for term in search_terms]
+                field_conditions.append(and_(*term_conditions))
+            # At least one field must match all terms
+            return stmt.where(or_(*field_conditions))
+        else:
+            # OR logic: any keyword matches in any field
+            conditions = []
+            for field_name, field_column in fields_to_search:
+                for term in search_terms:
+                    conditions.append(field_column.ilike(f"%{term}%"))
+            return stmt.where(or_(*conditions))
 
     async def get_contact_with_relations(
         self,

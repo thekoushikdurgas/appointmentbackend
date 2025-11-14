@@ -53,6 +53,7 @@ class ContactDB(ContactBase):
 class ContactListItem(BaseModel):
     """Flattened contact representation used for list endpoints."""
 
+    uuid: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     title: Optional[str] = None

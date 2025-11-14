@@ -854,7 +854,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?personTitles[]=CEO&personLocations[]=California&organizationNumEmployeesRanges[]=11,50&contactEmailStatusV2[]=verified&page=1&sortByField=employees&sortAscending=false\"\n}"
+							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?personTitles[]=CEO&personLocations[]=California&organizationNumEmployeesRanges[]=11,50&contactEmailStatusV2[]=verified&organizationIndustryTagIds[]=5567cd4773696439b10b0000&organizationIndustryTagIds[]=5567cd4e7369643b70010000&qAndedOrganizationKeywordTags[]=saas&qAndedOrganizationKeywordTags[]=cloud&includedAndedOrganizationKeywordFields[]=keywords&currentlyUsingAnyOfTechnologyUids[]=uid123&page=1&sortByField=employees&sortAscending=false\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrlV2}}/apollo/contacts?limit=25&offset=0",
@@ -869,7 +869,7 @@
 								{
 									"key": "limit",
 									"value": "25",
-									"description": "Maximum number of results per page (>=1)",
+									"description": "Maximum number of results per page (>=1). If not provided, returns all matching contacts (no pagination limit).",
 									"disabled": true
 								},
 								{
@@ -889,15 +889,189 @@
 									"value": "simple",
 									"description": "When set to 'simple', returns ContactSimpleItem. Omit for full ContactListItem.",
 									"disabled": true
+								},
+								{
+									"key": "include_company_name",
+									"value": "",
+									"description": "Include contacts whose company name matches (case-insensitive substring). Supports comma-separated values for OR logic.",
+									"disabled": true
+								},
+								{
+									"key": "exclude_company_name",
+									"value": "",
+									"description": "Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times.",
+									"disabled": true
 								}
 							]
 						},
-						"description": "Search contacts using Apollo.io URL parameters. This endpoint converts an Apollo.io People Search URL into contact filter parameters and returns matching contacts from your database.\n\n**Response Format:**\nThe endpoint returns an enhanced response that includes:\n- Contact results (paginated list of ContactListItem or ContactSimpleItem)\n- mapping_summary: Statistics about parameter mapping (total, mapped, unmapped counts)\n- unmapped_categories: Detailed information about parameters that were not mapped, grouped by category with reasons\n\nThis transparency helps you understand which Apollo filters were applied and which were skipped.\n\n**Parameter Mappings:**\n- page → page\n- sortByField + sortAscending → ordering (with '-' prefix for descending)\n- personTitles[] → title (comma-separated for OR logic)\n- personNotTitles[] → exclude_titles\n- personSeniorities[] → seniority (comma-separated)\n- personDepartmentOrSubdepartments[] → department (comma-separated)\n- personLocations[] → contact_location (comma-separated)\n- personNotLocations[] → exclude_contact_locations\n- organizationNumEmployeesRanges[] → employees_min, employees_max\n- organizationLocations[] → company_location (comma-separated)\n- organizationNotLocations[] → exclude_company_locations\n- revenueRange[min/max] → annual_revenue_min, annual_revenue_max\n- contactEmailStatusV2[] → email_status (comma-separated)\n- qOrganizationKeywordTags[] → keywords (comma-separated)\n- qNotOrganizationKeywordTags[] → exclude_keywords\n- qKeywords → search\n\n**Unmapped Parameter Reasons:**\n- ID-based filter (no name mapping available): Industry tags, technology UIDs\n- Apollo-specific feature: Search lists, personas, intent, lookalike, market segments\n- Unmapped filter: Job postings, trading status, email catch-all exclusion\n- Keyword field control: Fields to search for keywords (not applicable)\n- UI flag or advanced filter: tour, uniqueUrlId, includeSimilarTitles, etc.\n\n**Request Body:**\n- url (string, required): Apollo.io URL to convert and search\n\n**Query Parameters:**\n- limit (integer, optional, >=1): Maximum number of results per page\n- offset (integer, optional, >=0): Starting offset for results (default: 0)\n- cursor (string, optional): Opaque cursor token for pagination\n- view (string, optional): When 'simple', returns ContactSimpleItem, otherwise ContactListItem\n\n**Response Codes:**\n- 200 OK: Contacts retrieved successfully with mapping metadata\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or invalid filter parameters\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while searching contacts\n\n**Use Cases:**\n1. Apollo to Database Migration: Convert Apollo searches to database queries seamlessly\n2. Search Replication: Replicate Apollo.io searches in your own system with transparency\n3. Workflow Integration: Integrate Apollo URLs with full visibility into parameter mapping\n4. Parameter Analysis: Understand which Apollo filters are applicable to your database"
+						"description": "Search contacts using Apollo.io URL parameters. This endpoint converts an Apollo.io People Search URL into contact filter parameters and returns matching contacts from your database.\n\n**Response Format:**\nThe endpoint returns an enhanced response that includes:\n- Contact results (paginated list of ContactListItem or ContactSimpleItem)\n- mapping_summary: Statistics about parameter mapping (total, mapped, unmapped counts)\n- unmapped_categories: Detailed information about parameters that were not mapped, grouped by category with reasons\n\nThis transparency helps you understand which Apollo filters were applied and which were skipped.\n\n**Parameter Mappings:**\n- page → page\n- sortByField + sortAscending → ordering (with '-' prefix for descending)\n- personTitles[] → title (comma-separated for OR logic)\n- personNotTitles[] → exclude_titles\n- personSeniorities[] → seniority (comma-separated)\n- personDepartmentOrSubdepartments[] → department (comma-separated)\n- personLocations[] → contact_location (comma-separated)\n- personNotLocations[] → exclude_contact_locations\n- organizationNumEmployeesRanges[] → employees_min, employees_max\n- organizationLocations[] → company_location (comma-separated)\n- organizationNotLocations[] → exclude_company_locations\n- revenueRange[min/max] → annual_revenue_min, annual_revenue_max\n- contactEmailStatusV2[] → email_status (comma-separated)\n- organizationIndustryTagIds[] → industries (Tag IDs converted to industry names from CSV)\n- organizationNotIndustryTagIds[] → exclude_industries (Tag IDs converted to industry names from CSV)\n- qOrganizationKeywordTags[] → keywords (comma-separated)\n- qNotOrganizationKeywordTags[] → exclude_keywords\n- qKeywords → search\n\n**Unmapped Parameter Reasons:**\n- ID-based filter (no name mapping available): None (industry tag IDs are now mapped using CSV lookup, technology UIDs are mapped to technologies_uids)\n- Apollo-specific feature: Search lists, personas, intent, lookalike, market segments\n- Unmapped filter: Job postings, trading status, email catch-all exclusion\n- Keyword field control: Now mapped to keyword_search_fields and keyword_exclude_fields\n- UI flag or advanced filter: tour, uniqueUrlId, includeSimilarTitles, etc.\n\n**Request Body:**\n- url (string, required): Apollo.io URL to convert and search\n\n**Query Parameters:**\n- limit (integer, optional, >=1): Maximum number of results per page. **If not provided, returns all matching contacts (no pagination limit).** When provided, limits results to the specified number (capped at MAX_PAGE_SIZE).\n- offset (integer, optional, >=0): Starting offset for results (default: 0)\n- cursor (string, optional): Opaque cursor token for pagination\n- view (string, optional): When 'simple', returns ContactSimpleItem, otherwise ContactListItem\n- include_company_name (string, optional): Include contacts whose company name matches (case-insensitive substring). Supports comma-separated values for OR logic.\n- exclude_company_name (array of strings, optional): Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times.\n\n**Response Codes:**\n- 200 OK: Contacts retrieved successfully with mapping metadata\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or invalid filter parameters\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while searching contacts\n\n**Use Cases:**\n1. Apollo to Database Migration: Convert Apollo searches to database queries seamlessly\n2. Search Replication: Replicate Apollo.io searches in your own system with transparency\n3. Workflow Integration: Integrate Apollo URLs with full visibility into parameter mapping\n4. Parameter Analysis: Understand which Apollo filters are applicable to your database"
+					},
+					"response": []
+				},
+				{
+					"name": "Count Contacts from Apollo URL",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?personTitles[]=CEO&personLocations[]=California&organizationNumEmployeesRanges[]=11,50&contactEmailStatusV2[]=verified\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/apollo/contacts/count",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"apollo",
+								"contacts",
+								"count"
+							],
+							"query": [
+								{
+									"key": "include_company_name",
+									"value": "",
+									"description": "Include contacts whose company name matches (case-insensitive substring). Supports comma-separated values for OR logic.",
+									"disabled": true
+								},
+								{
+									"key": "exclude_company_name",
+									"value": "",
+									"description": "Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Count contacts matching Apollo.io URL parameters. This endpoint converts an Apollo.io People Search URL into contact filter parameters and returns the total count of matching contacts from your database.\n\n**Response Format:**\nReturns a simple count response:\n```json\n{\n  \"count\": 1234\n}\n```\n\n**Parameter Mappings:**\nSame as `/api/v2/apollo/contacts` endpoint - all Apollo URL parameters are mapped to contact filters using the same logic.\n\n**Request Body:**\n- url (string, required): Apollo.io URL to convert and count\n\n**Query Parameters:**\n- include_company_name (string, optional): Include contacts whose company name matches (case-insensitive substring). Supports comma-separated values for OR logic.\n- exclude_company_name (array of strings, optional): Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times.\n\n**Response Codes:**\n- 200 OK: Count retrieved successfully\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or invalid filter parameters\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while counting contacts\n\n**Use Cases:**\n1. Quick Count Check: Get the total number of contacts matching an Apollo search before fetching results\n2. Progress Tracking: Monitor how many contacts match specific criteria\n3. Filter Validation: Verify that your Apollo URL filters are working as expected\n4. Resource Planning: Estimate data volume before processing large result sets"
 					},
 					"response": []
 				}
 			],
-			"description": "Apollo.io integration endpoints for parsing Apollo search URLs and searching contacts using Apollo URL parameters. Includes URL analysis for parameter breakdown and contact search for converting Apollo searches to database queries."
+			"description": "Apollo.io integration endpoints for parsing Apollo search URLs and searching contacts using Apollo URL parameters. Includes URL analysis for parameter breakdown, contact search for converting Apollo searches to database queries, and contact count for quick result estimation."
+		},
+		{
+			"name": "Exports",
+			"item": [
+				{
+					"name": "Create Contact Export",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"contact_uuids\": [\n    \"{{sampleContactUuid}}\",\n    \"abc123-def456-ghi789\"\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/exports/contacts/export",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"exports",
+								"contacts",
+								"export"
+							]
+						},
+						"description": "Create a CSV export of selected contacts.\n\nAccepts a list of contact UUIDs and generates a CSV file containing all contact, company, contact metadata, and company metadata fields. Returns a signed temporary download URL that expires after 24 hours.\n\n**Field Requirements:**\n- contact_uuids (array[string], required, min: 1): List of contact UUIDs to export\n\n**CSV Fields Included:**\n- Contact fields: uuid, first_name, last_name, company_id, email, title, departments, mobile_phone, email_status, text_search, seniority, created_at, updated_at\n- Contact Metadata: linkedin_url, facebook_url, twitter_url, website, work_direct_phone, home_phone, city, state, country, other_phone, stage\n- Company fields: uuid, name, employees_count, industries, keywords, address, annual_revenue, total_funding, technologies, text_search, created_at, updated_at\n- Company Metadata: linkedin_url, facebook_url, twitter_url, website, company_name_for_emails, phone_number, latest_funding, latest_funding_amount, last_raised_at, city, state, country\n\n**Response Codes:**\n- 201 Created: Export created successfully\n- 400 Bad Request: At least one contact UUID is required\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Failed to create export or generate CSV\n\n**Notes:**\n- The export is processed synchronously and returns immediately with a download URL\n- The download URL expires after 24 hours\n- If a contact UUID doesn't exist, it will be skipped (not cause the entire export to fail)\n- Array fields (departments, industries, keywords, technologies) are formatted as comma-separated values in the CSV"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('sampleExportId', jsonData.export_id);",
+									"    pm.collectionVariables.set('sampleExportDownloadUrl', jsonData.download_url);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "Download Export",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "text/csv, application/json",
+								"description": "Expected response content type. Use text/csv for CSV file download."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{sampleExportDownloadUrl}}",
+							"host": [
+								""
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Download a CSV export file using a signed URL.\n\nThe token must be valid and the export must belong to the requesting user. The export must not have expired.\n\n**Path Parameters:**\n- export_id (string, UUID): Export ID\n\n**Query Parameters:**\n- token (string, required): Signed URL token for authentication. This token is included in the download_url returned by the Create Contact Export endpoint.\n\n**Response Codes:**\n- 200 OK: CSV file downloaded successfully\n- 401 Unauthorized: Invalid or expired download token\n- 403 Forbidden: Token does not match export or user\n- 404 Not Found: Export not found or access denied, or export file not found\n- 410 Gone: Export has expired\n- 400 Bad Request: Export is not ready (status not completed)\n\n**Notes:**\n- The download URL expires after 24 hours from creation\n- Only the user who created the export can download it\n- The response is a CSV file with Content-Disposition header for file download\n- Use the full download_url from the Create Contact Export response, which includes the token as a query parameter"
+					},
+					"response": []
+				}
+			],
+			"description": "Contact export endpoints for creating CSV exports of selected contacts and downloading them via signed temporary URLs. All exports include complete contact, company, and metadata information."
 		},
 		{
 			"name": "Contacts",
@@ -4245,6 +4419,16 @@
 			"key": "sampleCompanyUuid",
 			"value": "398cce44-233d-5f7c-aea1-e4a6a79df10c",
 			"description": "Sample company UUID for filtering and exclusions."
+		},
+		{
+			"key": "sampleExportId",
+			"value": "",
+			"description": "Export UUID identifier. Automatically set by the Create Contact Export endpoint test script."
+		},
+		{
+			"key": "sampleExportDownloadUrl",
+			"value": "",
+			"description": "Signed download URL for export file. Automatically set by the Create Contact Export endpoint test script. Includes the token as a query parameter."
 		}
 	]
 }

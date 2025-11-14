@@ -153,3 +153,17 @@ git status
 # 3. Run uvicorn / celery locally
 # 4. Execute pytest before pushing
 # 6. Deploy via git pull + systemctl restart appointmentbackend-api.service
+
+
+
+organizationIndustryTagIds[] → industry from csv 
+organizationNotIndustryTagIds[] → not industry from csv 
+includeSimilarTitles → extact match title (true or false)
+contactEmailExcludeCatchAll → ?
+
+
+qAndedOrganizationKeywordTags[] → keywords
+includedOrganizationKeywordFields[] → company + industry + keywords
+excludedOrganizationKeywordFields[] → not company + not industry + not keywords
+includedAndedOrganizationKeywordFields[] → keywords
+currentlyUsingAnyOfTechnologyUids[] → technologies

@@ -14,6 +14,7 @@ from app.schemas.apollo import (
     ParameterDetail,
     UrlStructure,
 )
+from app.utils.industry_mapping import get_industry_names_from_ids
 
 logger = get_logger(__name__)
 
@@ -325,25 +326,28 @@ class ApolloAnalysisService:
             sort_field = raw_parameters["sortByField"][0]
             sort_ascending = raw_parameters.get("sortAscending", ["true"])[0].lower()
 
-            # Map Apollo field names to contacts ordering fields
-            field_map = {
-                "contact_name": "first_name",
-                "title": "title",
-                "company": "company",
-                "employees": "employees",
-                "revenue": "annual_revenue",
-                "funding": "total_funding",
-                "location": "city",
-                "recommendations_score": "created_at",  # Default fallback
-            }
+            # Apollo uses [none] to indicate no sorting - skip setting ordering in that case
+            if sort_field and sort_field.lower() not in ["[none]", "none", ""]:
+                # Map Apollo field names to contacts ordering fields
+                field_map = {
+                    "contact_name": "first_name",
+                    "title": "title",
+                    "company": "company",
+                    "employees": "employees",
+                    "revenue": "annual_revenue",
+                    "funding": "total_funding",
+                    "location": "city",
+                    "recommendations_score": "created_at",  # Default fallback
+                }
 
-            mapped_field = field_map.get(sort_field, sort_field)
-            # Prepend '-' for descending (when sortAscending is false)
-            if sort_ascending == "false":
-                contact_filters["ordering"] = f"-{mapped_field}"
-            else:
-                contact_filters["ordering"] = mapped_field
+                mapped_field = field_map.get(sort_field, sort_field)
+                # Prepend '-' for descending (when sortAscending is false)
+                if sort_ascending == "false":
+                    contact_filters["ordering"] = f"-{mapped_field}"
+                else:
+                    contact_filters["ordering"] = mapped_field
             
+            # Always mark sortByField as mapped, even if it's [none]
             mapped_params.add("sortByField")
             if "sortAscending" in raw_parameters:
                 mapped_params.add("sortAscending")
@@ -467,6 +471,124 @@ class ApolloAnalysisService:
                 contact_filters["exclude_keywords"] = exclude_keywords
                 mapped_params.add("qNotOrganizationKeywordTags[]")
 
+        # Keywords - qAndedOrganizationKeywordTags[] → keywords_and (AND logic, combine with comma)
+        if "qAndedOrganizationKeywordTags[]" in raw_parameters:
+            keywords = raw_parameters["qAndedOrganizationKeywordTags[]"]
+            if keywords:
+                contact_filters["keywords_and"] = ",".join(keywords)
+                mapped_params.add("qAndedOrganizationKeywordTags[]")
+
+        # Keywords - includedOrganizationKeywordFields[] → keyword_search_fields (list of field names)
+        if "includedOrganizationKeywordFields[]" in raw_parameters:
+            fields = raw_parameters["includedOrganizationKeywordFields[]"]
+            if fields:
+                # Normalize field names: map Apollo field names to our field names
+                normalized_fields = []
+                for field in fields:
+                    field_lower = field.lower()
+                    if field_lower in ["company", "companyname", "name"]:
+                        normalized_fields.append("company")
+                    elif field_lower in ["industry", "industries"]:
+                        normalized_fields.append("industries")
+                    elif field_lower in ["keyword", "keywords"]:
+                        normalized_fields.append("keywords")
+                if normalized_fields:
+                    contact_filters["keyword_search_fields"] = normalized_fields
+                    mapped_params.add("includedOrganizationKeywordFields[]")
+
+        # Keywords - excludedOrganizationKeywordFields[] → keyword_exclude_fields (list of field names)
+        if "excludedOrganizationKeywordFields[]" in raw_parameters:
+            fields = raw_parameters["excludedOrganizationKeywordFields[]"]
+            if fields:
+                # Normalize field names: map Apollo field names to our field names
+                normalized_fields = []
+                for field in fields:
+                    field_lower = field.lower()
+                    if field_lower in ["company", "companyname", "name"]:
+                        normalized_fields.append("company")
+                    elif field_lower in ["industry", "industries"]:
+                        normalized_fields.append("industries")
+                    elif field_lower in ["keyword", "keywords"]:
+                        normalized_fields.append("keywords")
+                if normalized_fields:
+                    contact_filters["keyword_exclude_fields"] = normalized_fields
+                    mapped_params.add("excludedOrganizationKeywordFields[]")
+
+        # Keywords - includedAndedOrganizationKeywordFields[] → keywords_and + keyword_search_fields (combine both)
+        if "includedAndedOrganizationKeywordFields[]" in raw_parameters:
+            fields = raw_parameters["includedAndedOrganizationKeywordFields[]"]
+            if fields:
+                # Normalize field names: map Apollo field names to our field names
+                normalized_fields = []
+                for field in fields:
+                    field_lower = field.lower()
+                    if field_lower in ["company", "companyname", "name"]:
+                        normalized_fields.append("company")
+                    elif field_lower in ["industry", "industries"]:
+                        normalized_fields.append("industries")
+                    elif field_lower in ["keyword", "keywords"]:
+                        normalized_fields.append("keywords")
+                if normalized_fields:
+                    # For AND logic with field control, we need to use keywords_and
+                    # But we also need the keywords themselves - this parameter only provides fields
+                    # So we'll set keyword_search_fields, and the actual keywords should come from qAndedOrganizationKeywordTags[]
+                    contact_filters["keyword_search_fields"] = normalized_fields
+                    mapped_params.add("includedAndedOrganizationKeywordFields[]")
+                    # If qAndedOrganizationKeywordTags[] was also provided, keywords_and should already be set
+                    # If not, we still mark this as mapped but keywords_and might be empty
+
+        # Technology - currentlyUsingAnyOfTechnologyUids[] → technologies_uids (comma-join UIDs)
+        if "currentlyUsingAnyOfTechnologyUids[]" in raw_parameters:
+            uids = raw_parameters["currentlyUsingAnyOfTechnologyUids[]"]
+            if uids:
+                # Pass UIDs as comma-separated string for substring matching
+                contact_filters["technologies_uids"] = ",".join(uids)
+                mapped_params.add("currentlyUsingAnyOfTechnologyUids[]")
+
+        # Industry - organizationIndustryTagIds[] → industries (convert tag IDs to industry names)
+        if "organizationIndustryTagIds[]" in raw_parameters:
+            tag_ids = raw_parameters["organizationIndustryTagIds[]"]
+            if tag_ids:
+                logger.debug(
+                    "Mapping organizationIndustryTagIds[] to industries: tag_ids=%s",
+                    tag_ids,
+                )
+                industry_names = get_industry_names_from_ids(tag_ids)
+                if industry_names:
+                    contact_filters["industries"] = ",".join(industry_names)
+                    logger.info(
+                        "Mapped organizationIndustryTagIds[] to industries filter: %s",
+                        contact_filters["industries"],
+                    )
+                    mapped_params.add("organizationIndustryTagIds[]")
+                else:
+                    logger.warning(
+                        "No valid industry names found for organizationIndustryTagIds[]: %s",
+                        tag_ids,
+                    )
+
+        # Industry - organizationNotIndustryTagIds[] → exclude_industries (convert tag IDs to industry names)
+        if "organizationNotIndustryTagIds[]" in raw_parameters:
+            tag_ids = raw_parameters["organizationNotIndustryTagIds[]"]
+            if tag_ids:
+                logger.debug(
+                    "Mapping organizationNotIndustryTagIds[] to exclude_industries: tag_ids=%s",
+                    tag_ids,
+                )
+                industry_names = get_industry_names_from_ids(tag_ids)
+                if industry_names:
+                    contact_filters["exclude_industries"] = industry_names
+                    logger.info(
+                        "Mapped organizationNotIndustryTagIds[] to exclude_industries filter: %s",
+                        industry_names,
+                    )
+                    mapped_params.add("organizationNotIndustryTagIds[]")
+                else:
+                    logger.warning(
+                        "No valid industry names found for organizationNotIndustryTagIds[]: %s",
+                        tag_ids,
+                    )
+
         # Search - qKeywords → search
         if "qKeywords" in raw_parameters:
             search_term = raw_parameters["qKeywords"][0]
@@ -478,10 +600,7 @@ class ApolloAnalysisService:
         for param_name, param_values in raw_parameters.items():
             if param_name not in mapped_params:
                 # Categorize the reason for not mapping
-                if param_name in ["organizationIndustryTagIds[]", "currentlyUsingAnyOfTechnologyUids[]", 
-                                  "organizationNotIndustryTagIds[]"]:
-                    reason = "ID-based filter (no name mapping available)"
-                elif param_name in ["qOrganizationSearchListId", "qNotOrganizationSearchListId", 
+                if param_name in ["qOrganizationSearchListId", "qNotOrganizationSearchListId", 
                                     "qPersonPersonaIds[]"]:
                     reason = "Apollo-specific feature (search lists, personas)"
                 elif param_name in ["marketSegments[]", "intentStrengths[]", "lookalikeOrganizationIds[]"]:
@@ -493,11 +612,8 @@ class ApolloAnalysisService:
                     reason = "Unmapped filter (job postings, trading status)"
                 elif param_name in ["contactEmailExcludeCatchAll"]:
                     reason = "Unmapped filter (email catch-all exclusion)"
-                elif param_name in ["includedOrganizationKeywordFields[]", "excludedOrganizationKeywordFields[]",
-                                    "includedAndedOrganizationKeywordFields[]"]:
-                    reason = "Keyword field control (not applicable)"
                 elif param_name in ["uniqueUrlId", "tour", "includeSimilarTitles", "existFields[]",
-                                    "notOrganizationIds[]", "organizationIds[]", "qAndedOrganizationKeywordTags[]"]:
+                                    "notOrganizationIds[]", "organizationIds[]"]:
                     reason = "UI flag or advanced filter (not applicable)"
                 else:
                     reason = "Unknown parameter (no mapping defined)"
