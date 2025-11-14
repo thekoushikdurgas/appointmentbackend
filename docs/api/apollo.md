@@ -313,11 +313,12 @@ The endpoint categorizes parameters into the following groups:
 
 Apollo.io URLs follow this structure:
 
-```
+```txt
 https://app.apollo.io/#/people?[query_parameters]
 ```
 
 Components:
+
 - **Base URL**: `https://app.apollo.io`
 - **Hash Route**: `#/people` (indicates People Search page)
 - **Query Parameters**: Filter and search criteria (URL encoded)
@@ -379,6 +380,7 @@ Search contacts using Apollo.io URL parameters. This endpoint converts an Apollo
 **Response:**
 
 Returns an extended response format that includes:
+
 - Contact results (`CursorPage` with `ContactListItem` or `ContactSimpleItem` objects)
 - Apollo URL mapping metadata
 - Summary of mapped and unmapped parameters
@@ -812,6 +814,7 @@ Authorization: Bearer <access_token>
 ### 1. Understanding Search Criteria
 
 Use this endpoint to understand what search criteria are embedded in an Apollo.io URL, making it easier to:
+
 - Replicate searches in your own system
 - Document search parameters
 - Analyze search patterns
@@ -819,6 +822,7 @@ Use this endpoint to understand what search criteria are embedded in an Apollo.i
 ### 2. URL Migration
 
 When migrating from Apollo.io to another system, use this endpoint to:
+
 - Extract all filter parameters
 - Map Apollo parameters to your database schema
 - Preserve search criteria during migration
@@ -826,6 +830,7 @@ When migrating from Apollo.io to another system, use this endpoint to:
 ### 3. Search Analysis
 
 Analyze Apollo search URLs to:
+
 - Understand which filters are most commonly used
 - Identify search patterns
 - Optimize your own search interface
@@ -833,6 +838,7 @@ Analyze Apollo search URLs to:
 ### 4. Integration
 
 Integrate Apollo URL analysis into your workflow to:
+
 - Automatically parse and categorize search URLs
 - Extract structured data from Apollo URLs
 - Build search queries based on Apollo parameters

@@ -156,14 +156,3 @@ git status
 
 
 
-organizationIndustryTagIds[] → industry from csv 
-organizationNotIndustryTagIds[] → not industry from csv 
-includeSimilarTitles → extact match title (true or false)
-contactEmailExcludeCatchAll → ?
-
-
-qAndedOrganizationKeywordTags[] → keywords
-includedOrganizationKeywordFields[] → company + industry + keywords
-excludedOrganizationKeywordFields[] → not company + not industry + not keywords
-includedAndedOrganizationKeywordFields[] → keywords
-currentlyUsingAnyOfTechnologyUids[] → technologies
