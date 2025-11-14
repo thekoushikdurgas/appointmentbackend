@@ -5,7 +5,7 @@ Complete API documentation for company management endpoints, including listing, 
 ## Base URL
 
 ```txt
-http://54.88.182.69:8000
+http://54.87.173.234:8000
 ```
 
 **API Version:** All endpoints are under `/api/v1/companies/`
@@ -139,7 +139,7 @@ These filters exclude companies matching any of the provided values:
 
 ```json
 {
-  "next": "http://54.88.182.69:8000/api/v1/companies/?cursor=...",
+  "next": "http://54.87.173.234:8000/api/v1/companies/?cursor=...",
   "previous": null,
   "results": [
     {
@@ -265,7 +265,7 @@ Get detailed information about a specific company by UUID.
 
 ```bash
 # Retrieve by UUID
-curl -X GET "http://54.88.182.69:8000/api/v1/companies/398cce44-233d-5f7c-aea1-e4a6a79df10c/" \
+curl -X GET "http://54.87.173.234:8000/api/v1/companies/398cce44-233d-5f7c-aea1-e4a6a79df10c/" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -872,7 +872,7 @@ List and filter contacts belonging to a specific company.
 
 ```json
 {
-  "next": "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25&offset=25",
+  "next": "http://54.87.173.234:8000/api/v1/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25&offset=25",
   "previous": null,
   "results": [
     {
@@ -914,8 +914,8 @@ When using cursor-based pagination (by providing a `cursor` parameter), the URLs
 
 ```json
 {
-  "next": "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjI1fQ==",
-  "previous": "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjB9",
+  "next": "http://54.87.173.234:8000/api/v1/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjI1fQ==",
+  "previous": "http://54.87.173.234:8000/api/v1/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjB9",
   "results": [...]
 }
 ```
@@ -923,7 +923,7 @@ When using cursor-based pagination (by providing a `cursor` parameter), the URLs
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25" \
+curl -X GET "http://54.87.173.234:8000/api/v1/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -954,7 +954,7 @@ curl -X GET "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/cont
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.88.182.69:8000/api/v1/companies/company/abc-123-uuid/contacts/count/?title=engineer" \
+curl -X GET "http://54.87.173.234:8000/api/v1/companies/company/abc-123-uuid/contacts/count/?title=engineer" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 

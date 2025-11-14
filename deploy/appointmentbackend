@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name 54.88.182.69;
+    server_name 54.87.173.234;
 
     access_log /var/log/nginx/appointmentbackend.access.log;
     error_log  /var/log/nginx/appointmentbackend.error.log;

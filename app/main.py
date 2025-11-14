@@ -86,7 +86,7 @@ if settings.TRUSTED_HOSTS:
 # This ensures CORS headers are added even if other middleware might reject the request
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","http://localhost:8000","http://127.0.0.1:3000","http://127.0.0.1:8000","http://54.88.182.69","http://54.88.182.69:8000"],
+    allow_origins=["http://localhost:3000","http://localhost:8000","http://127.0.0.1:3000","http://127.0.0.1:8000","http://54.87.173.234","http://54.87.173.234:8000"],
     # allow_origins=[str(origin) for origin in settings.ALLOWED_ORIGINS],
     # allow_credentials=True,
     allow_methods=["*"],

@@ -78,12 +78,12 @@ class Settings(BaseSettings):
         AnyHttpUrl("http://localhost:8000"),
         AnyHttpUrl("http://127.0.0.1:3000"),
         AnyHttpUrl("http://127.0.0.1:8000"),
-        AnyHttpUrl("http://54.88.182.69"),
-        AnyHttpUrl("http://54.88.182.69:8000"),
+        AnyHttpUrl("http://54.87.173.234"),
+        AnyHttpUrl("http://54.87.173.234:8000"),
     ]
     TRUSTED_HOSTS: List[str] = [
-        "54.88.182.69",
-        "54.88.182.69:8000",
+        "54.87.173.234",
+        "54.87.173.234:8000",
         "localhost",
         "127.0.0.1",
         "testserver",
@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     FORWARDED_ALLOW_IPS: str = "*"
 
     # Celery / Redis
-    REDIS_HOST: str = "54.88.182.69"
+    REDIS_HOST: str = "54.87.173.234"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_URL: Optional[str] = None
@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     # File uploads
     UPLOAD_DIR: str = "./uploads"
     MEDIA_URL: str = "/media"
-    BASE_URL: str = "http://54.88.182.69:8000"  # Base URL for generating full avatar URLs
+    BASE_URL: str = "http://54.87.173.234:8000"  # Base URL for generating full avatar URLs
 
     # Pagination defaults
     DEFAULT_PAGE_SIZE: int = 25

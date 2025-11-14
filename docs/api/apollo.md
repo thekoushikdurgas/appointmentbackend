@@ -5,13 +5,13 @@ Complete API documentation for Apollo.io URL analysis endpoints, including parsi
 ## Base URL
 
 ```txt
-http://54.88.182.69:8000
+http://54.87.173.234:8000
 ```
 
 For production, use:
 
 ```txt
-http://54.88.182.69:8000
+http://54.87.173.234:8000
 ```
 
 ## Authentication
@@ -390,7 +390,7 @@ Returns an extended response format that includes:
 
 ```json
 {
-  "next": "http://54.88.182.69:8000/api/v2/apollo/contacts?limit=25&offset=25",
+  "next": "http://54.87.173.234:8000/api/v2/apollo/contacts?limit=25&offset=25",
   "previous": null,
   "results": [
     {

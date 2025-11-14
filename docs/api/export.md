@@ -5,13 +5,13 @@ Complete API documentation for contact export endpoints, including CSV generatio
 ## Base URL
 
 ```txt
-http://54.88.182.69:8000
+http://54.87.173.234:8000
 ```
 
 For production, use:
 
 ```txt
-http://54.88.182.69:8000
+http://54.87.173.234:8000
 ```
 
 ## Authentication
@@ -79,7 +79,7 @@ Create a CSV export of selected contacts. Accepts a list of contact UUIDs and ge
 ```json
 {
   "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
-  "download_url": "http://54.88.182.69:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "expires_at": "2024-12-20T10:30:00Z",
   "contact_count": 2,
   "status": "completed"
@@ -332,7 +332,7 @@ The export status field can have the following values:
 ### Step 1: Create Export
 
 ```bash
-curl -X POST "http://54.88.182.69:8000/api/v2/exports/contacts/export" \
+curl -X POST "http://54.87.173.234:8000/api/v2/exports/contacts/export" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -348,7 +348,7 @@ curl -X POST "http://54.88.182.69:8000/api/v2/exports/contacts/export" \
 ```json
 {
   "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
-  "download_url": "http://54.88.182.69:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "expires_at": "2024-12-20T10:30:00Z",
   "contact_count": 2,
   "status": "completed"
@@ -358,7 +358,7 @@ curl -X POST "http://54.88.182.69:8000/api/v2/exports/contacts/export" \
 ### Step 2: Download Export
 
 ```bash
-curl -X GET "http://54.88.182.69:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+curl -X GET "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: text/csv" \
   -o export.csv

@@ -52,8 +52,8 @@ Pull your FastAPI application from your repository:[^1]
 
 ```bash
 git init
-git remote add origin <your-repo-url>
-git pull origin <your-branch-name>
+git remote add origin https://github.com/thekoushikdurgas/appointmentbackend.git
+git pull origin main
 ```
 
 
@@ -72,7 +72,7 @@ pip install fastapi gunicorn uvicorn[standard]
 Before configuring systemd, test that your application runs correctly with Gunicorn and Uvicorn workers:[^2][^1]
 
 ```bash
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8000
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000
 ```
 
 **Command breakdown:**
@@ -164,7 +164,7 @@ Add the following configuration:[^10][^2][^1]
 ```nginx
 server {
     listen 80;
-    server_name your_domain_or_ip;
+    server_name 54.87.173.234;
 
     location / {
         proxy_pass http://127.0.0.1:8000;
