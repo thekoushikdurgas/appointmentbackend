@@ -45,12 +45,12 @@ class ImportService:
         total_rows: int,
     ) -> ContactImportJob:
         """Create a new import job record."""
-        self.logger.info(
-            "Creating import job: job_id=%s file_name=%s total_rows=%d",
-            job_id,
-            file_name,
-            total_rows,
-        )
+        # self.logger.info(
+        #     "Creating import job: job_id=%s file_name=%s total_rows=%d",
+        #     job_id,
+        #     file_name,
+        #     total_rows,
+        # )
         job = await self.job_repository.create_job(
             session,
             job_id=job_id,
@@ -74,13 +74,13 @@ class ImportService:
         total_rows: Optional[int] = None,
     ) -> None:
         """Update an import job's status."""
-        self.logger.info(
-            "Updating import job status: job_id=%s status=%s processed_rows=%s error_count=%s",
-            job_id,
-            status,
-            processed_rows,
-            error_count,
-        )
+        # self.logger.info(
+        #     "Updating import job status: job_id=%s status=%s processed_rows=%s error_count=%s",
+        #     job_id,
+        #     status,
+        #     processed_rows,
+        #     error_count,
+        # )
         await self.job_repository.update_job_status(
             session,
             job_id,
@@ -125,7 +125,7 @@ class ImportService:
     ) -> None:
         """Persist a batch of import errors."""
         error_list = list(errors)
-        self.logger.info("Adding import errors: job_db_id=%d batch_size=%d", job_db_id, len(error_list))
+        # self.logger.info("Adding import errors: job_db_id=%d batch_size=%d", job_db_id, len(error_list))
         await self.error_repository.add_errors(session, job_db_id, error_list)
         await session.commit()
         self.logger.debug("Stored import errors: job_db_id=%d batch_size=%d", job_db_id, len(error_list))
@@ -137,7 +137,7 @@ class ImportService:
         include_errors: bool = False,
     ) -> Optional[ImportJobWithErrors | ImportJobDetail]:
         """Retrieve a job by its external identifier."""
-        self.logger.info("Fetching import job: job_id=%s include_errors=%s", job_id, include_errors)
+        # self.logger.info("Fetching import job: job_id=%s include_errors=%s", job_id, include_errors)
         job = await self.job_repository.get_by_job_id(session, job_id)
         if not job:
             self.logger.warning("Import job not found: job_id=%s", job_id)

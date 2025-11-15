@@ -38,11 +38,11 @@ class ExportService:
     ) -> UserExport:
         """Create a new export record in the database."""
         if export_type == ExportType.contacts:
-            logger.info(
-                "Creating contact export: user_id=%s contact_count=%d",
-                user_id,
-                len(contact_uuids) if contact_uuids else 0,
-            )
+            # logger.info(
+            #     "Creating contact export: user_id=%s contact_count=%d",
+            #     user_id,
+            #     len(contact_uuids) if contact_uuids else 0,
+            # )
             export = UserExport(
                 user_id=user_id,
                 export_type=export_type,
@@ -51,11 +51,11 @@ class ExportService:
                 status=ExportStatus.pending,
             )
         else:  # companies
-            logger.info(
-                "Creating company export: user_id=%s company_count=%d",
-                user_id,
-                len(company_uuids) if company_uuids else 0,
-            )
+            # logger.info(
+            #     "Creating company export: user_id=%s company_count=%d",
+            #     user_id,
+            #     len(company_uuids) if company_uuids else 0,
+            # )
             export = UserExport(
                 user_id=user_id,
                 export_type=export_type,
@@ -84,7 +84,7 @@ class ExportService:
         Returns:
             Path to the generated CSV file
         """
-        logger.info("Generating CSV: export_id=%s contact_count=%d", export_id, len(contact_uuids))
+        # logger.info("Generating CSV: export_id=%s contact_count=%d", export_id, len(contact_uuids))
         
         # Create exports directory
         exports_dir = Path(settings.UPLOAD_DIR) / "exports"
@@ -255,7 +255,7 @@ class ExportService:
                     # Continue with next contact even if one fails
                     continue
         
-        logger.info("Generated CSV: export_id=%s file_path=%s", export_id, file_path)
+        # logger.info("Generated CSV: export_id=%s file_path=%s", export_id, file_path)
         return str(file_path)
 
     async def update_export_status(
@@ -268,12 +268,12 @@ class ExportService:
         company_count: Optional[int] = None,
     ) -> UserExport:
         """Update export record with file path, status, and generate signed URL."""
-        logger.info(
-            "Updating export status: export_id=%s status=%s file_path=%s",
-            export_id,
-            status,
-            file_path,
-        )
+        # logger.info(
+        #     "Updating export status: export_id=%s status=%s file_path=%s",
+        #     export_id,
+        #     status,
+        #     file_path,
+        # )
         
         # Get export record
         stmt = select(UserExport).where(UserExport.export_id == export_id)
@@ -345,7 +345,7 @@ class ExportService:
         Returns:
             Path to the generated CSV file
         """
-        logger.info("Generating company CSV: export_id=%s company_count=%d", export_id, len(company_uuids))
+        # logger.info("Generating company CSV: export_id=%s company_count=%d", export_id, len(company_uuids))
         
         # Create exports directory
         exports_dir = Path(settings.UPLOAD_DIR) / "exports"
@@ -467,7 +467,7 @@ class ExportService:
                     # Continue with next company even if one fails
                     continue
         
-        logger.info("Generated company CSV: export_id=%s file_path=%s", export_id, file_path)
+        # logger.info("Generated company CSV: export_id=%s file_path=%s", export_id, file_path)
         return str(file_path)
 
     async def list_user_exports(
@@ -499,7 +499,7 @@ class ExportService:
         Returns:
             Number of files deleted
         """
-        logger.info("Deleting all CSV files from exports directory")
+        # logger.info("Deleting all CSV files from exports directory")
         
         exports_dir = Path(settings.UPLOAD_DIR) / "exports"
         
@@ -521,7 +521,7 @@ class ExportService:
                     logger.exception("Failed to delete CSV file: %s error=%s", csv_file, str(exc))
                     # Continue with other files
             
-            logger.info("Deleted %d CSV files", deleted_count)
+            # logger.info("Deleted %d CSV files", deleted_count)
             
             # Optionally clean up expired export records
             from datetime import datetime, timezone
@@ -535,7 +535,7 @@ class ExportService:
                 for export in expired_exports:
                     session.delete(export)
                 await session.commit()
-                logger.info("Cleaned up %d expired export records", len(expired_exports))
+                # logger.info("Cleaned up %d expired export records", len(expired_exports))
             
         except Exception as exc:
             logger.exception("Error deleting CSV files: %s", str(exc))

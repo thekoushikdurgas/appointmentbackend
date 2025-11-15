@@ -245,7 +245,7 @@ async def _upsert_contact(
 @log_function_call(logger=logger, log_arguments=True)
 async def _process_csv(job_id: str, file_path: str) -> None:
     """Read a CSV, enqueue upserts, and update import job progress metrics."""
-    logger.info("Starting contacts import processing: job_id=%s file_path=%s", job_id, file_path)
+    # logger.info("Starting contacts import processing: job_id=%s file_path=%s", job_id, file_path)
     async with AsyncSessionLocal() as session:
         job: Optional[ContactImportJob] = await import_service.job_repository.get_by_job_id(session, job_id)
         if not job:
@@ -323,12 +323,12 @@ async def _process_csv(job_id: str, file_path: str) -> None:
                 total_rows=processed,
                 message=f"Processed {processed} rows",
             )
-            logger.info(
-                "Completed contacts import: job_id=%s processed=%d errors=%d",
-                job_id,
-                processed,
-                error_total,
-            )
+            # logger.info(
+            #     "Completed contacts import: job_id=%s processed=%d errors=%d",
+            #     job_id,
+            #     processed,
+            #     error_total,
+            # )
         except Exception as exc:  # noqa: BLE001
             await session.rollback()
             await import_service.set_status(
@@ -348,7 +348,7 @@ async def _process_csv(job_id: str, file_path: str) -> None:
 @celery_app.task(name="contacts.process_import")
 def process_contacts_import(job_id: str, file_path: str) -> None:
     """Celery entrypoint for processing contacts imports."""
-    logger.info("Celery task started: job_id=%s file_path=%s", job_id, file_path)
+    # logger.info("Celery task started: job_id=%s file_path=%s", job_id, file_path)
     asyncio.run(_process_csv(job_id, file_path))
-    logger.info("Celery task finished: job_id=%s", job_id)
+    # logger.info("Celery task finished: job_id=%s", job_id)
 

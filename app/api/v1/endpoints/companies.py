@@ -38,7 +38,7 @@ async def require_companies_write_key(
         logger.warning("Companies write key is not configured; denying write access.")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     if companies_write_key != configured_key:
-        logger.info("Companies write key mismatch; denying request.")
+        # logger.info("Companies write key mismatch; denying request.")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
@@ -198,13 +198,13 @@ async def list_companies(
         resolved_offset = (filters.page - 1) * page_limit
 
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info(
-        "Listing companies: limit=%s offset=%d use_cursor=%s filters=%s",
-        page_limit,
-        resolved_offset,
-        use_cursor,
-        active_filter_keys,
-    )
+    # logger.info(
+    #     "Listing companies: limit=%s offset=%d use_cursor=%s filters=%s",
+    #     page_limit,
+    #     resolved_offset,
+    #     use_cursor,
+    #     active_filter_keys,
+    # )
 
     page = await service.list_companies(
         session,
@@ -215,12 +215,12 @@ async def list_companies(
         use_cursor=use_cursor,
     )
 
-    logger.info(
-        "Listed companies: returned=%d has_next=%s has_previous=%s",
-        len(page.results),
-        bool(page.next),
-        bool(page.previous),
-    )
+    # logger.info(
+    #     "Listed companies: returned=%d has_next=%s has_previous=%s",
+    #     len(page.results),
+    #     bool(page.next),
+    #     bool(page.previous),
+    # )
     return page
 
 
@@ -232,9 +232,9 @@ async def count_companies(
 ) -> CountResponse:
     """Return the total number of companies that match the provided filters."""
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info("Counting companies with filters=%s", active_filter_keys)
+    # logger.info("Counting companies with filters=%s", active_filter_keys)
     count = await service.count_companies(session, filters)
-    logger.info("Counted companies: filters=%s total=%d", active_filter_keys, count.count)
+    # logger.info("Counted companies: filters=%s total=%d", active_filter_keys, count.count)
     return count
 
 
@@ -247,9 +247,9 @@ async def get_company_uuids(
 ) -> UuidListResponse:
     """Return company UUIDs that match the provided filters."""
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info("Getting company UUIDs with filters=%s limit=%s", active_filter_keys, limit)
+    # logger.info("Getting company UUIDs with filters=%s limit=%s", active_filter_keys, limit)
     uuids = await service.get_uuids_by_filters(session, filters, limit)
-    logger.info("Retrieved company UUIDs: filters=%s count=%d", active_filter_keys, len(uuids))
+    # logger.info("Retrieved company UUIDs: filters=%s count=%d", active_filter_keys, len(uuids))
     return UuidListResponse(count=len(uuids), uuids=uuids)
 
 
@@ -261,9 +261,9 @@ async def create_company(
     session: AsyncSession = Depends(get_db),
 ) -> CompanyDetail:
     """Create a new company with optional fields."""
-    logger.info("Creating company via API")
+    # logger.info("Creating company via API")
     company = await service.create_company(session, payload)
-    logger.info("Created company via API: uuid=%s", company.uuid)
+    # logger.info("Created company via API: uuid=%s", company.uuid)
     return company
 
 
@@ -276,9 +276,9 @@ async def update_company(
     session: AsyncSession = Depends(get_db),
 ) -> CompanyDetail:
     """Update an existing company."""
-    logger.info("Updating company via API: company_uuid=%s", company_uuid)
+    # logger.info("Updating company via API: company_uuid=%s", company_uuid)
     company = await service.update_company(session, company_uuid, payload)
-    logger.info("Updated company via API: company_uuid=%s", company_uuid)
+    # logger.info("Updated company via API: company_uuid=%s", company_uuid)
     return company
 
 
@@ -294,9 +294,9 @@ async def delete_company(
     session: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete a company."""
-    logger.info("Deleting company via API: company_uuid=%s", company_uuid)
+    # logger.info("Deleting company via API: company_uuid=%s", company_uuid)
     await service.delete_company(session, company_uuid)
-    logger.info("Deleted company via API: company_uuid=%s", company_uuid)
+    # logger.info("Deleted company via API: company_uuid=%s", company_uuid)
 
 
 async def _attribute_endpoint(
@@ -342,13 +342,13 @@ async def _attribute_endpoint(
             detail="offset must be zero or greater",
         )
 
-    logger.info(
-        "Listing company attribute values: attribute=%s distinct=%s limit=%d offset=%d",
-        attribute_label,
-        effective_params.distinct,
-        effective_params.limit,
-        effective_params.offset,
-    )
+    # logger.info(
+    #     "Listing company attribute values: attribute=%s distinct=%s limit=%d offset=%d",
+    #     attribute_label,
+    #     effective_params.distinct,
+    #     effective_params.limit,
+    #     effective_params.offset,
+    # )
     values = await service.list_attribute_values(
         session,
         filters,
@@ -375,7 +375,7 @@ async def _attribute_endpoint(
             len(unique_values),
         )
         return unique_values
-    logger.info("Listed company attribute values: attribute=%s count=%d", attribute_label, len(values))
+    # logger.info("Listed company attribute values: attribute=%s count=%d", attribute_label, len(values))
     return values
 
 
@@ -591,9 +591,9 @@ async def retrieve_company_by_uuid(
     # Skip if this looks like it might be a company contacts route
     if company_uuid == "company":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    logger.info("Retrieving company detail: company_uuid=%s", company_uuid)
+    # logger.info("Retrieving company detail: company_uuid=%s", company_uuid)
     company = await service.get_company_by_uuid(session, company_uuid)
-    logger.info("Retrieved company detail: company_uuid=%s", company_uuid)
+    # logger.info("Retrieved company detail: company_uuid=%s", company_uuid)
     return company
 
 
@@ -669,14 +669,14 @@ async def list_company_contacts(
         resolved_offset = (filters.page - 1) * page_limit
     
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info(
-        "Listing contacts for company %s: limit=%s offset=%d use_cursor=%s filters=%s",
-        company_uuid,
-        page_limit,
-        resolved_offset,
-        use_cursor,
-        active_filter_keys,
-    )
+    # logger.info(
+    #     "Listing contacts for company %s: limit=%s offset=%d use_cursor=%s filters=%s",
+    #     company_uuid,
+    #     page_limit,
+    #     resolved_offset,
+    #     use_cursor,
+    #     active_filter_keys,
+    # )
     
     contacts_service = ContactsService()
     page = await contacts_service.list_contacts_by_company(
@@ -689,11 +689,11 @@ async def list_company_contacts(
         use_cursor=use_cursor,
     )
     
-    logger.info(
-        "Listed %d contacts for company %s",
-        len(page.results),
-        company_uuid,
-    )
+    # logger.info(
+    #     "Listed %d contacts for company %s",
+    #     len(page.results),
+    #     company_uuid,
+    # )
     return page
 
 
@@ -709,11 +709,11 @@ async def count_company_contacts(
     from app.services.contacts_service import ContactsService
     
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info(
-        "Counting contacts for company %s with filters=%s",
-        company_uuid,
-        active_filter_keys,
-    )
+    # logger.info(
+    #     "Counting contacts for company %s with filters=%s",
+    #     company_uuid,
+    #     active_filter_keys,
+    # )
     
     contacts_service = ContactsService()
     count = await contacts_service.count_contacts_by_company(
@@ -722,11 +722,11 @@ async def count_company_contacts(
         filters,
     )
     
-    logger.info(
-        "Counted %d contacts for company %s",
-        count.count,
-        company_uuid,
-    )
+    # logger.info(
+    #     "Counted %d contacts for company %s",
+    #     count.count,
+    #     company_uuid,
+    # )
     return count
 
 
@@ -743,12 +743,12 @@ async def get_company_contact_uuids(
     from app.services.contacts_service import ContactsService
     
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info(
-        "Getting contact UUIDs for company %s with filters=%s limit=%s",
-        company_uuid,
-        active_filter_keys,
-        limit,
-    )
+    # logger.info(
+    #     "Getting contact UUIDs for company %s with filters=%s limit=%s",
+    #     company_uuid,
+    #     active_filter_keys,
+    #     limit,
+    # )
     
     contacts_service = ContactsService()
     uuids = await contacts_service.get_uuids_by_company(
@@ -758,11 +758,11 @@ async def get_company_contact_uuids(
         limit,
     )
     
-    logger.info(
-        "Retrieved %d contact UUIDs for company %s",
-        len(uuids),
-        company_uuid,
-    )
+    # logger.info(
+    #     "Retrieved %d contact UUIDs for company %s",
+    #     len(uuids),
+    #     company_uuid,
+    # )
     return UuidListResponse(count=len(uuids), uuids=uuids)
 
 
@@ -777,13 +777,13 @@ async def _company_contact_attribute_endpoint(
     from app.schemas.filters import CompanyContactFilterParams
     from app.services.contacts_service import ContactsService
     
-    logger.info(
-        "Listing attribute %s for company %s contacts with filters=%s params=%s",
-        attribute,
-        company_uuid,
-        sorted(filters.model_dump(exclude_none=True).keys()),
-        params.model_dump(exclude_none=True),
-    )
+    # logger.info(
+    #     "Listing attribute %s for company %s contacts with filters=%s params=%s",
+    #     attribute,
+    #     company_uuid,
+    #     sorted(filters.model_dump(exclude_none=True).keys()),
+    #     params.model_dump(exclude_none=True),
+    # )
     
     contacts_service = ContactsService()
     values = await contacts_service.list_attribute_values_by_company(
@@ -794,12 +794,12 @@ async def _company_contact_attribute_endpoint(
         params,
     )
     
-    logger.info(
-        "Listed %d distinct %s values for company %s contacts",
-        len(values),
-        attribute,
-        company_uuid,
-    )
+    # logger.info(
+    #     "Listed %d distinct %s values for company %s contacts",
+    #     len(values),
+    #     attribute,
+    #     company_uuid,
+    # )
     return values
 
 

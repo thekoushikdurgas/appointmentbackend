@@ -117,7 +117,7 @@ class UserService:
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
         
-        logger.info("User registered successfully: id=%s email=%s", user.id, user.email)
+        # logger.info("User registered successfully: id=%s email=%s", user.id, user.email)
         return user, access_token, refresh_token
 
     async def authenticate_user(
@@ -163,7 +163,7 @@ class UserService:
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
         
-        logger.info("User authenticated successfully: id=%s email=%s", user.id, user.email)
+        # logger.info("User authenticated successfully: id=%s email=%s", user.id, user.email)
         return user, access_token, refresh_token
 
     async def refresh_access_token(
@@ -207,7 +207,7 @@ class UserService:
         new_access_token = create_access_token(token_data)
         new_refresh_token = create_refresh_token(token_data)
         
-        logger.info("Access token refreshed successfully: user_id=%s", user_id)
+        # logger.info("Access token refreshed successfully: user_id=%s", user_id)
         return new_access_token, new_refresh_token
 
     async def get_user_profile(
@@ -457,7 +457,7 @@ class UserService:
             updated_at=profile.updated_at or user.updated_at,
         )
         
-        logger.info("Avatar uploaded successfully: user_id=%s filename=%s", user_id, filename)
+        # logger.info("Avatar uploaded successfully: user_id=%s filename=%s", user_id, filename)
         return full_avatar_url, profile_response
 
     async def promote_user_to_admin(
@@ -472,7 +472,7 @@ class UserService:
         
         Returns: Updated ProfileResponse with role="Admin"
         """
-        logger.info("Promoting user to admin: user_id=%s", user_id)
+        # logger.info("Promoting user to admin: user_id=%s", user_id)
         
         user = await self.user_repo.get_by_uuid(session, user_id)
         if not user:
@@ -502,7 +502,7 @@ class UserService:
         
         # Build response
         notifications = profile.notifications or {}
-        logger.info("User promoted to admin successfully: user_id=%s email=%s", user_id, user.email)
+        # logger.info("User promoted to admin successfully: user_id=%s email=%s", user_id, user.email)
         return ProfileResponse(
             id=user.id,
             name=user.name,

@@ -93,7 +93,7 @@ class AIChatService:
             messages=messages_dict,
         )
 
-        logger.info("Chat created: id=%s user_id=%s", chat.id, chat.user_id)
+        # logger.info("Chat created: id=%s user_id=%s", chat.id, chat.user_id)
         return AIChatResponse(
             id=chat.id,
             user_id=chat.user_id,
@@ -201,12 +201,12 @@ class AIChatService:
             for chat in chats
         ]
 
-        logger.info(
-            "Listed chats: user_id=%s returned=%d total=%d",
-            user_id,
-            len(results),
-            total_count,
-        )
+        # logger.info(
+        #     "Listed chats: user_id=%s returned=%d total=%d",
+        #     user_id,
+        #     len(results),
+        #     total_count,
+        # )
 
         return PaginatedAIChatResponse(
             count=total_count,
@@ -258,7 +258,7 @@ class AIChatService:
             await self.repository.update_chat(session, chat, **update_dict)
             await session.refresh(chat)
 
-        logger.info("Chat updated: id=%s", chat_id)
+        # logger.info("Chat updated: id=%s", chat_id)
         return AIChatResponse(
             id=chat.id,
             user_id=chat.user_id,
@@ -296,5 +296,5 @@ class AIChatService:
 
         # Delete chat
         await self.repository.delete_chat(session, chat)
-        logger.info("Chat deleted: id=%s", chat_id)
+        # logger.info("Chat deleted: id=%s", chat_id)
 

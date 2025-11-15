@@ -103,20 +103,20 @@ async def analyze_apollo_url(
     Raises:
         HTTPException: If URL is invalid, not from Apollo.io, or analysis fails
     """
-    logger.info(
-        "Apollo URL analysis request: user_id=%s url_length=%d",
-        current_user.id,
-        len(request_data.url),
-    )
+    # logger.info(
+    #     "Apollo URL analysis request: user_id=%s url_length=%d",
+    #     current_user.id,
+    #     len(request_data.url),
+    # )
 
     try:
         result = service.analyze_url(request_data.url)
-        logger.info(
-            "Apollo URL analyzed successfully: user_id=%s total_params=%d categories=%d",
-            current_user.id,
-            result.statistics.total_parameters,
-            result.statistics.categories_used,
-        )
+        # logger.info(
+        #     "Apollo URL analyzed successfully: user_id=%s total_params=%d categories=%d",
+        #     current_user.id,
+        #     result.statistics.total_parameters,
+        #     result.statistics.categories_used,
+        # )
         
         # Convert Tag IDs to industry names in the response for better readability
         converted_categories = []
@@ -158,7 +158,7 @@ async def analyze_apollo_url(
             raw_parameters=converted_raw_parameters,
         )
         
-        logger.info("Converted Tag IDs to industry names in analysis response")
+        # logger.info("Converted Tag IDs to industry names in analysis response")
         return converted_result
         
     except HTTPException:
@@ -233,20 +233,20 @@ async def search_contacts_from_apollo_url(
     Raises:
         HTTPException: If URL is invalid, not from Apollo.io, or query fails
     """
-    logger.info(
-        "Apollo contacts search request: user_id=%s url_length=%d",
-        current_user.id,
-        len(request_data.url),
-    )
+    # logger.info(
+    #     "Apollo contacts search request: user_id=%s url_length=%d",
+    #     current_user.id,
+    #     len(request_data.url),
+    # )
 
     try:
         # Step 1: Analyze the Apollo URL to extract parameters
         analysis = service.analyze_url(request_data.url)
-        logger.info(
-            "Apollo URL analyzed: total_params=%d categories=%d",
-            analysis.statistics.total_parameters,
-            analysis.statistics.categories_used,
-        )
+        # logger.info(
+        #     "Apollo URL analyzed: total_params=%d categories=%d",
+        #     analysis.statistics.total_parameters,
+        #     analysis.statistics.categories_used,
+        # )
 
         # Step 2: Map Apollo parameters to contact filter parameters (with unmapped tracking)
         filter_dict, unmapped_dict = service.map_to_contact_filters(analysis.raw_parameters, include_unmapped=True)
@@ -311,13 +311,13 @@ async def search_contacts_from_apollo_url(
                 "Unlimited Apollo query requested - this may return a large dataset. filters=%s",
                 active_filter_keys,
             )
-        logger.info(
-            "Searching contacts with Apollo filters: limit=%s offset=%d use_cursor=%s filters=%s",
-            page_limit if page_limit is not None else "unlimited",
-            resolved_offset,
-            use_cursor,
-            active_filter_keys,
-        )
+        # logger.info(
+        #     "Searching contacts with Apollo filters: limit=%s offset=%d use_cursor=%s filters=%s",
+        #     page_limit if page_limit is not None else "unlimited",
+        #     resolved_offset,
+        #     use_cursor,
+        #     active_filter_keys,
+        # )
 
         # Step 5: Query contacts based on view parameter
         # Pass None directly for unlimited queries (service handles it properly)
@@ -340,12 +340,12 @@ async def search_contacts_from_apollo_url(
                 use_cursor=use_cursor,
             )
 
-        logger.info(
-            "Apollo contacts search completed: user_id=%s returned=%d has_next=%s",
-            current_user.id,
-            len(page.results),
-            bool(page.next),
-        )
+        # logger.info(
+        #     "Apollo contacts search completed: user_id=%s returned=%d has_next=%s",
+        #     current_user.id,
+        #     len(page.results),
+        #     bool(page.next),
+        # )
 
         # Step 6: Build unmapped categories structure from analysis
         unmapped_categories = []
@@ -410,12 +410,12 @@ async def search_contacts_from_apollo_url(
             unmapped_categories=unmapped_categories
         )
         
-        logger.info(
-            "Apollo contacts response built: mapped=%d unmapped=%d unmapped_categories=%d",
-            mapping_summary.mapped_parameters,
-            mapping_summary.unmapped_parameters,
-            len(unmapped_categories),
-        )
+        # logger.info(
+        #     "Apollo contacts response built: mapped=%d unmapped=%d unmapped_categories=%d",
+        #     mapping_summary.mapped_parameters,
+        #     mapping_summary.unmapped_parameters,
+        #     len(unmapped_categories),
+        # )
 
         return response
 
@@ -465,20 +465,20 @@ async def count_contacts_from_apollo_url(
     Raises:
         HTTPException: If URL is invalid, not from Apollo.io, or query fails
     """
-    logger.info(
-        "Apollo contacts count request: user_id=%s url_length=%d",
-        current_user.id,
-        len(request_data.url),
-    )
+    # logger.info(
+    #     "Apollo contacts count request: user_id=%s url_length=%d",
+    #     current_user.id,
+    #     len(request_data.url),
+    # )
 
     try:
         # Step 1: Analyze the Apollo URL to extract parameters
         analysis = service.analyze_url(request_data.url)
-        logger.info(
-            "Apollo URL analyzed: total_params=%d categories=%d",
-            analysis.statistics.total_parameters,
-            analysis.statistics.categories_used,
-        )
+        # logger.info(
+        #     "Apollo URL analyzed: total_params=%d categories=%d",
+        #     analysis.statistics.total_parameters,
+        #     analysis.statistics.categories_used,
+        # )
 
         # Step 2: Map Apollo parameters to contact filter parameters
         filter_dict, unmapped_dict = service.map_to_contact_filters(analysis.raw_parameters, include_unmapped=True)
@@ -501,19 +501,19 @@ async def count_contacts_from_apollo_url(
             ) from exc
 
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-        logger.info(
-            "Counting contacts with Apollo filters: filters=%s",
-            active_filter_keys,
-        )
+        # logger.info(
+        #     "Counting contacts with Apollo filters: filters=%s",
+        #     active_filter_keys,
+        # )
 
         # Step 4: Count contacts
         count_response = await contacts_service.count_contacts(session, filters)
 
-        logger.info(
-            "Apollo contacts count completed: user_id=%s count=%d",
-            current_user.id,
-            count_response.count,
-        )
+        # logger.info(
+        #     "Apollo contacts count completed: user_id=%s count=%d",
+        #     current_user.id,
+        #     count_response.count,
+        # )
 
         return count_response
 
@@ -566,21 +566,21 @@ async def get_contact_uuids_from_apollo_url(
     Raises:
         HTTPException: If URL is invalid, not from Apollo.io, or query fails
     """
-    logger.info(
-        "Apollo contacts UUID request: user_id=%s url_length=%d limit=%s",
-        current_user.id,
-        len(request_data.url),
-        limit,
-    )
+    # logger.info(
+    #     "Apollo contacts UUID request: user_id=%s url_length=%d limit=%s",
+    #     current_user.id,
+    #     len(request_data.url),
+    #     limit,
+    # )
 
     try:
         # Step 1: Analyze the Apollo URL to extract parameters
         analysis = service.analyze_url(request_data.url)
-        logger.info(
-            "Apollo URL analyzed: total_params=%d categories=%d",
-            analysis.statistics.total_parameters,
-            analysis.statistics.categories_used,
-        )
+        # logger.info(
+        #     "Apollo URL analyzed: total_params=%d categories=%d",
+        #     analysis.statistics.total_parameters,
+        #     analysis.statistics.categories_used,
+        # )
 
         # Step 2: Map Apollo parameters to contact filter parameters
         filter_dict, unmapped_dict = service.map_to_contact_filters(analysis.raw_parameters, include_unmapped=True)
@@ -608,20 +608,20 @@ async def get_contact_uuids_from_apollo_url(
                 "Unlimited Apollo UUID query requested - this may return a large dataset. filters=%s",
                 active_filter_keys,
             )
-        logger.info(
-            "Getting contact UUIDs with Apollo filters: limit=%s filters=%s",
-            limit,
-            active_filter_keys,
-        )
+        # logger.info(
+        #     "Getting contact UUIDs with Apollo filters: limit=%s filters=%s",
+        #     limit,
+        #     active_filter_keys,
+        # )
 
         # Step 4: Get contact UUIDs
         uuids = await contacts_service.get_uuids_by_filters(session, filters, limit)
 
-        logger.info(
-            "Apollo contacts UUID completed: user_id=%s count=%d",
-            current_user.id,
-            len(uuids),
-        )
+        # logger.info(
+        #     "Apollo contacts UUID completed: user_id=%s count=%d",
+        #     current_user.id,
+        #     len(uuids),
+        # )
 
         return UuidListResponse(count=len(uuids), uuids=uuids)
 

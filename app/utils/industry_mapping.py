@@ -40,10 +40,10 @@ def _load_industry_mapping() -> dict[str, str]:
                     # Store as lowercase for consistent matching
                     mapping[tag_id] = industry.lower()
             
-            logger.info(
-                "Loaded %d industry tag ID mappings from CSV",
-                len(mapping),
-            )
+            # logger.info(
+            #     "Loaded %d industry tag ID mappings from CSV",
+            #     len(mapping),
+            # )
     except Exception as exc:
         logger.exception("Failed to load industry mapping CSV: %s", exc)
         return {}
@@ -88,12 +88,13 @@ def get_industry_names_from_ids(tag_ids: list[str]) -> list[str]:
     
     # Log summary
     if industry_names:
-        logger.info(
-            "Mapped %d/%d industry tag IDs to: %s",
-            len(industry_names),
-            len(tag_ids),
-            ", ".join(industry_names[:5]),  # Show first 5 industry names
-        )
+        # logger.info(
+        #     "Mapped %d/%d industry tag IDs to: %s",
+        #     len(industry_names),
+        #     len(tag_ids),
+        #     ", ".join(industry_names[:5]),  # Show first 5 industry names
+        # )
+        pass
     
     if invalid_ids:
         logger.warning(

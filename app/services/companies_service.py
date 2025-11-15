@@ -116,7 +116,7 @@ class CompaniesService:
         data["created_at"] = now
         data["updated_at"] = now
 
-        self.logger.info("Service creating company: uuid=%s name=%s", data["uuid"], data.get("name"))
+        # self.logger.info("Service creating company: uuid=%s name=%s", data["uuid"], data.get("name"))
         company = await self.repository.create_company(session, data)
         await session.commit()
         self.logger.debug("Created company persisted: id=%s uuid=%s", company.id, company.uuid)
@@ -155,10 +155,10 @@ class CompaniesService:
 
         data["updated_at"] = datetime.now(UTC).replace(tzinfo=None)
 
-        self.logger.info("Service updating company: company_uuid=%s", company_uuid)
+        # self.logger.info("Service updating company: company_uuid=%s", company_uuid)
         company = await self.repository.update_company(session, company_uuid, data)
         if not company:
-            self.logger.info("Company not found for update: company_uuid=%s", company_uuid)
+            # self.logger.info("Company not found for update: company_uuid=%s", company_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         await session.commit()
         self.logger.debug("Updated company persisted: id=%s uuid=%s", company.id, company.uuid)
@@ -172,10 +172,10 @@ class CompaniesService:
         company_uuid: str,
     ) -> None:
         """Delete a company by UUID."""
-        self.logger.info("Service deleting company: company_uuid=%s", company_uuid)
+        # self.logger.info("Service deleting company: company_uuid=%s", company_uuid)
         deleted = await self.repository.delete_company(session, company_uuid)
         if not deleted:
-            self.logger.info("Company not found for deletion: company_uuid=%s", company_uuid)
+            # self.logger.info("Company not found for deletion: company_uuid=%s", company_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         await session.commit()
         self.logger.debug("Deleted company: company_uuid=%s", company_uuid)
@@ -192,13 +192,13 @@ class CompaniesService:
     ) -> CursorPage[CompanyListItem]:
         """List companies and build pagination metadata."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-        self.logger.info(
-            "Service listing companies: limit=%s offset=%d use_cursor=%s filters=%s",
-            limit,
-            offset,
-            use_cursor,
-            active_filter_keys,
-        )
+        # self.logger.info(
+        #     "Service listing companies: limit=%s offset=%d use_cursor=%s filters=%s",
+        #     limit,
+        #     offset,
+        #     use_cursor,
+        #     active_filter_keys,
+        # )
         if limit is None:
             self.logger.warning(
                 "Unlimited query requested for companies - this may return a large dataset. filters=%s",
@@ -207,7 +207,7 @@ class CompaniesService:
         try:
             rows = await self.repository.list_companies(session, filters, limit, offset)
         except ValueError as exc:
-            self.logger.info("List companies request rejected: %s", exc)
+            # self.logger.info("List companies request rejected: %s", exc)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         self.logger.debug("Repository returned %d rows for company list", len(rows))
 
@@ -237,11 +237,11 @@ class CompaniesService:
             else:
                 prev_offset = max(offset - (limit or 0), 0)
                 previous_link = build_pagination_link(request_url, limit=limit, offset=prev_offset)
-        self.logger.info(
-            "List companies pagination prepared: next=%s previous=%s",
-            bool(next_link),
-            bool(previous_link),
-        )
+        # self.logger.info(
+        #     "List companies pagination prepared: next=%s previous=%s",
+        #     bool(next_link),
+        #     bool(previous_link),
+        # )
         self.logger.debug(
             "Exiting CompaniesService.list_companies results=%d next_link=%s previous_link=%s",
             len(results),
@@ -257,9 +257,9 @@ class CompaniesService:
     ) -> CountResponse:
         """Count companies that match the provided filters."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-        self.logger.info("Service counting companies: filters=%s", active_filter_keys)
+        # self.logger.info("Service counting companies: filters=%s", active_filter_keys)
         total = await self.repository.count_companies(session, filters)
-        self.logger.info("Service counted companies: total=%d", total)
+        # self.logger.info("Service counted companies: total=%d", total)
         self.logger.debug("Exiting CompaniesService.count_companies")
         return CountResponse(count=total)
 
@@ -271,18 +271,18 @@ class CompaniesService:
     ) -> list[str]:
         """Return company UUIDs that match the supplied filters."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-        self.logger.info(
-            "Service getting company UUIDs: limit=%s filters=%s",
-            limit,
-            active_filter_keys,
-        )
+        # self.logger.info(
+        #     "Service getting company UUIDs: limit=%s filters=%s",
+        #     limit,
+        #     active_filter_keys,
+        # )
         if limit is None:
             self.logger.warning(
                 "Unlimited UUID query requested - this may return a large dataset. filters=%s",
                 active_filter_keys,
             )
         uuids = await self.repository.get_uuids_by_filters(session, filters, limit)
-        self.logger.info("Service retrieved %d company UUIDs", len(uuids))
+        # self.logger.info("Service retrieved %d company UUIDs", len(uuids))
         return uuids
 
     async def get_company(
@@ -291,10 +291,10 @@ class CompaniesService:
         company_uuid: str,
     ) -> CompanyDetail:
         """Fetch a single company with related data."""
-        self.logger.info("Service retrieving company: company_uuid=%s", company_uuid)
+        # self.logger.info("Service retrieving company: company_uuid=%s", company_uuid)
         row = await self.repository.get_company_with_metadata(session, company_uuid)
         if not row:
-            self.logger.info("Company not found: company_uuid=%s", company_uuid)
+            # self.logger.info("Company not found: company_uuid=%s", company_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         company, company_meta = row
         item = self._hydrate_company(company, company_meta)
@@ -313,10 +313,10 @@ class CompaniesService:
         company_uuid: str,
     ) -> CompanyDetail:
         """Fetch a single company by UUID with related data."""
-        self.logger.info("Service retrieving company: company_uuid=%s", company_uuid)
+        # self.logger.info("Service retrieving company: company_uuid=%s", company_uuid)
         row = await self.repository.get_company_by_uuid_with_metadata(session, company_uuid)
         if not row:
-            self.logger.info("Company not found: company_uuid=%s", company_uuid)
+            # self.logger.info("Company not found: company_uuid=%s", company_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         company, company_meta = row
         item = self._hydrate_company(company, company_meta)
@@ -340,13 +340,13 @@ class CompaniesService:
     ) -> List[str]:
         """Return a list of attribute values for companies."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-        self.logger.info(
-            "Service listing attribute values: limit=%s offset=%d distinct=%s filters=%s",
-            params.limit,
-            params.offset,
-            params.distinct,
-            active_filter_keys,
-        )
+        # self.logger.info(
+        #     "Service listing attribute values: limit=%s offset=%d distinct=%s filters=%s",
+        #     params.limit,
+        #     params.offset,
+        #     params.distinct,
+        #     active_filter_keys,
+        # )
         if params.limit is None:
             self.logger.warning(
                 "Unlimited attribute query requested - this may return a large dataset. filters=%s",

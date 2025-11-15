@@ -92,18 +92,18 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Not Found"},
             )
 
-        logger.info("Entering LoggingMiddleware.dispatch method=%s path=%s", request.method, request.url.path)
+        # logger.info("Entering LoggingMiddleware.dispatch method=%s path=%s", request.method, request.url.path)
         try:
             response = await call_next(request)
         except Exception:
             logger.exception("Error processing request method=%s path=%s", request.method, request.url.path)
             raise
-        logger.info(
-            "Exiting LoggingMiddleware.dispatch method=%s path=%s status=%s",
-            request.method,
-            request.url.path,
-            response.status_code,
-        )
+        # logger.info(
+        #     "Exiting LoggingMiddleware.dispatch method=%s path=%s status=%s",
+        #     request.method,
+        #     request.url.path,
+        #     response.status_code,
+        # )
         return response
 
 

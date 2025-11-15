@@ -55,11 +55,11 @@ async def update_profile(
     All fields are optional - only provided fields will be updated (partial update).
     The notifications field is merged with existing preferences, not replaced.
     """
-    logger.info("Update profile request: user_id=%s fields=%s", current_user.id, list(update_data.model_dump(exclude_none=True).keys()))
+    # logger.info("Update profile request: user_id=%s fields=%s", current_user.id, list(update_data.model_dump(exclude_none=True).keys()))
     
     try:
         profile = await service.update_user_profile(session, current_user.id, update_data)
-        logger.info("Profile updated: user_id=%s", current_user.id)
+        # logger.info("Profile updated: user_id=%s", current_user.id)
         return profile
     except HTTPException:
         raise
@@ -88,7 +88,7 @@ async def upload_avatar(
     - Maximum Size: 5MB
     - Validation: Both file extension and file content (magic bytes) are validated
     """
-    logger.info("Avatar upload request: user_id=%s filename=%s", current_user.id, avatar.filename)
+    # logger.info("Avatar upload request: user_id=%s filename=%s", current_user.id, avatar.filename)
     
     try:
         avatar_url, profile = await service.upload_avatar(session, current_user.id, avatar)
@@ -98,7 +98,7 @@ async def upload_avatar(
             profile=profile,
             message="Avatar uploaded successfully"
         )
-        logger.info("Avatar uploaded: user_id=%s filename=%s", current_user.id, avatar.filename)
+        # logger.info("Avatar uploaded: user_id=%s filename=%s", current_user.id, avatar.filename)
         return response
     except HTTPException:
         raise
@@ -122,11 +122,11 @@ async def promote_to_admin(
     This endpoint allows authenticated users to change their role to "Admin".
     The operation is logged for audit purposes.
     """
-    logger.info("Promote to admin request: user_id=%s", current_user.id)
+    # logger.info("Promote to admin request: user_id=%s", current_user.id)
     
     try:
         profile = await service.promote_user_to_admin(session, current_user.id)
-        logger.info("User promoted to admin: user_id=%s", current_user.id)
+        # logger.info("User promoted to admin: user_id=%s", current_user.id)
         return profile
     except HTTPException:
         raise

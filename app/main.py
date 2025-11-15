@@ -36,9 +36,9 @@ async def lifespan(app: FastAPI):
     setup_logging()
     Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
     Path(settings.UPLOAD_DIR, "avatars").mkdir(parents=True, exist_ok=True)
-    logger.info("Application startup complete: project=%s version=%s", settings.PROJECT_NAME, settings.VERSION)
+    # logger.info("Application startup complete: project=%s version=%s", settings.PROJECT_NAME, settings.VERSION)
     yield
-    logger.info("Application shutdown initiated: project=%s", settings.PROJECT_NAME)
+    # logger.info("Application shutdown initiated: project=%s", settings.PROJECT_NAME)
     logger.debug("Exiting lifespan cleanup")
 
 
@@ -174,7 +174,7 @@ async def health_check():
     """Simple health check endpoint used during scaffolding."""
     logger.debug("Entering health_check")
     payload = {"status": "healthy", "environment": settings.ENVIRONMENT}
-    logger.info("Health check response: status=%s environment=%s", payload["status"], payload["environment"])
+    # logger.info("Health check response: status=%s environment=%s", payload["status"], payload["environment"])
     logger.debug("Exiting health_check payload=%s", payload)
     return payload
 

@@ -40,11 +40,11 @@ async def create_contact_export(
     company, and metadata fields. Returns a signed temporary download URL that expires
     after 24 hours.
     """
-    logger.info(
-        "Received contact export request: user_id=%s contact_count=%d",
-        current_user.id,
-        len(request.contact_uuids),
-    )
+    # logger.info(
+    #     "Received contact export request: user_id=%s contact_count=%d",
+    #     current_user.id,
+    #     len(request.contact_uuids),
+    # )
     
     if not request.contact_uuids:
         raise HTTPException(
@@ -78,12 +78,12 @@ async def create_contact_export(
                 contact_count=len(request.contact_uuids),
             )
             
-            logger.info(
-                "Export completed: export_id=%s user_id=%s contact_count=%d",
-                export.export_id,
-                current_user.id,
-                export.contact_count,
-            )
+            # logger.info(
+            #     "Export completed: export_id=%s user_id=%s contact_count=%d",
+            #     export.export_id,
+            #     current_user.id,
+            #     export.contact_count,
+            # )
             
             return ContactExportResponse(
                 export_id=export.export_id,
@@ -134,14 +134,14 @@ async def list_exports(
     Returns all exports created by the authenticated user, ordered by creation date
     (newest first). Includes both contact and company exports.
     """
-    logger.info("Listing exports for user: user_id=%s", current_user.id)
+    # logger.info("Listing exports for user: user_id=%s", current_user.id)
     
     try:
         exports = await service.list_user_exports(session, current_user.id)
         
         export_details = [UserExportDetail.model_validate(export) for export in exports]
         
-        logger.info("Found %d exports for user: user_id=%s", len(export_details), current_user.id)
+        # logger.info("Found %d exports for user: user_id=%s", len(export_details), current_user.id)
         
         return ExportListResponse(
             exports=export_details,
@@ -168,7 +168,7 @@ async def download_export(
     The token must be valid and the export must belong to the requesting user.
     The export must not have expired.
     """
-    logger.info("Download request: export_id=%s user_id=%s", export_id, current_user.id)
+    # logger.info("Download request: export_id=%s user_id=%s", export_id, current_user.id)
     
     # Verify signed URL token
     token_payload = verify_signed_url(token)
@@ -238,7 +238,7 @@ async def download_export(
     # Determine filename
     filename = export.file_name or f"export_{export_id}.csv"
     
-    logger.info("Serving export file: export_id=%s file_path=%s", export_id, file_path)
+    # logger.info("Serving export file: export_id=%s file_path=%s", export_id, file_path)
     
     return FileResponse(
         path=str(file_path),
@@ -263,11 +263,11 @@ async def create_company_export(
     and company metadata fields. Returns a signed temporary download URL that expires
     after 24 hours.
     """
-    logger.info(
-        "Received company export request: user_id=%s company_count=%d",
-        current_user.id,
-        len(request.company_uuids),
-    )
+    # logger.info(
+    #     "Received company export request: user_id=%s company_count=%d",
+    #     current_user.id,
+    #     len(request.company_uuids),
+    # )
     
     if not request.company_uuids:
         raise HTTPException(
@@ -301,12 +301,12 @@ async def create_company_export(
                 company_count=len(request.company_uuids),
             )
             
-            logger.info(
-                "Export completed: export_id=%s user_id=%s company_count=%d",
-                export.export_id,
-                current_user.id,
-                export.company_count,
-            )
+            # logger.info(
+            #     "Export completed: export_id=%s user_id=%s company_count=%d",
+            #     export.export_id,
+            #     current_user.id,
+            #     export.company_count,
+            # )
             
             return CompanyExportResponse(
                 export_id=export.export_id,
@@ -357,12 +357,12 @@ async def delete_all_csv_files(
     This endpoint deletes all CSV files in the exports directory and optionally
     cleans up expired export records from the database.
     """
-    logger.info("Admin CSV cleanup request: user_id=%s", current_user.id)
+    # logger.info("Admin CSV cleanup request: user_id=%s", current_user.id)
     
     try:
         deleted_count = await service.delete_all_csv_files(session)
         
-        logger.info("CSV cleanup completed: deleted_count=%d", deleted_count)
+        # logger.info("CSV cleanup completed: deleted_count=%d", deleted_count)
         
         return {
             "message": "CSV files deleted successfully",

@@ -33,7 +33,7 @@ async def import_info(
     current_user: User = Depends(get_current_user),
 ) -> MessageResponse:
     """Provide instructions for triggering a contacts import."""
-    logger.info("Import info endpoint requested")
+    # logger.info("Import info endpoint requested")
     payload = MessageResponse(
         message="Upload a CSV file via POST to /api/contacts/import/ to start a background import job."
     )
@@ -48,11 +48,11 @@ async def upload_contacts_import(
     current_user: User = Depends(get_current_admin),
 ) -> ImportJobDetail:
     """Accept a CSV upload, persist job metadata, and enqueue background processing."""
-    logger.info(
-        "Received contacts import upload request: filename=%s content_type=%s",
-        file.filename,
-        file.content_type,
-    )
+    # logger.info(
+    #     "Received contacts import upload request: filename=%s content_type=%s",
+    #     file.filename,
+    #     file.content_type,
+    # )
     if not file.filename:
         logger.warning("Upload rejected: missing filename")
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File name is required")
@@ -133,13 +133,13 @@ async def upload_contacts_import(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to enqueue import job",
         ) from exc
-    logger.info(
-        "Enqueued contacts import: job_id=%s filename=%s stored_path=%s size_bytes=%d",
-        job.job_id,
-        file.filename,
-        temp_path,
-        file_size,
-    )
+    # logger.info(
+    #     "Enqueued contacts import: job_id=%s filename=%s stored_path=%s size_bytes=%d",
+    #     job.job_id,
+    #     file.filename,
+    #     temp_path,
+    #     file_size,
+    # )
 
     response = ImportJobDetail.model_validate(job)
     logger.debug("Returning import job detail response: job_id=%s", job.job_id)
@@ -154,16 +154,16 @@ async def import_job_detail(
     current_user: User = Depends(get_current_user),
 ) -> ImportJobWithErrors | ImportJobDetail:
     """Return a job record with optional error payload."""
-    logger.info("Fetching import job detail: job_id=%s include_errors=%s", job_id, include_errors)
+    # logger.info("Fetching import job detail: job_id=%s include_errors=%s", job_id, include_errors)
     job = await service.get_job(session, job_id, include_errors=include_errors)
     if not job:
         logger.warning("Import job not found: job_id=%s", job_id)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import job not found")
-    logger.info(
-        "Fetched import job detail: job_id=%s status=%s",
-        job_id,
-        job.status if isinstance(job, ImportJobDetail) else job.status,
-    )
+    # logger.info(
+    #     "Fetched import job detail: job_id=%s status=%s",
+    #     job_id,
+    #     job.status if isinstance(job, ImportJobDetail) else job.status,
+    # )
     return job
 
 
@@ -174,11 +174,11 @@ async def download_import_errors(
     current_user: User = Depends(get_current_user),
 ) -> List[ImportErrorRecord]:
     """Return recorded row-level errors for a contacts import job."""
-    logger.info("Fetching import job errors: job_id=%s", job_id)
+    # logger.info("Fetching import job errors: job_id=%s", job_id)
     job = await service.get_job(session, job_id, include_errors=True)
     if not job or not isinstance(job, ImportJobWithErrors):
         logger.warning("Import job errors not found: job_id=%s", job_id)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import job not found")
-    logger.info("Fetched import job errors: job_id=%s error_count=%d", job_id, len(job.errors))
+    # logger.info("Fetched import job errors: job_id=%s error_count=%d", job_id, len(job.errors))
     return job.errors
 

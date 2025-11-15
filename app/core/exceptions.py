@@ -30,7 +30,7 @@ class NotFoundException(AppException):
     """Exception raised when a resource cannot be located."""
 
     def __init__(self, detail: str = "Resource not found") -> None:
-        logger.info("Raising NotFoundException detail=%s", detail)
+        # logger.info("Raising NotFoundException detail=%s", detail)
         super().__init__(status.HTTP_404_NOT_FOUND, detail, "NOT_FOUND")
 
 
@@ -54,7 +54,7 @@ class ValidationException(AppException):
     """Exception raised for data validation errors."""
 
     def __init__(self, detail: str = "Validation error") -> None:
-        logger.info("Raising ValidationException detail=%s", detail)
+        # logger.info("Raising ValidationException detail=%s", detail)
         super().__init__(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail,

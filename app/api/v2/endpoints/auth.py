@@ -37,7 +37,7 @@ async def register(
     
     Creates a user profile automatically upon registration.
     """
-    logger.info("Registration request: email=%s", register_data.email)
+    # logger.info("Registration request: email=%s", register_data.email)
     
     try:
         user, access_token, refresh_token = await service.register_user(session, register_data)
@@ -48,7 +48,7 @@ async def register(
             user={"id": user.id, "email": user.email},
             message="Registration successful! Please check your email to verify your account."
         )
-        logger.info("Registration successful: user_id=%s email=%s", user.id, user.email)
+        # logger.info("Registration successful: user_id=%s email=%s", user.id, user.email)
         return response
     except HTTPException:
         raise
@@ -71,7 +71,7 @@ async def login(
     
     Updates the user's last_sign_in_at timestamp upon successful login.
     """
-    logger.info("Login request: email=%s", login_data.email)
+    # logger.info("Login request: email=%s", login_data.email)
     
     try:
         user, access_token, refresh_token = await service.authenticate_user(session, login_data)
@@ -81,7 +81,7 @@ async def login(
             refresh_token=refresh_token,
             user={"id": user.id, "email": user.email}
         )
-        logger.info("Login successful: user_id=%s email=%s", user.id, user.email)
+        # logger.info("Login successful: user_id=%s email=%s", user.id, user.email)
         return response
     except HTTPException:
         raise
@@ -106,14 +106,14 @@ async def logout(
     Note: In a production system, you would blacklist the refresh token.
     For now, logout succeeds even if refresh token is not provided.
     """
-    logger.info("Logout request: user_id=%s", current_user.id)
+    # logger.info("Logout request: user_id=%s", current_user.id)
     
     # TODO: Implement token blacklisting (store in database or Redis)
     # For now, we just return success
     # If refresh_token is provided, it could be blacklisted here
     
     response = LogoutResponse(message="Logout successful")
-    logger.info("Logout successful: user_id=%s", current_user.id)
+    # logger.info("Logout successful: user_id=%s", current_user.id)
     return response
 
 
@@ -148,7 +148,7 @@ async def refresh_token(
     
     Returns new access and refresh tokens (token rotation).
     """
-    logger.info("Token refresh request")
+    # logger.info("Token refresh request")
     
     try:
         access_token, refresh_token = await service.refresh_access_token(
@@ -160,7 +160,7 @@ async def refresh_token(
             access_token=access_token,
             refresh_token=refresh_token
         )
-        logger.info("Token refresh successful")
+        # logger.info("Token refresh successful")
         return response
     except HTTPException:
         raise

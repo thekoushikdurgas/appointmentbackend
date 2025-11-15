@@ -37,7 +37,7 @@ async def require_contacts_write_key(
         logger.warning("Contacts write key is not configured; denying write access.")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     if contacts_write_key != configured_key:
-        logger.info("Contacts write key mismatch; denying request.")
+        # logger.info("Contacts write key mismatch; denying request.")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
@@ -152,13 +152,13 @@ async def list_contacts(
         resolved_offset = (filters.page - 1) * page_limit
 
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info(
-        "Listing contacts: limit=%s offset=%d use_cursor=%s filters=%s",
-        page_limit,
-        resolved_offset,
-        use_cursor,
-        active_filter_keys,
-    )
+    # logger.info(
+    #     "Listing contacts: limit=%s offset=%d use_cursor=%s filters=%s",
+    #     page_limit,
+    #     resolved_offset,
+    #     use_cursor,
+    #     active_filter_keys,
+    # )
 
     if (view or "").strip().lower() == "simple":
         page = await service.list_contacts_simple(
@@ -179,12 +179,12 @@ async def list_contacts(
             use_cursor=use_cursor,
         )
 
-    logger.info(
-        "Listed contacts: returned=%d has_next=%s has_previous=%s",
-        len(page.results),
-        bool(page.next),
-        bool(page.previous),
-    )
+    # logger.info(
+    #     "Listed contacts: returned=%d has_next=%s has_previous=%s",
+    #     len(page.results),
+    #     bool(page.next),
+    #     bool(page.previous),
+    # )
     return page
 
 
@@ -257,9 +257,9 @@ async def count_contacts(
 ) -> CountResponse:
     """Return the total number of contacts that match the provided filters."""
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info("Counting contacts with filters=%s", active_filter_keys)
+    # logger.info("Counting contacts with filters=%s", active_filter_keys)
     count = await service.count_contacts(session, filters)
-    logger.info("Counted contacts: filters=%s total=%d", active_filter_keys, count.count)
+    # logger.info("Counted contacts: filters=%s total=%d", active_filter_keys, count.count)
     return count
 
 
@@ -272,9 +272,9 @@ async def get_contact_uuids(
 ) -> UuidListResponse:
     """Return contact UUIDs that match the provided filters."""
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info("Getting contact UUIDs with filters=%s limit=%s", active_filter_keys, limit)
+    # logger.info("Getting contact UUIDs with filters=%s limit=%s", active_filter_keys, limit)
     uuids = await service.get_uuids_by_filters(session, filters, limit)
-    logger.info("Retrieved contact UUIDs: filters=%s count=%d", active_filter_keys, len(uuids))
+    # logger.info("Retrieved contact UUIDs: filters=%s count=%d", active_filter_keys, len(uuids))
     return UuidListResponse(count=len(uuids), uuids=uuids)
 
 
@@ -286,9 +286,9 @@ async def create_contact(
     session: AsyncSession = Depends(get_db),
 ) -> ContactDetail:
     """Create a new contact with optional fields."""
-    logger.info("Creating contact via API")
+    # logger.info("Creating contact via API")
     contact = await service.create_contact(session, payload)
-    logger.info("Created contact via API: uuid=%s", contact.uuid)
+    # logger.info("Created contact via API: uuid=%s", contact.uuid)
     return contact
 
 
@@ -340,13 +340,13 @@ async def _attribute_endpoint(
             detail="offset must be zero or greater",
         )
 
-    logger.info(
-        "Listing contact attribute values: attribute=%s distinct=%s limit=%d offset=%d",
-        attribute_label,
-        effective_params.distinct,
-        effective_params.limit,
-        effective_params.offset,
-    )
+    # logger.info(
+    #     "Listing contact attribute values: attribute=%s distinct=%s limit=%d offset=%d",
+    #     attribute_label,
+    #     effective_params.distinct,
+    #     effective_params.limit,
+    #     effective_params.offset,
+    # )
     values = await service.list_attribute_values(
         session,
         filters,
@@ -375,7 +375,7 @@ async def _attribute_endpoint(
             len(unique_values),
         )
         return unique_values
-    logger.info("Listed contact attribute values: attribute=%s count=%d", attribute_label, len(values))
+    # logger.info("Listed contact attribute values: attribute=%s count=%d", attribute_label, len(values))
     return values
 
 
@@ -673,8 +673,8 @@ async def retrieve_contact(
     current_user: User = Depends(get_current_user),
 ) -> ContactDetail:
     """Retrieve a single contact by UUID."""
-    logger.info("Retrieving contact detail: contact_uuid=%s", contact_uuid)
+    # logger.info("Retrieving contact detail: contact_uuid=%s", contact_uuid)
     contact = await service.get_contact(session, contact_uuid)
-    logger.info("Retrieved contact detail: contact_uuid=%s", contact_uuid)
+    # logger.info("Retrieved contact detail: contact_uuid=%s", contact_uuid)
     return contact
 

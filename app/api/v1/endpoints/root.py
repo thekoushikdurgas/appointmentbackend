@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 async def root() -> dict[str, str]:
     """Return a lightweight descriptor for the API."""
     settings = get_settings()
-    logger.info("Root endpoint requested: project=%s version=%s", settings.PROJECT_NAME, settings.VERSION)
+    # logger.info("Root endpoint requested: project=%s version=%s", settings.PROJECT_NAME, settings.VERSION)
     payload = {
         "name": settings.PROJECT_NAME,
         "version": settings.VERSION,
@@ -31,9 +31,9 @@ async def health() -> dict[str, str]:
     """Return a lightweight health payload for the versioned API."""
     settings = get_settings()
     payload = {"status": "healthy", "environment": settings.ENVIRONMENT}
-    logger.info(
-        "Health endpoint requested: status=%s environment=%s",
-        payload["status"],
-        payload["environment"],
-    )
+    # logger.info(
+    #     "Health endpoint requested: status=%s environment=%s",
+    #     payload["status"],
+    #     payload["environment"],
+    # )
     return payload

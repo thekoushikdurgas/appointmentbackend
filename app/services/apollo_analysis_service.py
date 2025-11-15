@@ -144,7 +144,7 @@ class ApolloAnalysisService:
         Raises:
             HTTPException: If URL is invalid or not an Apollo.io URL
         """
-        logger.info("Analyzing Apollo URL: url_length=%d", len(url))
+        # logger.info("Analyzing Apollo URL: url_length=%d", len(url))
 
         # Validate URL
         if not url or not isinstance(url, str):
@@ -270,11 +270,11 @@ class ApolloAnalysisService:
                 raw_parameters=params,
             )
 
-            logger.info(
-                "URL analysis complete: total_params=%d categories=%d",
-                statistics.total_parameters,
-                statistics.categories_used,
-            )
+            # logger.info(
+            #     "URL analysis complete: total_params=%d categories=%d",
+            #     statistics.total_parameters,
+            #     statistics.categories_used,
+            # )
 
             return response
 
@@ -329,7 +329,7 @@ class ApolloAnalysisService:
             - Exclusion filters are passed as lists
             - ID-based parameters are skipped (no mapping available)
         """
-        logger.info("Mapping Apollo parameters to contact filters: params=%d", len(raw_parameters))
+        # logger.info("Mapping Apollo parameters to contact filters: params=%d", len(raw_parameters))
 
         contact_filters = {}
         mapped_params = set()
@@ -616,10 +616,10 @@ class ApolloAnalysisService:
                 industry_names = get_industry_names_from_ids(tag_ids)
                 if industry_names:
                     contact_filters["industries"] = ",".join(industry_names)
-                    logger.info(
-                        "Mapped organizationIndustryTagIds[] to industries filter: %s",
-                        contact_filters["industries"],
-                    )
+                    # logger.info(
+                    #     "Mapped organizationIndustryTagIds[] to industries filter: %s",
+                    #     contact_filters["industries"],
+                    # )
                     mapped_params.add("organizationIndustryTagIds[]")
                 else:
                     logger.warning(
@@ -638,10 +638,10 @@ class ApolloAnalysisService:
                 industry_names = get_industry_names_from_ids(tag_ids)
                 if industry_names:
                     contact_filters["exclude_industries"] = industry_names
-                    logger.info(
-                        "Mapped organizationNotIndustryTagIds[] to exclude_industries filter: %s",
-                        industry_names,
-                    )
+                    # logger.info(
+                    #     "Mapped organizationNotIndustryTagIds[] to exclude_industries filter: %s",
+                    #     industry_names,
+                    # )
                     mapped_params.add("organizationNotIndustryTagIds[]")
                 else:
                     logger.warning(
@@ -680,12 +680,12 @@ class ApolloAnalysisService:
                 
                 unmapped_params[param_name] = (param_values, reason)
 
-        logger.info(
-            "Mapped Apollo parameters: input_params=%d mapped_params=%d unmapped_params=%d",
-            len(raw_parameters),
-            len(contact_filters),
-            len(unmapped_params),
-        )
+        # logger.info(
+        #     "Mapped Apollo parameters: input_params=%d mapped_params=%d unmapped_params=%d",
+        #     len(raw_parameters),
+        #     len(contact_filters),
+        #     len(unmapped_params),
+        # )
 
         if include_unmapped:
             return contact_filters, unmapped_params
