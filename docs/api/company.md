@@ -366,7 +366,7 @@ GET /api/v1/companies/count/uuids/?search=software&limit=500
 **Notes:**
 
 - Returns only UUIDs, not full company data (efficient for bulk operations)
-- Supports all the same filters as the main companies endpoint
+- **Accepts all the same filter parameters as `/api/v1/companies/count/` endpoint**
 - Useful for exporting specific company sets or bulk updates
 - When `limit` is not provided, returns all matching UUIDs (unlimited)
 
@@ -1037,9 +1037,11 @@ curl -X GET "http://54.87.173.234:8000/api/v1/companies/company/abc-123-uuid/con
 
 **Query Parameters:**
 
-All filter parameters from the list contacts endpoint are supported. Additionally:
+**This endpoint accepts ALL the same query parameters as `/api/v1/companies/company/{company_uuid}/contacts/count/` endpoint, plus an additional parameter:**
 
 - `limit` (integer, optional): Maximum number of UUIDs to return. **If not provided, returns all matching UUIDs (unlimited).** When provided, limits results to the specified number.
+
+All filter parameters from the list contacts endpoint are supported (title, first_name, last_name, email, seniority, department, search, etc.).
 
 **Response:** `200 OK`
 

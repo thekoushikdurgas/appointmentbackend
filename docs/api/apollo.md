@@ -799,6 +799,8 @@ Get a list of contact UUIDs matching Apollo.io URL parameters. This endpoint con
 
 **Query Parameters:**
 
+**This endpoint accepts the same request body and query parameters as `/api/v2/apollo/contacts/count` endpoint, plus an additional parameter:**
+
 - `include_company_name` (string, optional): Include contacts whose company name matches this value (case-insensitive substring match). Supports comma-separated values for OR logic.
 - `exclude_company_name` (array of strings, optional): Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times or as comma-separated values.
 - `limit` (integer, optional): Maximum number of UUIDs to return. **If not provided, returns all matching UUIDs (unlimited).** When provided, limits results to the specified number.
@@ -882,7 +884,7 @@ Authorization: Bearer <access_token>
 **Notes:**
 
 - Returns only UUIDs, not full contact data (efficient for bulk operations)
-- Supports all the same filters as the search endpoint
+- **Accepts the same request body and query parameters as `/api/v2/apollo/contacts/count` endpoint, plus an additional `limit` parameter**
 - Useful for exporting specific contact sets or bulk updates
 - When `limit` is not provided, returns all matching UUIDs (unlimited)
 - Company name filters can be combined with Apollo URL filters
