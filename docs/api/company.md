@@ -319,9 +319,20 @@ Get a list of company UUIDs that match the provided filters. Returns count and l
 
 **Query Parameters:**
 
-All filter parameters from `/api/v1/companies/` are supported. Additionally:
+**This endpoint accepts ALL the same query parameters as `/api/v1/companies/count/` endpoint, plus an additional parameter:**
 
 - `limit` (integer, optional): Maximum number of UUIDs to return. **If not provided, returns all matching UUIDs (unlimited).** When provided, limits results to the specified number.
+
+All filter parameters from `/api/v1/companies/` are supported:
+
+- All text filters (name, search, etc.)
+- All numeric range filters (employees_min, employees_max, annual_revenue_min, annual_revenue_max, total_funding_min, total_funding_max, etc.)
+- All array filters (industries, keywords, technologies, etc.)
+- All exclude filters (exclude_industries, exclude_keywords, exclude_technologies, exclude_locations, etc.)
+- All location filters (city, state, country, address, company_location, etc.)
+- All contact information filters (phone_number, website, linkedin_url, facebook_url, twitter_url, etc.)
+- All date range filters (created_at_after, created_at_before, updated_at_after, updated_at_before, etc.)
+- Distinct parameter
 
 **Response:**
 

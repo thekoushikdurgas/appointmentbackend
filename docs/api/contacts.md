@@ -479,6 +479,61 @@ GET /api/v1/contacts/count/?email_status=valid&industry=Technology
 
 ---
 
+### GET /api/v1/contacts/count/uuids/ - Get Contact UUIDs
+
+Get a list of contact UUIDs that match the provided filters. Returns count and list of UUIDs. Useful for bulk operations or exporting specific contact sets.
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+**This endpoint accepts ALL the same query parameters as `/api/v1/contacts/count/` endpoint, plus an additional parameter:**
+
+- `limit` (integer, optional): Maximum number of UUIDs to return. **If not provided, returns all matching UUIDs (unlimited).** When provided, limits results to the specified number.
+
+All filter parameters from `/api/v1/contacts/` are supported:
+
+- All text filters (first_name, last_name, title, company, etc.)
+- All exact filters (email_status, stage, seniority, etc.)
+- All numeric range filters (employees_min, employees_max, etc.)
+- All date range filters (created_at_after, created_at_before, updated_at_after, updated_at_before, etc.)
+- All exclude filters (exclude_titles, exclude_seniorities, exclude_departments, exclude_company_locations, exclude_contact_locations, exclude_technologies, exclude_keywords, exclude_industries, exclude_company_ids, etc.)
+- Search and distinct parameters
+
+**Response:**
+
+```json
+{
+  "count": 1234,
+  "uuids": ["uuid1", "uuid2", "uuid3", ...]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+- `400 Bad Request`: Invalid query parameters
+- `401 Unauthorized`: Authentication required
+- `500 Internal Server Error`: Error retrieving UUIDs
+
+**Example Requests:**
+
+```txt
+GET /api/v1/contacts/count/uuids/
+GET /api/v1/contacts/count/uuids/?country=United States&city=San Francisco&employees_min=50
+GET /api/v1/contacts/count/uuids/?email_status=valid&industry=Technology&limit=1000
+```
+
+**Notes:**
+
+- Returns all matching UUIDs by default (unlimited) unless `limit` parameter is provided
+- Useful for bulk operations, exports, or when you only need UUIDs without full contact data
+- All the same filtering capabilities as the count endpoint
+
+---
+
 ### POST /api/v1/contacts/ - Create Contact
 
 Create a new contact. Requires admin authentication and the `X-Contacts-Write-Key` header.

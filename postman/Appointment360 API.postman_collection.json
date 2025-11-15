@@ -1943,7 +1943,7 @@
 									}
 								],
 								"url": {
-									"raw": "{{baseUrl}}/contacts/count/uuids/?company={{sampleCompany}}&search=cyber",
+									"raw": "{{baseUrl}}/contacts/count/uuids/?company={{sampleCompany}}&distinct=true&search=cyber",
 									"host": [
 										"{{baseUrl}}"
 									],
@@ -1961,9 +1961,141 @@
 											"disabled": true
 										},
 										{
+											"key": "name",
+											"value": "{{sampleCompany}}",
+											"description": "Alias for company filter.",
+											"disabled": true
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Request distinct contacts based on primary key (boolean).",
+											"disabled": true
+										},
+										{
 											"key": "search",
 											"value": "cyber",
 											"description": "General-purpose search term applied across contact and company text columns (case-insensitive).",
+											"disabled": true
+										},
+										{
+											"key": "first_name",
+											"value": "Patrick",
+											"description": "Case-insensitive substring match against Contact.first_name.",
+											"disabled": true
+										},
+										{
+											"key": "last_name",
+											"value": "McGarry",
+											"description": "Case-insensitive substring match against Contact.last_name.",
+											"disabled": true
+										},
+										{
+											"key": "title",
+											"value": "Chief Technology Officer",
+											"description": "Case-insensitive substring match against Contact.title.",
+											"disabled": true
+										},
+										{
+											"key": "email",
+											"value": "pat.mcgarry@banduracyber.com",
+											"description": "Case-insensitive substring match against Contact.email.",
+											"disabled": true
+										},
+										{
+											"key": "email_status",
+											"value": "Verified",
+											"description": "Case-insensitive substring match against Contact.email_status.",
+											"disabled": true
+										},
+										{
+											"key": "seniority",
+											"value": "C suite",
+											"description": "Case-insensitive substring match against Contact.seniority.",
+											"disabled": true
+										},
+										{
+											"key": "department",
+											"value": "C-Suite",
+											"description": "Substring match against Contact.departments array.",
+											"disabled": true
+										},
+										{
+											"key": "mobile_phone",
+											"value": "+1 937-555-0132",
+											"description": "Substring match against Contact.mobile_phone.",
+											"disabled": true
+										},
+										{
+											"key": "city",
+											"value": "{{sampleCity}}",
+											"description": "Substring match against ContactMetadata.city.",
+											"disabled": true
+										},
+										{
+											"key": "state",
+											"value": "{{sampleState}}",
+											"description": "Substring match against ContactMetadata.state.",
+											"disabled": true
+										},
+										{
+											"key": "country",
+											"value": "{{sampleCountry}}",
+											"description": "Substring match against ContactMetadata.country.",
+											"disabled": true
+										},
+										{
+											"key": "employees_min",
+											"value": "20",
+											"description": "Lower-bound filter for Company.employees_count (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "employees_max",
+											"value": "35",
+											"description": "Upper-bound filter for Company.employees_count (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue_min",
+											"value": "7000000",
+											"description": "Lower-bound filter for Company.annual_revenue (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue_max",
+											"value": "9000000",
+											"description": "Upper-bound filter for Company.annual_revenue (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "technologies",
+											"value": "Salesforce",
+											"description": "Substring match within Company.technologies array.",
+											"disabled": true
+										},
+										{
+											"key": "keywords",
+											"value": "cyber security",
+											"description": "Substring match within Company.keywords array.",
+											"disabled": true
+										},
+										{
+											"key": "industries",
+											"value": "information technology",
+											"description": "Substring match within Company.industries array.",
+											"disabled": true
+										},
+										{
+											"key": "created_at_after",
+											"value": "2024-01-01T00:00:00",
+											"description": "Filter contacts created after ISO 8601 timestamp (inclusive).",
+											"disabled": true
+										},
+										{
+											"key": "created_at_before",
+											"value": "2024-12-31T23:59:59",
+											"description": "Filter contacts created before ISO 8601 timestamp (inclusive).",
 											"disabled": true
 										},
 										{
@@ -3283,14 +3415,194 @@
 									],
 									"query": [
 										{
-											"key": "industries",
-											"value": "Technology",
-											"description": "Substring match within Company.industries array."
+											"key": "name",
+											"value": "{{sampleCompanyName}}",
+											"description": "Case-insensitive substring match against Company.name.",
+											"disabled": true
+										},
+										{
+											"key": "distinct",
+											"value": "true",
+											"description": "Request distinct companies based on primary key (boolean).",
+											"disabled": true
+										},
+										{
+											"key": "search",
+											"value": "technology",
+											"description": "General-purpose search term applied across company text columns (case-insensitive).",
+											"disabled": true
+										},
+										{
+											"key": "employees_count",
+											"value": "250",
+											"description": "Exact match against Company.employees_count (integer, >=0).",
+											"disabled": true
 										},
 										{
 											"key": "employees_min",
 											"value": "100",
 											"description": "Lower-bound filter for Company.employees_count (>=0)."
+										},
+										{
+											"key": "employees_max",
+											"value": "500",
+											"description": "Upper-bound filter applied to Company.employees_count (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue",
+											"value": "50000000",
+											"description": "Exact match against Company.annual_revenue stored as integer dollars (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue_min",
+											"value": "10000000",
+											"description": "Lower-bound filter applied to Company.annual_revenue in integer dollars (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "annual_revenue_max",
+											"value": "100000000",
+											"description": "Upper-bound filter applied to Company.annual_revenue in integer dollars (>=0).",
+											"disabled": true
+										},
+										{
+											"key": "total_funding",
+											"value": "25000000",
+											"description": "Exact match against Company.total_funding (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "total_funding_min",
+											"value": "5000000",
+											"description": "Lower-bound filter applied to Company.total_funding (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "total_funding_max",
+											"value": "50000000",
+											"description": "Upper-bound filter applied to Company.total_funding (integer, >=0).",
+											"disabled": true
+										},
+										{
+											"key": "industries",
+											"value": "Technology",
+											"description": "Substring match within Company.industries array."
+										},
+										{
+											"key": "exclude_industries",
+											"value": "Retail,Healthcare",
+											"description": "Exclude companies whose industries include any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "keywords",
+											"value": "enterprise,saas",
+											"description": "Substring match within Company.keywords array (stored as text array). Comma-separated for OR logic.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_keywords",
+											"value": "retail,consumer",
+											"description": "Exclude companies whose keywords include any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "technologies",
+											"value": "Python,AWS",
+											"description": "Substring match within Company.technologies array (stored as text array). Comma-separated for OR logic.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_technologies",
+											"value": "PHP,WordPress",
+											"description": "Exclude companies whose technologies include any provided value (case-insensitive). Accepts comma-separated values or repeated parameters.",
+											"disabled": true
+										},
+										{
+											"key": "company_location",
+											"value": "San Francisco California United States",
+											"description": "Company text-search filter. Matches Company.text_search covering address, city, state, and country.",
+											"disabled": true
+										},
+										{
+											"key": "city",
+											"value": "San Francisco",
+											"description": "Substring match against CompanyMetadata.city.",
+											"disabled": true
+										},
+										{
+											"key": "state",
+											"value": "California",
+											"description": "Substring match against CompanyMetadata.state.",
+											"disabled": true
+										},
+										{
+											"key": "country",
+											"value": "United States",
+											"description": "Substring match against CompanyMetadata.country.",
+											"disabled": true
+										},
+										{
+											"key": "address",
+											"value": "Main St",
+											"description": "Substring match against Company.address.",
+											"disabled": true
+										},
+										{
+											"key": "phone_number",
+											"value": "+1-415-555",
+											"description": "Substring match against CompanyMetadata.phone_number.",
+											"disabled": true
+										},
+										{
+											"key": "website",
+											"value": "acme.com",
+											"description": "Substring match against CompanyMetadata.website.",
+											"disabled": true
+										},
+										{
+											"key": "linkedin_url",
+											"value": "linkedin.com/company/acme",
+											"description": "Substring match against CompanyMetadata.linkedin_url.",
+											"disabled": true
+										},
+										{
+											"key": "facebook_url",
+											"value": "facebook.com/acme",
+											"description": "Substring match against CompanyMetadata.facebook_url.",
+											"disabled": true
+										},
+										{
+											"key": "twitter_url",
+											"value": "twitter.com/acme",
+											"description": "Substring match against CompanyMetadata.twitter_url.",
+											"disabled": true
+										},
+										{
+											"key": "created_at_after",
+											"value": "2024-01-01T00:00:00",
+											"description": "Filter companies created after the provided ISO 8601 timestamp (inclusive). Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SSZ.",
+											"disabled": true
+										},
+										{
+											"key": "created_at_before",
+											"value": "2024-12-31T23:59:59",
+											"description": "Filter companies created before the provided ISO 8601 timestamp (inclusive). Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SSZ.",
+											"disabled": true
+										},
+										{
+											"key": "updated_at_after",
+											"value": "2024-06-01T00:00:00",
+											"description": "Filter companies updated after the provided ISO 8601 timestamp (inclusive). Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SSZ.",
+											"disabled": true
+										},
+										{
+											"key": "updated_at_before",
+											"value": "2024-10-01T00:00:00",
+											"description": "Filter companies updated before the provided ISO 8601 timestamp (inclusive). Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM:SSZ.",
+											"disabled": true
 										},
 										{
 											"key": "limit",
@@ -4159,6 +4471,42 @@
 											"key": "title",
 											"value": "engineer",
 											"description": "Filter by job title"
+										},
+										{
+											"key": "seniority",
+											"value": "senior",
+											"description": "Filter by seniority level",
+											"disabled": true
+										},
+										{
+											"key": "first_name",
+											"value": "John",
+											"description": "Filter by first name",
+											"disabled": true
+										},
+										{
+											"key": "last_name",
+											"value": "Doe",
+											"description": "Filter by last name",
+											"disabled": true
+										},
+										{
+											"key": "email",
+											"value": "example@company.com",
+											"description": "Filter by email",
+											"disabled": true
+										},
+										{
+											"key": "department",
+											"value": "Engineering",
+											"description": "Filter by department",
+											"disabled": true
+										},
+										{
+											"key": "search",
+											"value": "developer",
+											"description": "General search term",
+											"disabled": true
 										},
 										{
 											"key": "limit",
