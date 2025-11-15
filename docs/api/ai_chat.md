@@ -4,10 +4,6 @@ Complete API documentation for AI chat conversation endpoints, including listing
 
 ## Base URL
 
-```txt
-http://54.87.173.234:8000
-```
-
 For production, use:
 
 ```txt

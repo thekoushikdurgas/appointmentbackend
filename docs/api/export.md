@@ -4,10 +4,6 @@ Complete API documentation for contact and company export endpoints, including C
 
 ## Base URL
 
-```txt
-http://54.87.173.234:8000
-```
-
 For production, use:
 
 ```txt
