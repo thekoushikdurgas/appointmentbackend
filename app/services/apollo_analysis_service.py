@@ -287,6 +287,28 @@ class ApolloAnalysisService:
                 detail="An error occurred while analyzing the URL",
             ) from exc
 
+    @staticmethod
+    def _normalize_title(title: str) -> str:
+        """
+        Normalize a job title by sorting words alphabetically.
+        
+        This allows matching titles regardless of word order:
+        - "Project Manager" → "manager project"
+        - "Manager Project" → "manager project"
+        
+        Args:
+            title: Original job title
+            
+        Returns:
+            Normalized title with words sorted alphabetically (lowercase)
+        """
+        # Convert to lowercase and split into words
+        words = title.lower().split()
+        # Sort words alphabetically
+        words.sort()
+        # Join back together
+        return " ".join(words)
+
     def map_to_contact_filters(
         self, raw_parameters: dict[str, list[str]], include_unmapped: bool = False
     ) -> tuple[dict[str, any], dict[str, tuple[list[str], str]]] | dict[str, any]:
@@ -356,15 +378,53 @@ class ApolloAnalysisService:
         if "personTitles[]" in raw_parameters:
             titles = raw_parameters["personTitles[]"]
             if titles:
-                contact_filters["title"] = ",".join(titles)
+                # Check if includeSimilarTitles is true
+                include_similar = raw_parameters.get("includeSimilarTitles", ["false"])[0].lower() == "true"
+                
+                if include_similar:
+                    # Use exact titles (case will be handled by case-insensitive DB query)
+                    contact_filters["title"] = ",".join(titles)
+                    logger.debug("Using exact titles (includeSimilarTitles=true): %s", titles)
+                else:
+                    # Normalize titles by sorting words alphabetically
+                    normalized_titles = [self._normalize_title(t) for t in titles]
+                    contact_filters["title"] = ",".join(normalized_titles)
+                    logger.debug(
+                        "Normalized titles (includeSimilarTitles=false): %s → %s",
+                        titles,
+                        normalized_titles,
+                    )
+                
                 mapped_params.add("personTitles[]")
 
         # Person Filters - personNotTitles[] → exclude_titles (list)
         if "personNotTitles[]" in raw_parameters:
             exclude_titles = raw_parameters["personNotTitles[]"]
             if exclude_titles:
-                contact_filters["exclude_titles"] = exclude_titles
+                # Check if includeSimilarTitles is true
+                include_similar = raw_parameters.get("includeSimilarTitles", ["false"])[0].lower() == "true"
+                
+                if include_similar:
+                    # Use exact titles (case will be handled by case-insensitive DB query)
+                    contact_filters["exclude_titles"] = exclude_titles
+                    logger.debug("Using exact exclude titles (includeSimilarTitles=true): %s", exclude_titles)
+                else:
+                    # Normalize titles by sorting words alphabetically
+                    normalized_not_titles = [self._normalize_title(t) for t in exclude_titles]
+                    contact_filters["exclude_titles"] = normalized_not_titles
+                    logger.debug(
+                        "Normalized exclude titles (includeSimilarTitles=false): %s → %s",
+                        exclude_titles,
+                        normalized_not_titles,
+                    )
+                
                 mapped_params.add("personNotTitles[]")
+
+        # Mark includeSimilarTitles as mapped if it influenced title processing
+        if "includeSimilarTitles" in raw_parameters:
+            if "personTitles[]" in mapped_params or "personNotTitles[]" in mapped_params:
+                # Mark as mapped if it influenced title processing
+                mapped_params.add("includeSimilarTitles")
 
         # Person Filters - personSeniorities[] → seniority (combine with comma)
         if "personSeniorities[]" in raw_parameters:

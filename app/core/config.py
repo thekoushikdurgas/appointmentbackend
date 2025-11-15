@@ -108,8 +108,11 @@ class Settings(BaseSettings):
     BASE_URL: str = "http://54.87.173.234:8000"  # Base URL for generating full avatar URLs
 
     # Pagination defaults
-    DEFAULT_PAGE_SIZE: int = 25
-    MAX_PAGE_SIZE: int = 100
+    # WARNING: Setting DEFAULT_PAGE_SIZE to None enables unlimited queries by default.
+    # This can have significant performance and memory implications for large datasets.
+    # Consider setting explicit limits for production environments with large datasets.
+    DEFAULT_PAGE_SIZE: Optional[int] = None  # None = unlimited by default
+    MAX_PAGE_SIZE: Optional[int] = None  # None = no cap, can be set for safety limits
 
     # Logging
     LOG_LEVEL: str = "INFO"

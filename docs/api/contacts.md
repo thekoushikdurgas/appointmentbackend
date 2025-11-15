@@ -153,7 +153,7 @@ These filters exclude contacts matching any of the provided values:
 
 #### Pagination Parameters
 
-- `limit` (integer): Number of results per page (max 100, default: 25) - Used with custom ordering
+- `limit` (integer, optional): Number of results per page. **If not provided, returns all matching contacts (unlimited).** When provided, limits results to the specified number (capped at MAX_PAGE_SIZE).
 - `offset` (integer): Offset for pagination (used when custom ordering is applied)
 - `page_size` (integer): Page size for cursor pagination (used when ordering by created_at, default: 25, max: 100)
 
@@ -537,7 +537,7 @@ These endpoints return only the `id` and the specific field value for each conta
 
 - `search` (string): Search term to filter results (case-insensitive, searches within the field)
 - `distinct` (boolean): If `true`, returns only distinct field values (default: `false`)
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 ### GET /api/v1/contacts/title/ - List Titles
@@ -552,7 +552,7 @@ Get list of contacts with only id and title field.
 
 - `search` (string): Search term to filter results (case-insensitive, searches within title field)
 - `distinct` (boolean): If `true`, returns only distinct title values (default: `false`)
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -601,7 +601,7 @@ Get list of contacts with only id and company field.
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct company values
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -649,7 +649,7 @@ Get list of contacts with only id and industry field.
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct industry values
 - `separated` (boolean): If `true`, expands comma-separated industries into individual records (one record per industry). Each contact ID may appear multiple times.
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -692,7 +692,7 @@ Get list of contacts with only id and keywords field. Supports expansion of comm
   - When `separated=true`: Uses two-stage filtering (pre-filter at DB level, then post-filter individual keywords after expansion)
 - `separated` (boolean): If `true`, expands comma-separated keywords into individual records (one record per keyword). Each contact ID may appear multiple times.
 - `distinct` (boolean): If `true`, returns only distinct keyword values. When combined with `separated=true`, returns unique individual keywords across all contacts.
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -813,7 +813,7 @@ Get list of contacts with only id and technologies field.
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct technology values
 - `separated` (boolean): If `true`, expands comma-separated technologies into individual records (one record per technology). Each contact ID may appear multiple times.
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -853,7 +853,7 @@ Return address text for related companies, sourced from the `Company.text_search
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct company address values
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -893,7 +893,7 @@ Return person-level address text sourced from the `Contact.text_search` column.
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct contact address values
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -933,7 +933,7 @@ Get list of contacts with only id and city field (from ContactMetadata).
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct city values
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -968,7 +968,7 @@ Get list of contacts with only id and state field (from ContactMetadata).
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct state values
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -1003,7 +1003,7 @@ Get list of contacts with only id and country field (from ContactMetadata).
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct country values
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -1038,7 +1038,7 @@ Get list of contacts with only id and company city field (from CompanyMetadata).
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct company city values
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -1073,7 +1073,7 @@ Get list of contacts with only id and company state field (from CompanyMetadata)
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct company state values
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**
@@ -1108,7 +1108,7 @@ Get list of contacts with only id and company country field (from CompanyMetadat
 
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct company country values
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 
 **Response:**

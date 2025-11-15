@@ -15,7 +15,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.common import CountResponse, CursorPage
+from app.schemas.common import CountResponse, CursorPage, UuidListResponse
 from app.schemas.companies import CompanyCreate, CompanyDetail, CompanyListItem, CompanyUpdate
 from app.schemas.contacts import ContactListItem
 from app.schemas.filters import AttributeListParams, CompanyFilterParams
@@ -78,18 +78,37 @@ async def resolve_attribute_params(request: Request) -> AttributeListParams:
 def _resolve_pagination(
     filters: CompanyFilterParams,
     limit: Optional[int],
-) -> int:
+) -> Optional[int]:
     """Choose the most appropriate page size within configured bounds."""
-    page_size = filters.page_size if filters.page_size is not None else limit or settings.DEFAULT_PAGE_SIZE
-    resolved = min(page_size, settings.MAX_PAGE_SIZE)
+    # If explicit limit is provided, use it (no cap when explicitly requested)
+    if limit is not None:
+        logger.debug(
+            "Resolved pagination: explicit limit=%d (no cap applied)",
+            limit,
+        )
+        return limit
+    
+    # If page_size is specified in filters, use it (with cap if MAX_PAGE_SIZE is set)
+    if filters.page_size is not None:
+        if settings.MAX_PAGE_SIZE is not None:
+            resolved = min(filters.page_size, settings.MAX_PAGE_SIZE)
+            logger.debug(
+                "Resolved pagination: page_size=%d capped to %d",
+                filters.page_size,
+                resolved,
+            )
+            return resolved
+        logger.debug(
+            "Resolved pagination: page_size=%d (no cap)",
+            filters.page_size,
+        )
+        return filters.page_size
+    
+    # Default: unlimited (None)
     logger.debug(
-        "Resolved pagination: requested=%s limit_param=%s effective=%d max_allowed=%d",
-        filters.page_size,
-        limit,
-        resolved,
-        settings.MAX_PAGE_SIZE,
+        "Resolved pagination: default=unlimited (None)",
     )
-    return resolved
+    return None
 
 
 def _parse_iterable_like(value: Any) -> Iterable[str]:
@@ -175,12 +194,12 @@ async def list_companies(
                 detail="Invalid cursor value",
             ) from exc
         use_cursor = True
-    elif filters.page is not None:
+    elif filters.page is not None and page_limit is not None:
         resolved_offset = (filters.page - 1) * page_limit
 
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
     logger.info(
-        "Listing companies: limit=%d offset=%d use_cursor=%s filters=%s",
+        "Listing companies: limit=%s offset=%d use_cursor=%s filters=%s",
         page_limit,
         resolved_offset,
         use_cursor,
@@ -217,6 +236,21 @@ async def count_companies(
     count = await service.count_companies(session, filters)
     logger.info("Counted companies: filters=%s total=%d", active_filter_keys, count.count)
     return count
+
+
+@router.get("/count/uuids/", response_model=UuidListResponse)
+async def get_company_uuids(
+    filters: CompanyFilterParams = Depends(resolve_company_filters),
+    limit: Optional[int] = Query(None, ge=1, description="Limit the number of UUIDs returned. If not provided, returns all matching UUIDs."),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UuidListResponse:
+    """Return company UUIDs that match the provided filters."""
+    active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+    logger.info("Getting company UUIDs with filters=%s limit=%s", active_filter_keys, limit)
+    uuids = await service.get_uuids_by_filters(session, filters, limit)
+    logger.info("Retrieved company UUIDs: filters=%s count=%d", active_filter_keys, len(uuids))
+    return UuidListResponse(count=len(uuids), uuids=uuids)
 
 
 @router.post("/", response_model=CompanyDetail, status_code=status.HTTP_201_CREATED)
@@ -607,10 +641,16 @@ async def list_company_contacts(
     from app.services.contacts_service import ContactsService
     from app.utils.cursor import decode_offset_cursor
     
-    page_limit = min(
-        filters.page_size if filters.page_size is not None else limit or settings.DEFAULT_PAGE_SIZE,
-        settings.MAX_PAGE_SIZE,
-    )
+    # Resolve pagination for company contacts
+    if limit is not None:
+        page_limit = limit
+    elif filters.page_size is not None:
+        if settings.MAX_PAGE_SIZE is not None:
+            page_limit = min(filters.page_size, settings.MAX_PAGE_SIZE)
+        else:
+            page_limit = filters.page_size
+    else:
+        page_limit = None  # Unlimited
     
     use_cursor = False
     resolved_offset = offset or 0
@@ -625,12 +665,12 @@ async def list_company_contacts(
                 detail="Invalid cursor value",
             ) from exc
         use_cursor = True
-    elif filters.page is not None:
+    elif filters.page is not None and page_limit is not None:
         resolved_offset = (filters.page - 1) * page_limit
     
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
     logger.info(
-        "Listing contacts for company %s: limit=%d offset=%d use_cursor=%s filters=%s",
+        "Listing contacts for company %s: limit=%s offset=%d use_cursor=%s filters=%s",
         company_uuid,
         page_limit,
         resolved_offset,
@@ -688,6 +728,42 @@ async def count_company_contacts(
         company_uuid,
     )
     return count
+
+
+@router.get("/company/{company_uuid}/contacts/count/uuids/", response_model=UuidListResponse)
+async def get_company_contact_uuids(
+    company_uuid: str,
+    filters: "CompanyContactFilterParams" = Depends(resolve_company_contact_filters),
+    limit: Optional[int] = Query(None, ge=1, description="Limit the number of UUIDs returned. If not provided, returns all matching UUIDs."),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UuidListResponse:
+    """Return contact UUIDs for a specific company that match the provided filters."""
+    from app.schemas.filters import CompanyContactFilterParams
+    from app.services.contacts_service import ContactsService
+    
+    active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+    logger.info(
+        "Getting contact UUIDs for company %s with filters=%s limit=%s",
+        company_uuid,
+        active_filter_keys,
+        limit,
+    )
+    
+    contacts_service = ContactsService()
+    uuids = await contacts_service.get_uuids_by_company(
+        session,
+        company_uuid,
+        filters,
+        limit,
+    )
+    
+    logger.info(
+        "Retrieved %d contact UUIDs for company %s",
+        len(uuids),
+        company_uuid,
+    )
+    return UuidListResponse(count=len(uuids), uuids=uuids)
 
 
 async def _company_contact_attribute_endpoint(

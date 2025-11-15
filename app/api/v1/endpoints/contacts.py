@@ -15,7 +15,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.common import CountResponse, CursorPage
+from app.schemas.common import CountResponse, CursorPage, UuidListResponse
 from app.schemas.contacts import ContactCreate, ContactDetail, ContactListItem, ContactSimpleItem
 from app.schemas.filters import AttributeListParams, ContactFilterParams
 from app.services.contacts_service import ContactsService
@@ -82,18 +82,37 @@ async def resolve_attribute_params(request: Request) -> AttributeListParams:
 def _resolve_pagination(
     filters: ContactFilterParams,
     limit: Optional[int],
-) -> int:
+) -> Optional[int]:
     """Choose the most appropriate page size within configured bounds."""
-    page_size = filters.page_size if filters.page_size is not None else limit or settings.DEFAULT_PAGE_SIZE
-    resolved = min(page_size, settings.MAX_PAGE_SIZE)
+    # If explicit limit is provided, use it (no cap when explicitly requested)
+    if limit is not None:
+        logger.debug(
+            "Resolved pagination: explicit limit=%d (no cap applied)",
+            limit,
+        )
+        return limit
+    
+    # If page_size is specified in filters, use it (with cap if MAX_PAGE_SIZE is set)
+    if filters.page_size is not None:
+        if settings.MAX_PAGE_SIZE is not None:
+            resolved = min(filters.page_size, settings.MAX_PAGE_SIZE)
+            logger.debug(
+                "Resolved pagination: page_size=%d capped to %d",
+                filters.page_size,
+                resolved,
+            )
+            return resolved
+        logger.debug(
+            "Resolved pagination: page_size=%d (no cap)",
+            filters.page_size,
+        )
+        return filters.page_size
+    
+    # Default: unlimited (None)
     logger.debug(
-        "Resolved pagination: requested=%s limit_param=%s effective=%d max_allowed=%d",
-        filters.page_size,
-        limit,
-        resolved,
-        settings.MAX_PAGE_SIZE,
+        "Resolved pagination: default=unlimited (None)",
     )
-    return resolved
+    return None
 
 
 @router.get("/", response_model=CursorPage[Union[ContactListItem, ContactSimpleItem]])
@@ -129,12 +148,12 @@ async def list_contacts(
                 detail="Invalid cursor value",
             ) from exc
         use_cursor = True
-    elif filters.page is not None:
+    elif filters.page is not None and page_limit is not None:
         resolved_offset = (filters.page - 1) * page_limit
 
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
     logger.info(
-        "Listing contacts: limit=%d offset=%d use_cursor=%s filters=%s",
+        "Listing contacts: limit=%s offset=%d use_cursor=%s filters=%s",
         page_limit,
         resolved_offset,
         use_cursor,
@@ -244,6 +263,21 @@ async def count_contacts(
     return count
 
 
+@router.get("/count/uuids/", response_model=UuidListResponse)
+async def get_contact_uuids(
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
+    limit: Optional[int] = Query(None, ge=1, description="Limit the number of UUIDs returned. If not provided, returns all matching UUIDs."),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UuidListResponse:
+    """Return contact UUIDs that match the provided filters."""
+    active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+    logger.info("Getting contact UUIDs with filters=%s limit=%s", active_filter_keys, limit)
+    uuids = await service.get_uuids_by_filters(session, filters, limit)
+    logger.info("Retrieved contact UUIDs: filters=%s count=%d", active_filter_keys, len(uuids))
+    return UuidListResponse(count=len(uuids), uuids=uuids)
+
+
 @router.post("/", response_model=ContactDetail, status_code=status.HTTP_201_CREATED)
 async def create_contact(
     payload: ContactCreate,
@@ -289,6 +323,11 @@ async def _attribute_endpoint(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="limit must be a positive integer",
+        )
+    if params.limit is None:
+        logger.warning(
+            "Unlimited attribute query requested - this may return a large dataset. attribute=%s",
+            attribute_label,
         )
     if params.offset is not None and params.offset < 0:
         logger.warning(

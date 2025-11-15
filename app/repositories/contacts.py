@@ -362,13 +362,13 @@ class ContactRepository(AsyncRepository[Contact]):
         self,
         session: AsyncSession,
         filters: ContactFilterParams,
-        limit: int,
+        limit: Optional[int],
         offset: int,
     ) -> Sequence[tuple[Contact, Company, ContactMetadata, CompanyMetadata]]:
         """Return contacts with associated company and metadata rows."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         logger.debug(
-            "Listing contacts: limit=%d offset=%d ordering=%s filters=%s",
+            "Listing contacts: limit=%s offset=%d ordering=%s filters=%s",
             limit,
             offset,
             filters.ordering,
@@ -441,7 +441,9 @@ class ContactRepository(AsyncRepository[Contact]):
             "last_raised_at": company_meta_alias.last_raised_at,
         }
         stmt = apply_ordering(stmt, filters.ordering, ordering_map)
-        stmt = stmt.limit(limit).offset(offset)
+        stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         result = await session.execute(stmt)
         rows = result.fetchall()
         logger.debug("Retrieved %d contacts from repository query", len(rows))
@@ -581,7 +583,9 @@ class ContactRepository(AsyncRepository[Contact]):
         if params.distinct and not params.ordering:
             stmt = stmt.order_by(column_expression.asc())
         
-        stmt = stmt.limit(params.limit).offset(params.offset)
+        stmt = stmt.offset(params.offset)
+        if params.limit is not None:
+            stmt = stmt.limit(params.limit)
         result = await session.execute(stmt)
         values = []
         for (value,) in result.fetchall():
@@ -660,10 +664,118 @@ class ContactRepository(AsyncRepository[Contact]):
         if params.distinct:
             attr_stmt = attr_stmt.distinct()
 
-        attr_stmt = attr_stmt.limit(params.limit).offset(params.offset)
+        attr_stmt = attr_stmt.offset(params.offset)
+        if params.limit is not None:
+            attr_stmt = attr_stmt.limit(params.limit)
         result = await session.execute(attr_stmt)
         values = [value for (value,) in result.fetchall() if value]
         return values
+
+    async def get_uuids_by_filters(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        limit: Optional[int] = None,
+    ) -> list[str]:
+        """Return contact UUIDs that match the supplied filters (efficient UUID-only query)."""
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Getting contact UUIDs: limit=%s filters=%s",
+            limit,
+            active_filter_keys,
+        )
+        company_alias = aliased(Company, name="company_for_uuids")
+        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata_for_uuids")
+        company_meta_alias = aliased(CompanyMetadata, name="company_metadata_for_uuids")
+
+        stmt = (
+            select(Contact.uuid)
+            .select_from(Contact)
+            .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+            .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+        )
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        stmt = self.apply_filters(
+            stmt,
+            filters,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+        stmt = self.apply_search_terms(
+            stmt,
+            filters.search,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+        stmt = stmt.where(Contact.uuid.isnot(None))
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await session.execute(stmt)
+        uuids = [uuid for (uuid,) in result.fetchall() if uuid]
+        logger.debug("Retrieved %d contact UUIDs", len(uuids))
+        return uuids
+
+    async def get_uuids_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        filters: "CompanyContactFilterParams",
+        limit: Optional[int] = None,
+    ) -> list[str]:
+        """Return contact UUIDs for a specific company that match the supplied filters."""
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Getting contact UUIDs for company %s: limit=%s filters=%s",
+            company_uuid,
+            limit,
+            active_filter_keys,
+        )
+        company_alias = aliased(Company, name="company_for_uuids")
+        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata_for_uuids")
+        company_meta_alias = aliased(CompanyMetadata, name="company_metadata_for_uuids")
+
+        stmt = (
+            select(Contact.uuid)
+            .select_from(Contact)
+            .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+            .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+        )
+        
+        # Filter by company UUID
+        stmt = stmt.where(Contact.company_id == company_uuid)
+        
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        stmt = self._apply_company_contact_filters(
+            stmt,
+            filters,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+        stmt = self._apply_company_contact_search(
+            stmt,
+            filters.search,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+        stmt = stmt.where(Contact.uuid.isnot(None))
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await session.execute(stmt)
+        uuids = [uuid for (uuid,) in result.fetchall() if uuid]
+        logger.debug("Retrieved %d contact UUIDs for company %s", len(uuids), company_uuid)
+        return uuids
 
     @staticmethod
     def _split_filter_values(raw_value: str) -> list[str]:
@@ -855,7 +967,7 @@ class ContactRepository(AsyncRepository[Contact]):
         session: AsyncSession,
         company_uuid: str,
         filters: "CompanyContactFilterParams",
-        limit: int,
+        limit: Optional[int],
         offset: int,
     ) -> Sequence[tuple[Contact, Company, ContactMetadata, CompanyMetadata]]:
         """Return contacts for a specific company with associated metadata rows."""
@@ -863,7 +975,7 @@ class ContactRepository(AsyncRepository[Contact]):
         
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         logger.debug(
-            "Listing contacts for company %s: limit=%d offset=%d ordering=%s filters=%s",
+            "Listing contacts for company %s: limit=%s offset=%d ordering=%s filters=%s",
             company_uuid,
             limit,
             offset,
@@ -918,7 +1030,9 @@ class ContactRepository(AsyncRepository[Contact]):
             "country": contact_meta_alias.country,
         }
         stmt = apply_ordering(stmt, filters.ordering, ordering_map)
-        stmt = stmt.limit(limit).offset(offset)
+        stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         result = await session.execute(stmt)
         rows = result.fetchall()
         logger.debug("Retrieved %d contacts for company %s", len(rows), company_uuid)

@@ -185,7 +185,7 @@ class CompaniesService:
         session: AsyncSession,
         filters: CompanyFilterParams,
         *,
-        limit: int,
+        limit: Optional[int],
         offset: int,
         request_url: str,
         use_cursor: bool = False,
@@ -193,12 +193,17 @@ class CompaniesService:
         """List companies and build pagination metadata."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         self.logger.info(
-            "Service listing companies: limit=%d offset=%d use_cursor=%s filters=%s",
+            "Service listing companies: limit=%s offset=%d use_cursor=%s filters=%s",
             limit,
             offset,
             use_cursor,
             active_filter_keys,
         )
+        if limit is None:
+            self.logger.warning(
+                "Unlimited query requested for companies - this may return a large dataset. filters=%s",
+                active_filter_keys,
+            )
         try:
             rows = await self.repository.list_companies(session, filters, limit, offset)
         except ValueError as exc:
@@ -212,7 +217,8 @@ class CompaniesService:
         ]
 
         next_link = None
-        if len(results) == limit:
+        # Only show next link if we have a limit and returned exactly that many results
+        if limit is not None and len(results) == limit:
             if use_cursor:
                 next_cursor = encode_offset_cursor(offset + limit)
                 next_link = build_cursor_link(request_url, next_cursor)
@@ -225,11 +231,11 @@ class CompaniesService:
         previous_link = None
         if offset > 0:
             if use_cursor:
-                prev_offset = max(offset - limit, 0)
+                prev_offset = max(offset - (limit or 0), 0)
                 prev_cursor = encode_offset_cursor(prev_offset)
                 previous_link = build_cursor_link(request_url, prev_cursor)
             else:
-                prev_offset = max(offset - limit, 0)
+                prev_offset = max(offset - (limit or 0), 0)
                 previous_link = build_pagination_link(request_url, limit=limit, offset=prev_offset)
         self.logger.info(
             "List companies pagination prepared: next=%s previous=%s",
@@ -256,6 +262,28 @@ class CompaniesService:
         self.logger.info("Service counted companies: total=%d", total)
         self.logger.debug("Exiting CompaniesService.count_companies")
         return CountResponse(count=total)
+
+    async def get_uuids_by_filters(
+        self,
+        session: AsyncSession,
+        filters: CompanyFilterParams,
+        limit: Optional[int] = None,
+    ) -> list[str]:
+        """Return company UUIDs that match the supplied filters."""
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        self.logger.info(
+            "Service getting company UUIDs: limit=%s filters=%s",
+            limit,
+            active_filter_keys,
+        )
+        if limit is None:
+            self.logger.warning(
+                "Unlimited UUID query requested - this may return a large dataset. filters=%s",
+                active_filter_keys,
+            )
+        uuids = await self.repository.get_uuids_by_filters(session, filters, limit)
+        self.logger.info("Service retrieved %d company UUIDs", len(uuids))
+        return uuids
 
     async def get_company(
         self,
@@ -313,12 +341,17 @@ class CompaniesService:
         """Return a list of attribute values for companies."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         self.logger.info(
-            "Service listing attribute values: limit=%d offset=%d distinct=%s filters=%s",
+            "Service listing attribute values: limit=%s offset=%d distinct=%s filters=%s",
             params.limit,
             params.offset,
             params.distinct,
             active_filter_keys,
         )
+        if params.limit is None:
+            self.logger.warning(
+                "Unlimited attribute query requested - this may return a large dataset. filters=%s",
+                active_filter_keys,
+            )
         try:
             values = await self.repository.list_attribute_values(
                 session,

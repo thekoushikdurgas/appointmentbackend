@@ -25,6 +25,13 @@ class ExportStatus(str, PyEnum):
     failed = "failed"
 
 
+class ExportType(str, PyEnum):
+    """Enumerates the types of exports."""
+
+    contacts = "contacts"
+    companies = "companies"
+
+
 class UserExport(Base):
     """Represents a CSV export job tracked by the system."""
 
@@ -44,10 +51,18 @@ class UserExport(Base):
         index=True,
         nullable=False,
     )
+    export_type: Mapped[ExportType] = mapped_column(
+        SQLEnum(ExportType, name="export_type"),
+        default=ExportType.contacts,
+        index=True,
+        nullable=False,
+    )
     file_path: Mapped[Optional[str]] = mapped_column(Text)
     file_name: Mapped[Optional[str]] = mapped_column(Text)
     contact_count: Mapped[int] = mapped_column(Integer, default=0)
     contact_uuids: Mapped[Optional[list[str]]] = mapped_column(StringList())
+    company_count: Mapped[int] = mapped_column(Integer, default=0)
+    company_uuids: Mapped[Optional[list[str]]] = mapped_column(StringList())
     status: Mapped[ExportStatus] = mapped_column(
         SQLEnum(ExportStatus, name="export_status"),
         default=ExportStatus.pending,
@@ -64,5 +79,6 @@ class UserExport(Base):
         Index("idx_user_exports_expires_at", "expires_at"),
         Index("idx_user_exports_status", "status"),
         Index("idx_user_exports_created_at", "created_at"),
+        Index("idx_user_exports_export_type", "export_type"),
     )
 

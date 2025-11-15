@@ -1,4 +1,4 @@
-"""Endpoints supporting contact export workflows."""
+"""Endpoints supporting contact and company export workflows."""
 
 from pathlib import Path
 
@@ -6,12 +6,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_admin, get_current_user
 from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models.exports import ExportStatus
+from app.models.exports import ExportStatus, ExportType
 from app.models.user import User
-from app.schemas.exports import ContactExportRequest, ContactExportResponse
+from app.schemas.exports import (
+    CompanyExportRequest,
+    CompanyExportResponse,
+    ContactExportRequest,
+    ContactExportResponse,
+    ExportListResponse,
+    UserExportDetail,
+)
 from app.services.export_service import ExportService
 from app.utils.signed_url import verify_signed_url
 
@@ -50,7 +57,8 @@ async def create_contact_export(
         export = await service.create_export(
             session,
             current_user.id,
-            request.contact_uuids,
+            ExportType.contacts,
+            contact_uuids=request.contact_uuids,
         )
         
         # Generate CSV file
@@ -67,7 +75,7 @@ async def create_contact_export(
                 export.export_id,
                 ExportStatus.completed,
                 file_path,
-                len(request.contact_uuids),
+                contact_count=len(request.contact_uuids),
             )
             
             logger.info(
@@ -112,6 +120,38 @@ async def create_contact_export(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create export",
+        ) from exc
+
+
+@router.get("/", response_model=ExportListResponse)
+async def list_exports(
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ExportListResponse:
+    """
+    List all exports for the current user.
+    
+    Returns all exports created by the authenticated user, ordered by creation date
+    (newest first). Includes both contact and company exports.
+    """
+    logger.info("Listing exports for user: user_id=%s", current_user.id)
+    
+    try:
+        exports = await service.list_user_exports(session, current_user.id)
+        
+        export_details = [UserExportDetail.model_validate(export) for export in exports]
+        
+        logger.info("Found %d exports for user: user_id=%s", len(export_details), current_user.id)
+        
+        return ExportListResponse(
+            exports=export_details,
+            total=len(export_details),
+        )
+    except Exception as exc:
+        logger.exception("Failed to list exports: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list exports",
         ) from exc
 
 
@@ -208,4 +248,130 @@ async def download_export(
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+
+@router.post("/companies/export", response_model=CompanyExportResponse, status_code=status.HTTP_201_CREATED)
+async def create_company_export(
+    request: CompanyExportRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CompanyExportResponse:
+    """
+    Create a CSV export of selected companies.
+    
+    Accepts a list of company UUIDs and generates a CSV file containing all company
+    and company metadata fields. Returns a signed temporary download URL that expires
+    after 24 hours.
+    """
+    logger.info(
+        "Received company export request: user_id=%s company_count=%d",
+        current_user.id,
+        len(request.company_uuids),
+    )
+    
+    if not request.company_uuids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one company UUID is required",
+        )
+    
+    try:
+        # Create export record
+        export = await service.create_export(
+            session,
+            current_user.id,
+            ExportType.companies,
+            company_uuids=request.company_uuids,
+        )
+        
+        # Generate CSV file
+        try:
+            file_path = await service.generate_company_csv(
+                session,
+                export.export_id,
+                request.company_uuids,
+            )
+            
+            # Update export with file path and generate signed URL
+            export = await service.update_export_status(
+                session,
+                export.export_id,
+                ExportStatus.completed,
+                file_path,
+                company_count=len(request.company_uuids),
+            )
+            
+            logger.info(
+                "Export completed: export_id=%s user_id=%s company_count=%d",
+                export.export_id,
+                current_user.id,
+                export.company_count,
+            )
+            
+            return CompanyExportResponse(
+                export_id=export.export_id,
+                download_url=export.download_url or "",
+                expires_at=export.expires_at or export.created_at,
+                company_count=export.company_count,
+                status=export.status,
+            )
+            
+        except Exception as csv_exc:
+            logger.exception("Failed to generate CSV: export_id=%s", export.export_id)
+            # Update export status to failed
+            try:
+                from sqlalchemy import select
+                from app.models.exports import UserExport
+                stmt = select(UserExport).where(UserExport.export_id == export.export_id)
+                result = await session.execute(stmt)
+                failed_export = result.scalar_one_or_none()
+                if failed_export:
+                    failed_export.status = ExportStatus.failed
+                    await session.commit()
+            except Exception:
+                pass
+            
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to generate CSV: {str(csv_exc)}",
+            ) from csv_exc
+            
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Export creation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create export",
+        ) from exc
+
+
+@router.delete("/files", status_code=status.HTTP_200_OK)
+async def delete_all_csv_files(
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+) -> dict:
+    """
+    Delete all CSV files from the exports directory (admin only).
+    
+    This endpoint deletes all CSV files in the exports directory and optionally
+    cleans up expired export records from the database.
+    """
+    logger.info("Admin CSV cleanup request: user_id=%s", current_user.id)
+    
+    try:
+        deleted_count = await service.delete_all_csv_files(session)
+        
+        logger.info("CSV cleanup completed: deleted_count=%d", deleted_count)
+        
+        return {
+            "message": "CSV files deleted successfully",
+            "deleted_count": deleted_count,
+        }
+    except Exception as exc:
+        logger.exception("Failed to delete CSV files: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete CSV files",
+        ) from exc
 

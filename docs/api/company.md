@@ -123,7 +123,7 @@ These filters exclude companies matching any of the provided values:
 
 #### Pagination Parameters
 
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Number of results per page. **If not provided, returns all matching companies (unlimited).** When provided, limits results to the specified number (capped at MAX_PAGE_SIZE).
 - `offset` (integer): Offset for pagination
 - `page` (integer): 1-indexed page number (converts to offset)
 - `page_size` (integer): Page size override (max 100, default: 25)
@@ -309,6 +309,58 @@ GET /api/v1/companies/count/?city=San Francisco&annual_revenue_min=10000000
 
 ---
 
+### GET /api/v1/companies/count/uuids/ - Get Company UUIDs
+
+Get a list of company UUIDs that match the provided filters. Returns count and list of UUIDs. Useful for bulk operations or exporting specific company sets.
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+All filter parameters from `/api/v1/companies/` are supported. Additionally:
+
+- `limit` (integer, optional): Maximum number of UUIDs to return. **If not provided, returns all matching UUIDs (unlimited).** When provided, limits results to the specified number.
+
+**Response:**
+
+**Success (200 OK):**
+
+```json
+{
+  "count": 567,
+  "uuids": [
+    "398cce44-233d-5f7c-aea1-e4a6a79df10c",
+    "498cce44-233d-5f7c-aea1-e4a6a79df10d",
+    "598cce44-233d-5f7c-aea1-e4a6a79df10e"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+- `401 Unauthorized`: Authentication required
+- `500 Internal Server Error`: Error retrieving UUIDs
+
+**Example Requests:**
+
+```txt
+GET /api/v1/companies/count/uuids/
+GET /api/v1/companies/count/uuids/?industries=Technology&employees_min=100
+GET /api/v1/companies/count/uuids/?search=software&limit=500
+```
+
+**Notes:**
+
+- Returns only UUIDs, not full company data (efficient for bulk operations)
+- Supports all the same filters as the main companies endpoint
+- Useful for exporting specific company sets or bulk updates
+- When `limit` is not provided, returns all matching UUIDs (unlimited)
+
+---
+
 ### POST /api/v1/companies/ - Create Company
 
 Create a new company. Requires admin authentication and the `X-Companies-Write-Key` header.
@@ -473,7 +525,7 @@ These endpoints return distinct values for specific company attributes. Useful f
 - `search` (string): Search term to filter results (case-insensitive)
 - `distinct` (boolean): If `true`, returns only distinct values (default: `true`)
 - `separated` (boolean): If `true`, expands array columns into individual records (for industries, keywords, technologies)
-- `limit` (integer): Number of results per page (max 100, default: 25)
+- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer): Offset for pagination
 - `ordering` (string): Sort order. Valid values: `value`, `-value`, `count`, `-count`
 
@@ -861,7 +913,7 @@ List and filter contacts belonging to a specific company.
 
 *Pagination:*
 
-- `limit` (integer, >=1): Number of items per page
+- `limit` (integer, optional): Number of items per page. **If not provided, returns all matching contacts (unlimited).** When provided, limits results to the specified number.
 - `offset` (integer, >=0): Zero-based offset into result set
 - `cursor` (string): Opaque cursor token for pagination
 - `page` (integer, >=1): 1-indexed page number
@@ -957,6 +1009,53 @@ curl -X GET "http://54.87.173.234:8000/api/v1/companies/company/abc-123-uuid/con
 curl -X GET "http://54.87.173.234:8000/api/v1/companies/company/abc-123-uuid/contacts/count/?title=engineer" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
+
+---
+
+### Get Contact UUIDs for Company
+
+**Endpoint:** `GET /api/v1/companies/company/{company_uuid}/contacts/count/uuids/`
+
+**Description:** Return a list of contact UUIDs for a specific company that match the provided filters. Returns count and list of UUIDs. Useful for bulk operations on company contacts.
+
+**Authentication:** Required (Bearer token)
+
+**Path Parameters:**
+
+- `company_uuid` (string, required): Company UUID identifier
+
+**Query Parameters:**
+
+All filter parameters from the list contacts endpoint are supported. Additionally:
+
+- `limit` (integer, optional): Maximum number of UUIDs to return. **If not provided, returns all matching UUIDs (unlimited).** When provided, limits results to the specified number.
+
+**Response:** `200 OK`
+
+```json
+{
+  "count": 45,
+  "uuids": [
+    "contact-uuid-1",
+    "contact-uuid-2",
+    "contact-uuid-3"
+  ]
+}
+```
+
+**Example Request:**
+
+```bash
+curl -X GET "http://54.87.173.234:8000/api/v1/companies/company/abc-123-uuid/contacts/count/uuids/?title=engineer" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+**Notes:**
+
+- Returns only UUIDs, not full contact data (efficient for bulk operations)
+- Supports all the same filters as the list contacts endpoint
+- Useful for exporting specific contact sets or bulk updates
+- When `limit` is not provided, returns all matching UUIDs (unlimited)
 
 ---
 

@@ -817,7 +817,7 @@ class AttributeListParams(BaseModel):
 
     search: Optional[str] = None
     distinct: bool = False
-    limit: int = 25
+    limit: Optional[int] = None  # None = unlimited by default
     offset: int = 0
     ordering: Optional[str] = None
 

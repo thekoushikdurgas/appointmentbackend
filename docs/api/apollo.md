@@ -52,6 +52,8 @@ All endpoints support CORS (Cross-Origin Resource Sharing) for browser-based req
 
 Analyze an Apollo.io URL and return structured parameter breakdown. This endpoint parses Apollo.io search URLs (typically from the People Search page) and extracts all query parameters, categorizing them into logical groups.
 
+**Note:** Industry Tag IDs (`organizationIndustryTagIds[]`, `organizationNotIndustryTagIds[]`) are automatically converted to readable industry names in the API response for better usability.
+
 **Headers:**
 
 - `Authorization: Bearer <access_token>` (required)
@@ -248,8 +250,8 @@ The endpoint categorizes parameters into the following groups:
    - `organizationNumEmployeesRanges[]`: Company size ranges
    - `organizationLocations[]`: Organization locations to include
    - `organizationNotLocations[]`: Organization locations to exclude
-   - `organizationIndustryTagIds[]`: Industry tag IDs to include
-   - `organizationNotIndustryTagIds[]`: Industry tag IDs to exclude
+   - `organizationIndustryTagIds[]`: Industry tag IDs to include (displayed as industry names in response)
+   - `organizationNotIndustryTagIds[]`: Industry tag IDs to exclude (displayed as industry names in response)
    - `organizationJobLocations[]`: Job posting locations
    - `organizationNumJobsRange[min]`: Minimum number of job postings
    - `organizationJobPostedAtRange[min]`: Job posting date range
@@ -505,8 +507,9 @@ The endpoint maps Apollo.io parameters to contact filter parameters as follows:
 |-----------------|----------------|---------------|
 | `page` | `page` | Direct mapping |
 | `sortByField` + `sortAscending` | `ordering` | Combined; prepend `-` for descending |
-| `personTitles[]` | `title` | Multiple values joined with comma (OR logic) |
-| `personNotTitles[]` | `exclude_titles` | List of titles to exclude |
+| `personTitles[]` | `title` | Multiple values joined with comma (OR logic). **Title Normalization**: When `includeSimilarTitles=false` (or absent), titles are normalized by sorting words alphabetically (e.g., "Project Manager" and "Manager Project" both match). When `includeSimilarTitles=true`, exact title text is used (case-insensitive). |
+| `personNotTitles[]` | `exclude_titles` | List of titles to exclude. **Title Normalization**: Same normalization logic as `personTitles[]` based on `includeSimilarTitles` flag. |
+| `includeSimilarTitles` | (influences `title`/`exclude_titles`) | When `true`, uses exact title matching. When `false` or absent, normalizes titles by sorting words alphabetically for flexible matching. |
 | `personSeniorities[]` | `seniority` | Multiple values joined with comma |
 | `personDepartmentOrSubdepartments[]` | `department` | Multiple values joined with comma |
 | `personLocations[]` | `contact_location` | Multiple values joined with comma |
@@ -532,10 +535,29 @@ The endpoint maps Apollo.io parameters to contact filter parameters as follows:
 
 The following Apollo parameters are not mapped (no equivalent in contacts database):
 
-- **ID-based filters**: None (industry tag IDs are now mapped using CSV lookup)
 - **Apollo-specific features**: `qOrganizationSearchListId`, `qNotOrganizationSearchListId`, `qPersonPersonaIds[]`, `marketSegments[]`, `intentStrengths[]`, `lookalikeOrganizationIds[]`, `prospectedByCurrentTeam[]`
 - **Unmapped filters**: `organizationJobLocations[]`, `organizationNumJobsRange[min]`, `organizationJobPostedAtRange[min]`, `organizationTradingStatus[]`, `contactEmailExcludeCatchAll`
-- **UI flags**: `uniqueUrlId`, `tour`, `includeSimilarTitles`, `existFields[]`, `notOrganizationIds[]`, `organizationIds[]`
+- **UI flags**: `uniqueUrlId`, `tour`, `existFields[]`, `notOrganizationIds[]`, `organizationIds[]`
+
+**Note:** `includeSimilarTitles` is now mapped and influences how `personTitles[]` and `personNotTitles[]` are processed (see Title Normalization above).
+
+**Note:** Industry tag IDs (`organizationIndustryTagIds[]`, `organizationNotIndustryTagIds[]`) ARE now successfully mapped to industry names using a CSV-based lookup table with 147 industry mappings.
+
+**Title Normalization Examples:**
+
+When `includeSimilarTitles=false` (or absent):
+```
+Apollo URL: personTitles[]=Project Manager&personTitles[]=Senior Developer
+Normalized: "manager project", "developer senior"
+Result: Matches contacts with "Project Manager", "Manager Project", "Senior Developer", "Developer Senior"
+```
+
+When `includeSimilarTitles=true`:
+```
+Apollo URL: personTitles[]=Project Manager&includeSimilarTitles=true
+Normalized: "Project Manager" (exact match)
+Result: Matches only "Project Manager" (case-insensitive), not "Manager Project"
+```
 
 **Example Requests:**
 
@@ -595,11 +617,14 @@ In addition to the standard pagination fields (`next`, `previous`, `results`), t
 
 **Unmapped Parameter Reasons:**
 
-- **ID-based filter (no name mapping available)**: Parameters that use IDs which cannot be mapped to names (e.g., `organizationIndustryTagIds[]`, `currentlyUsingAnyOfTechnologyUids[]`)
+- **ID-based filter (no name mapping available)**: Parameters that use IDs which cannot be mapped to names (e.g., `currentlyUsingAnyOfTechnologyUids[]`)
+  - Note: `organizationIndustryTagIds[]` and `organizationNotIndustryTagIds[]` are now successfully mapped using a CSV-based industry name lookup
 - **Apollo-specific feature**: Features specific to Apollo.io that don't have equivalents in the contact database (e.g., search lists, personas, intent signals, lookalike)
 - **Unmapped filter**: Filters that don't have corresponding fields in the contact database (e.g., job postings, trading status)
 - **Keyword field control**: Parameters that control which fields to search for keywords (not applicable in the contacts database)
-- **UI flag or advanced filter**: User interface flags and advanced filters that don't affect the query (e.g., `tour`, `uniqueUrlId`, `includeSimilarTitles`)
+- **UI flag or advanced filter**: User interface flags and advanced filters that don't affect the query (e.g., `tour`, `uniqueUrlId`)
+
+**Note:** `includeSimilarTitles` is now mapped and controls title normalization behavior (see Title Normalization in parameter mappings).
 - **Unknown parameter**: Parameters not recognized or not yet mapped
 
 **Notes:**
@@ -751,7 +776,145 @@ Authorization: Bearer <access_token>
 
 ---
 
+### POST /api/v2/apollo/contacts/count/uuids - Get Contact UUIDs from Apollo URL
+
+Get a list of contact UUIDs matching Apollo.io URL parameters. This endpoint converts an Apollo.io People Search URL into contact filter parameters and returns matching contact UUIDs from your database.
+
+**Headers:**
+
+- `Authorization: Bearer <access_token>` (required)
+- `Content-Type: application/json`
+
+**Request Body:**
+
+```json
+{
+  "url": "https://app.apollo.io/#/people?personTitles[]=CEO&personLocations[]=California&organizationNumEmployeesRanges[]=11,50&contactEmailStatusV2[]=verified"
+}
+```
+
+**Request Body Fields:**
+
+- `url` (string, required): Apollo.io URL to analyze and convert. Must be from the `apollo.io` domain.
+
+**Query Parameters:**
+
+- `include_company_name` (string, optional): Include contacts whose company name matches this value (case-insensitive substring match). Supports comma-separated values for OR logic.
+- `exclude_company_name` (array of strings, optional): Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times or as comma-separated values.
+- `limit` (integer, optional): Maximum number of UUIDs to return. **If not provided, returns all matching UUIDs (unlimited).** When provided, limits results to the specified number.
+
+**Response:**
+
+Returns count and list of UUIDs.
+
+**Success (200 OK):**
+
+```json
+{
+  "count": 1234,
+  "uuids": [
+    "398cce44-233d-5f7c-aea1-e4a6a79df10c",
+    "498cce44-233d-5f7c-aea1-e4a6a79df10d",
+    "598cce44-233d-5f7c-aea1-e4a6a79df10e"
+  ]
+}
+```
+
+**Error (400 Bad Request) - Invalid URL:**
+
+```json
+{
+  "detail": "URL is required and must be a string"
+}
+```
+
+**Error (400 Bad Request) - Invalid Filter Parameters:**
+
+```json
+{
+  "detail": "Invalid filter parameters: validation error message"
+}
+```
+
+**Error (401 Unauthorized):**
+
+```json
+{
+  "detail": "Authentication credentials were not provided."
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: UUIDs retrieved successfully
+- `400 Bad Request`: Invalid URL, not from Apollo.io domain, or invalid filter parameters
+- `401 Unauthorized`: Authentication required
+- `500 Internal Server Error`: Error occurred while retrieving UUIDs
+
+**Parameter Mappings:**
+
+The endpoint uses the same parameter mappings as `/api/v2/apollo/contacts`. See that endpoint's documentation for complete mapping details.
+
+**Example Requests:**
+
+```txt
+POST /api/v2/apollo/contacts/count/uuids
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "url": "https://app.apollo.io/#/people?personTitles[]=CEO&personLocations[]=California&organizationNumEmployeesRanges[]=11,50"
+}
+```
+
+With company name inclusion filter and limit:
+
+```txt
+POST /api/v2/apollo/contacts/count/uuids?include_company_name=Tech&limit=1000
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "url": "https://app.apollo.io/#/people?personTitles[]=CEO&contactEmailStatusV2[]=verified"
+}
+```
+
+**Notes:**
+
+- Returns only UUIDs, not full contact data (efficient for bulk operations)
+- Supports all the same filters as the search endpoint
+- Useful for exporting specific contact sets or bulk updates
+- When `limit` is not provided, returns all matching UUIDs (unlimited)
+- Company name filters can be combined with Apollo URL filters
+- All text searches are case-insensitive
+
+**Use Cases:**
+
+1. **Bulk Operations**: Get UUIDs for bulk updates or exports
+2. **Efficient Filtering**: Retrieve only UUIDs without full contact data
+3. **Export Preparation**: Get UUID list before exporting specific contact sets
+4. **Integration**: Use UUIDs for downstream processing or API calls
+
+---
+
 ## Response Schema
+
+### Important: Tag ID to Industry Name Conversion
+
+**All API responses automatically convert industry Tag IDs to human-readable industry names:**
+
+- **Affected Parameters**: `organizationIndustryTagIds[]`, `organizationNotIndustryTagIds[]`
+- **Conversion Source**: CSV mapping file with 147 industry name mappings
+- **Where Applied**:
+  - `raw_parameters` dictionary in `/apollo/analyze` response
+  - Categorized parameter `values` in `/apollo/analyze` response
+  - Unmapped parameter `values` in `/apollo/contacts` response (if any)
+
+**Example Conversion:**
+- **Input (Apollo URL)**: `organizationIndustryTagIds[]=5567cd4773696439dd350000`
+- **Output (API Response)**: `organizationIndustryTagIds[]=["construction"]`
+
+This conversion makes API responses more readable and user-friendly without requiring clients to perform Tag ID lookups.
 
 ### ApolloUrlAnalysisResponse
 

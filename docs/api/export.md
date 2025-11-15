@@ -1,6 +1,6 @@
-# Contact Export API Documentation
+# Export API Documentation
 
-Complete API documentation for contact export endpoints, including CSV generation and secure download via signed URLs.
+Complete API documentation for contact and company export endpoints, including CSV generation, export listing, and secure download via signed URLs.
 
 ## Base URL
 
@@ -304,12 +304,287 @@ The response body contains the CSV file content.
 
 ---
 
+### POST /api/v2/exports/companies/export - Create Company Export
+
+Create a CSV export of selected companies. Accepts a list of company UUIDs and generates a CSV file containing all company and company metadata fields. Returns a signed temporary download URL that expires after 24 hours.
+
+**Headers:**
+
+- `Authorization: Bearer <access_token>` (required)
+- `Content-Type: application/json`
+
+**Request Body:**
+
+```json
+{
+  "company_uuids": [
+    "abc123-def456-ghi789",
+    "xyz789-uvw456-rst123"
+  ]
+}
+```
+
+**Request Body Fields:**
+
+- `company_uuids` (array[string], required, min: 1): List of company UUIDs to export. At least one UUID is required.
+
+**Response:**
+
+**Success (201 Created):**
+
+```json
+{
+  "export_id": "f4b8c3f5-2222-4f9b-bbbb-123456789abc",
+  "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_at": "2024-12-20T10:30:00Z",
+  "company_count": 2,
+  "status": "completed"
+}
+```
+
+**Response Fields:**
+
+- `export_id` (string, UUID): Unique identifier for the export
+- `download_url` (string): Signed temporary download URL that expires after 24 hours. Includes the token as a query parameter.
+- `expires_at` (datetime, ISO 8601): Timestamp when the download URL expires (24 hours from creation)
+- `company_count` (integer): Number of companies included in the export
+- `status` (string): Export status. Possible values: `pending`, `processing`, `completed`, `failed`
+
+**Error (400 Bad Request) - No Company UUIDs:**
+
+```json
+{
+  "detail": "At least one company UUID is required"
+}
+```
+
+**Error (401 Unauthorized) - Missing Authentication:**
+
+```json
+{
+  "detail": "Not authenticated"
+}
+```
+
+**Error (500 Internal Server Error) - CSV Generation Failed:**
+
+```json
+{
+  "detail": "Failed to generate CSV: <error_message>"
+}
+```
+
+**CSV Fields Included:**
+
+The generated CSV file includes the following fields:
+
+**Company Fields:**
+
+- `company_uuid`: Company UUID
+- `company_name`: Company name
+- `company_employees_count`: Number of employees
+- `company_industries`: Comma-separated list of industries
+- `company_keywords`: Comma-separated list of keywords
+- `company_address`: Company address
+- `company_annual_revenue`: Annual revenue in integer dollars
+- `company_total_funding`: Total funding in integer dollars
+- `company_technologies`: Comma-separated list of technologies
+- `company_text_search`: Free-form search text (e.g., location information)
+- `company_created_at`: Company creation timestamp
+- `company_updated_at`: Company last update timestamp
+
+**Company Metadata Fields:**
+
+- `company_metadata_linkedin_url`: Company LinkedIn URL
+- `company_metadata_facebook_url`: Company Facebook URL
+- `company_metadata_twitter_url`: Company Twitter URL
+- `company_metadata_website`: Company website URL
+- `company_metadata_company_name_for_emails`: Company name used for emails
+- `company_metadata_phone_number`: Company phone number
+- `company_metadata_latest_funding`: Latest funding round information
+- `company_metadata_latest_funding_amount`: Latest funding amount in integer dollars
+- `company_metadata_last_raised_at`: Last funding date
+- `company_metadata_city`: Company city
+- `company_metadata_state`: Company state/province
+- `company_metadata_country`: Company country
+
+**Notes:**
+
+- The export is processed synchronously and returns immediately with a download URL
+- The download URL expires after 24 hours from creation
+- If a company UUID doesn't exist, it will be skipped (not cause the entire export to fail)
+- Array fields (industries, keywords, technologies) are formatted as comma-separated values in the CSV
+- All timestamps are in ISO 8601 format (UTC)
+- Missing or null values are represented as empty strings in the CSV
+
+---
+
+### GET /api/v2/exports/ - List Exports
+
+List all exports for the current user. Returns all exports created by the authenticated user, ordered by creation date (newest first). Includes both contact and company exports.
+
+**Headers:**
+
+- `Authorization: Bearer <access_token>` (required)
+
+**Response:**
+
+**Success (200 OK):**
+
+```json
+{
+  "exports": [
+    {
+      "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
+      "user_id": "user-123",
+      "export_type": "contacts",
+      "file_path": "/path/to/export.csv",
+      "file_name": "export_f4b8c3f5-1111-4f9b-aaaa-123456789abc.csv",
+      "contact_count": 2,
+      "contact_uuids": ["abc123-def456-ghi789", "xyz789-uvw456-rst123"],
+      "company_count": 0,
+      "company_uuids": null,
+      "status": "completed",
+      "created_at": "2024-12-19T10:30:00Z",
+      "expires_at": "2024-12-20T10:30:00Z",
+      "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=..."
+    },
+    {
+      "export_id": "f4b8c3f5-2222-4f9b-bbbb-123456789abc",
+      "user_id": "user-123",
+      "export_type": "companies",
+      "file_path": "/path/to/export.csv",
+      "file_name": "export_f4b8c3f5-2222-4f9b-bbbb-123456789abc.csv",
+      "contact_count": 0,
+      "contact_uuids": null,
+      "company_count": 3,
+      "company_uuids": ["def456-ghi789-jkl012", "mno345-pqr678-stu901"],
+      "status": "completed",
+      "created_at": "2024-12-18T15:20:00Z",
+      "expires_at": "2024-12-19T15:20:00Z",
+      "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=..."
+    }
+  ],
+  "total": 2
+}
+```
+
+**Response Fields:**
+
+- `exports` (array): List of export records, ordered by `created_at` descending (newest first)
+- `total` (integer): Total number of exports for the user
+
+**Each export object contains:**
+
+- `export_id` (string, UUID): Unique identifier for the export
+- `user_id` (string): ID of the user who created the export
+- `export_type` (string): Type of export - either `"contacts"` or `"companies"`
+- `file_path` (string, optional): Path to the CSV file on the server
+- `file_name` (string, optional): Name of the CSV file
+- `contact_count` (integer): Number of contacts in the export (0 for company exports)
+- `contact_uuids` (array[string], optional): List of contact UUIDs (null for company exports)
+- `company_count` (integer): Number of companies in the export (0 for contact exports)
+- `company_uuids` (array[string], optional): List of company UUIDs (null for contact exports)
+- `status` (string): Export status - `pending`, `completed`, or `failed`
+- `created_at` (datetime, ISO 8601): When the export was created
+- `expires_at` (datetime, ISO 8601, optional): When the download URL expires
+- `download_url` (string, optional): Signed download URL (null if export is not completed)
+
+**Error (401 Unauthorized) - Missing Authentication:**
+
+```json
+{
+  "detail": "Not authenticated"
+}
+```
+
+**Error (500 Internal Server Error) - Failed to List Exports:**
+
+```json
+{
+  "detail": "Failed to list exports"
+}
+```
+
+**Notes:**
+
+- Returns all exports for the authenticated user, regardless of export type
+- Exports are ordered by creation date, newest first
+- Only exports created by the current user are returned
+- Expired exports are still included in the list (check `expires_at` to determine if download is still available)
+
+---
+
+### DELETE /api/v2/exports/files - Delete All CSV Files (Admin Only)
+
+Delete all CSV files from the exports directory. This endpoint is restricted to admin users only and deletes all CSV files system-wide. Optionally cleans up expired export records from the database.
+
+**Headers:**
+
+- `Authorization: Bearer <access_token>` (required, admin role)
+
+**Response:**
+
+**Success (200 OK):**
+
+```json
+{
+  "message": "CSV files deleted successfully",
+  "deleted_count": 15
+}
+```
+
+**Response Fields:**
+
+- `message` (string): Success message
+- `deleted_count` (integer): Number of CSV files deleted
+
+**Error (401 Unauthorized) - Missing Authentication:**
+
+```json
+{
+  "detail": "Not authenticated"
+}
+```
+
+**Error (403 Forbidden) - Not Admin:**
+
+```json
+{
+  "detail": "You do not have permission to perform this action. Admin role required."
+}
+```
+
+**Error (500 Internal Server Error) - Failed to Delete Files:**
+
+```json
+{
+  "detail": "Failed to delete CSV files"
+}
+```
+
+**Notes:**
+
+- This endpoint requires admin authentication
+- Deletes all CSV files from the exports directory, regardless of ownership
+- Optionally cleans up expired export records from the database
+- Use with caution as this operation cannot be undone
+- Individual file deletion failures are logged but do not stop the overall operation
+
+---
+
+## Export Type Values
+
+The export type field can have the following values:
+
+- `contacts`: Export contains contact data
+- `companies`: Export contains company data
+
 ## Export Status Values
 
 The export status field can have the following values:
 
 - `pending`: Export is queued but not yet started
-- `processing`: Export is currently being generated
 - `completed`: Export is ready for download
 - `failed`: Export generation failed
 
@@ -327,9 +602,11 @@ The export status field can have the following values:
 
 ---
 
-## Example Workflow
+## Example Workflows
 
-### Step 1: Create Export
+### Contact Export Workflow
+
+**Step 1: Create Contact Export**
 
 ```bash
 curl -X POST "http://54.87.173.234:8000/api/v2/exports/contacts/export" \
@@ -355,7 +632,7 @@ curl -X POST "http://54.87.173.234:8000/api/v2/exports/contacts/export" \
 }
 ```
 
-### Step 2: Download Export
+**Step 2: Download Export**
 
 ```bash
 curl -X GET "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
@@ -365,6 +642,73 @@ curl -X GET "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-12
 ```
 
 The CSV file will be downloaded to `export.csv`.
+
+### Company Export Workflow
+
+**Step 1: Create Company Export**
+
+```bash
+curl -X POST "http://54.87.173.234:8000/api/v2/exports/companies/export" \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_uuids": [
+      "def456-ghi789-jkl012",
+      "mno345-pqr678-stu901"
+    ]
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "export_id": "f4b8c3f5-2222-4f9b-bbbb-123456789abc",
+  "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_at": "2024-12-20T10:30:00Z",
+  "company_count": 2,
+  "status": "completed"
+}
+```
+
+**Step 2: Download Export**
+
+```bash
+curl -X GET "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Accept: text/csv" \
+  -o company_export.csv
+```
+
+### List Exports Workflow
+
+**List All Exports**
+
+```bash
+curl -X GET "http://54.87.173.234:8000/api/v2/exports/" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**Response:**
+
+```json
+{
+  "exports": [
+    {
+      "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
+      "user_id": "user-123",
+      "export_type": "contacts",
+      "contact_count": 2,
+      "company_count": 0,
+      "status": "completed",
+      "created_at": "2024-12-19T10:30:00Z",
+      "expires_at": "2024-12-20T10:30:00Z",
+      "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=..."
+    }
+  ],
+  "total": 1
+}
+```
 
 ---
 

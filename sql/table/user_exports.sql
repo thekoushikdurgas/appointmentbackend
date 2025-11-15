@@ -1,4 +1,5 @@
 create type export_status as enum ('pending', 'completed', 'failed');
+create type export_type as enum ('contacts', 'companies');
 
 create table public.user_exports
 (
@@ -6,10 +7,13 @@ create table public.user_exports
         primary key,
     export_id     text         not null,
     user_id       text         not null,
+    export_type   export_type  not null default 'contacts'::export_type,
     file_path     text,
     file_name     text,
     contact_count integer      default 0,
     contact_uuids text[],
+    company_count integer      default 0,
+    company_uuids text[],
     status        export_status not null default 'pending'::export_status,
     created_at    timestamp with time zone not null default now(),
     expires_at    timestamp with time zone,
@@ -41,4 +45,7 @@ create index idx_user_exports_status
 
 create index idx_user_exports_created_at
     on public.user_exports (created_at);
+
+create index idx_user_exports_export_type
+    on public.user_exports (export_type);
 

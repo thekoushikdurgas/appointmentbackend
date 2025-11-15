@@ -210,13 +210,13 @@ class CompanyRepository(AsyncRepository[Company]):
         self,
         session: AsyncSession,
         filters: CompanyFilterParams,
-        limit: int,
+        limit: Optional[int],
         offset: int,
     ) -> Sequence[tuple[Company, CompanyMetadata]]:
         """Return companies with associated metadata rows."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         logger.debug(
-            "Listing companies: limit=%d offset=%d ordering=%s filters=%s",
+            "Listing companies: limit=%s offset=%d ordering=%s filters=%s",
             limit,
             offset,
             filters.ordering,
@@ -253,7 +253,9 @@ class CompanyRepository(AsyncRepository[Company]):
             "technologies": cast(Company.technologies, Text),
         }
         stmt = apply_ordering(stmt, filters.ordering, ordering_map)
-        stmt = stmt.limit(limit).offset(offset)
+        stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         result = await session.execute(stmt)
         rows = result.fetchall()
         logger.debug("Retrieved %d companies from repository query", len(rows))
@@ -404,7 +406,9 @@ class CompanyRepository(AsyncRepository[Company]):
         if params.distinct and not params.ordering:
             stmt = stmt.order_by(column_expression.asc())
         
-        stmt = stmt.limit(params.limit).offset(params.offset)
+        stmt = stmt.offset(params.offset)
+        if params.limit is not None:
+            stmt = stmt.limit(params.limit)
         result = await session.execute(stmt)
         values = []
         for (value,) in result.fetchall():
@@ -478,7 +482,9 @@ class CompanyRepository(AsyncRepository[Company]):
         if params.distinct:
             attr_stmt = attr_stmt.distinct()
 
-        attr_stmt = attr_stmt.limit(params.limit).offset(params.offset)
+        attr_stmt = attr_stmt.offset(params.offset)
+        if params.limit is not None:
+            attr_stmt = attr_stmt.limit(params.limit)
         result = await session.execute(attr_stmt)
         values = [value for (value,) in result.fetchall() if value]
         return values
@@ -596,6 +602,47 @@ class CompanyRepository(AsyncRepository[Company]):
         negative_conditions = [~array_text.ilike(f"%{token}%") for token in tokens]
         combined_negative = and_(*negative_conditions)
         return stmt.where(or_(column.is_(None), combined_negative))
+
+    async def get_uuids_by_filters(
+        self,
+        session: AsyncSession,
+        filters: CompanyFilterParams,
+        limit: Optional[int] = None,
+    ) -> list[str]:
+        """Return company UUIDs that match the supplied filters (efficient UUID-only query)."""
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Getting company UUIDs: limit=%s filters=%s",
+            limit,
+            active_filter_keys,
+        )
+        company_meta_alias = aliased(CompanyMetadata, name="company_metadata_for_uuids")
+
+        stmt = (
+            select(Company.uuid)
+            .select_from(Company)
+            .outerjoin(company_meta_alias, Company.uuid == company_meta_alias.uuid)
+        )
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        stmt = self.apply_filters(
+            stmt,
+            filters,
+            company_meta_alias,
+            dialect_name=dialect_name,
+        )
+        stmt = self.apply_search_terms(
+            stmt,
+            filters.search,
+            company_meta_alias,
+            dialect_name=dialect_name,
+        )
+        stmt = stmt.where(Company.uuid.isnot(None))
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await session.execute(stmt)
+        uuids = [uuid for (uuid,) in result.fetchall() if uuid]
+        logger.debug("Retrieved %d company UUIDs", len(uuids))
+        return uuids
 
     @staticmethod
     def _array_column_as_text(column, dialect: str):

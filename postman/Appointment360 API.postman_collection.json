@@ -821,7 +821,7 @@
 								"analyze"
 							]
 						},
-						"description": "Analyze an Apollo.io URL and return structured parameter breakdown.\n\nThis endpoint parses Apollo.io search URLs (typically from the People Search page) and extracts all query parameters, categorizing them into logical groups such as:\n- Pagination (page numbers)\n- Sorting (sort field and direction)\n- Person Filters (titles, locations, seniorities, departments)\n- Organization Filters (employee ranges, locations, industries, revenue)\n- Email Filters (verification status, catch-all exclusion)\n- Keyword Filters (organization keywords, search fields)\n- And more...\n\nThe analysis includes:\n- URL structure breakdown (base URL, hash path, query string)\n- Categorized parameters with descriptions\n- Parameter values (URL-decoded)\n- Statistics about the search criteria\n\n**Field Requirements:**\n- url (string, required): Apollo.io URL to analyze (must be from apollo.io domain)\n\n**Response Codes:**\n- 200 OK: URL analyzed successfully\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or missing URL field\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while analyzing the URL"
+						"description": "Analyze an Apollo.io URL and return structured parameter breakdown.\n\nThis endpoint parses Apollo.io search URLs (typically from the People Search page) and extracts all query parameters, categorizing them into logical groups such as:\n- Pagination (page numbers)\n- Sorting (sort field and direction)\n- Person Filters (titles, locations, seniorities, departments)\n- Organization Filters (employee ranges, locations, industries, revenue)\n- Email Filters (verification status, catch-all exclusion)\n- Keyword Filters (organization keywords, search fields)\n- And more...\n\n**Important:** Industry Tag IDs (organizationIndustryTagIds[], organizationNotIndustryTagIds[]) are automatically converted to readable industry names in the API response.\n\nThe analysis includes:\n- URL structure breakdown (base URL, hash path, query string)\n- Categorized parameters with descriptions\n- Parameter values (URL-decoded)\n- Statistics about the search criteria\n\n**Field Requirements:**\n- url (string, required): Apollo.io URL to analyze (must be from apollo.io domain)\n\n**Response Codes:**\n- 200 OK: URL analyzed successfully\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or missing URL field\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while analyzing the URL"
 					},
 					"response": []
 				},
@@ -967,9 +967,76 @@
 						"description": "Count contacts matching Apollo.io URL parameters. This endpoint converts an Apollo.io People Search URL into contact filter parameters and returns the total count of matching contacts from your database.\n\n**Response Format:**\nReturns a simple count response:\n```json\n{\n  \"count\": 1234\n}\n```\n\n**Parameter Mappings:**\nSame as `/api/v2/apollo/contacts` endpoint - all Apollo URL parameters are mapped to contact filters using the same logic.\n\n**Request Body:**\n- url (string, required): Apollo.io URL to convert and count\n\n**Query Parameters:**\n- include_company_name (string, optional): Include contacts whose company name matches (case-insensitive substring). Supports comma-separated values for OR logic.\n- exclude_company_name (array of strings, optional): Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times.\n\n**Response Codes:**\n- 200 OK: Count retrieved successfully\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or invalid filter parameters\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while counting contacts\n\n**Use Cases:**\n1. Quick Count Check: Get the total number of contacts matching an Apollo search before fetching results\n2. Progress Tracking: Monitor how many contacts match specific criteria\n3. Filter Validation: Verify that your Apollo URL filters are working as expected\n4. Resource Planning: Estimate data volume before processing large result sets"
 					},
 					"response": []
+				},
+				{
+					"name": "Get Contact UUIDs from Apollo URL",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?personTitles[]=CEO&personLocations[]=California&organizationNumEmployeesRanges[]=11,50&contactEmailStatusV2[]=verified\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/apollo/contacts/count/uuids",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"apollo",
+								"contacts",
+								"count",
+								"uuids"
+							],
+							"query": [
+								{
+									"key": "include_company_name",
+									"value": "",
+									"description": "Include contacts whose company name matches (case-insensitive substring). Supports comma-separated values for OR logic.",
+									"disabled": true
+								},
+								{
+									"key": "exclude_company_name",
+									"value": "",
+									"description": "Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times.",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "",
+									"description": "Optional limit on number of UUIDs returned. If not provided, returns all matching UUIDs (unlimited).",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get a list of contact UUIDs matching Apollo.io URL parameters. This endpoint converts an Apollo.io People Search URL into contact filter parameters and returns matching contact UUIDs from your database.\n\n**Response Format:**\nReturns count and list of UUIDs:\n```json\n{\n  \"count\": 1234,\n  \"uuids\": [\"uuid1\", \"uuid2\", \"uuid3\", ...]\n}\n```\n\n**Parameter Mappings:**\nSame as `/api/v2/apollo/contacts` endpoint - all Apollo URL parameters are mapped to contact filters using the same logic.\n\n**Request Body:**\n- url (string, required): Apollo.io URL to convert and search\n\n**Query Parameters:**\n- include_company_name (string, optional): Include contacts whose company name matches (case-insensitive substring). Supports comma-separated values for OR logic.\n- exclude_company_name (array of strings, optional): Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times.\n- limit (integer, optional): Maximum number of UUIDs to return. If not provided, returns all matching UUIDs (unlimited).\n\n**Response Codes:**\n- 200 OK: UUIDs retrieved successfully\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or invalid filter parameters\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while retrieving UUIDs\n\n**Use Cases:**\n1. Bulk Operations: Get UUIDs for bulk updates or exports\n2. Efficient Filtering: Retrieve only UUIDs without full contact data\n3. Export Preparation: Get UUID list before exporting specific contact sets\n4. Integration: Use UUIDs for downstream processing or API calls"
+					},
+					"response": []
 				}
 			],
-			"description": "Apollo.io integration endpoints for parsing Apollo search URLs and searching contacts using Apollo URL parameters. Includes URL analysis for parameter breakdown, contact search for converting Apollo searches to database queries, and contact count for quick result estimation."
+			"description": "Apollo.io integration endpoints for parsing Apollo search URLs and searching contacts using Apollo URL parameters. Includes URL analysis for parameter breakdown, contact search for converting Apollo searches to database queries, contact count for quick result estimation, and UUID retrieval for bulk operations."
 		},
 		{
 			"name": "Exports",
@@ -1069,9 +1136,142 @@
 						"description": "Download a CSV export file using a signed URL.\n\nThe token must be valid and the export must belong to the requesting user. The export must not have expired.\n\n**Path Parameters:**\n- export_id (string, UUID): Export ID\n\n**Query Parameters:**\n- token (string, required): Signed URL token for authentication. This token is included in the download_url returned by the Create Contact Export endpoint.\n\n**Response Codes:**\n- 200 OK: CSV file downloaded successfully\n- 401 Unauthorized: Invalid or expired download token\n- 403 Forbidden: Token does not match export or user\n- 404 Not Found: Export not found or access denied, or export file not found\n- 410 Gone: Export has expired\n- 400 Bad Request: Export is not ready (status not completed)\n\n**Notes:**\n- The download URL expires after 24 hours from creation\n- Only the user who created the export can download it\n- The response is a CSV file with Content-Disposition header for file download\n- Use the full download_url from the Create Contact Export response, which includes the token as a query parameter"
 					},
 					"response": []
+				},
+				{
+					"name": "Create Company Export",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"company_uuids\": [\n    \"{{sampleCompanyUuid}}\",\n    \"abc123-def456-ghi789\"\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/exports/companies/export",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"exports",
+								"companies",
+								"export"
+							]
+						},
+						"description": "Create a CSV export of selected companies.\n\nAccepts a list of company UUIDs and generates a CSV file containing all company and company metadata fields. Returns a signed temporary download URL that expires after 24 hours.\n\n**Field Requirements:**\n- company_uuids (array[string], required, min: 1): List of company UUIDs to export\n\n**CSV Fields Included:**\n- Company fields: uuid, name, employees_count, industries, keywords, address, annual_revenue, total_funding, technologies, text_search, created_at, updated_at\n- Company Metadata: linkedin_url, facebook_url, twitter_url, website, company_name_for_emails, phone_number, latest_funding, latest_funding_amount, last_raised_at, city, state, country\n\n**Response Codes:**\n- 201 Created: Export created successfully\n- 400 Bad Request: At least one company UUID is required\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Failed to create export or generate CSV\n\n**Notes:**\n- The export is processed synchronously and returns immediately with a download URL\n- The download URL expires after 24 hours\n- If a company UUID doesn't exist, it will be skipped (not cause the entire export to fail)\n- Array fields (industries, keywords, technologies) are formatted as comma-separated values in the CSV"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('sampleExportId', jsonData.export_id);",
+									"    pm.collectionVariables.set('sampleExportDownloadUrl', jsonData.download_url);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "List Exports",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{baseUrlV2}}/exports/",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"exports",
+								""
+							]
+						},
+						"description": "List all exports for the current user.\n\nReturns all exports created by the authenticated user, ordered by creation date (newest first). Includes both contact and company exports.\n\n**Response Codes:**\n- 200 OK: Exports listed successfully\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Failed to list exports\n\n**Response Fields:**\n- exports (array): List of export records, ordered by created_at descending\n- total (integer): Total number of exports for the user\n\n**Each export object contains:**\n- export_id (string, UUID): Unique identifier for the export\n- user_id (string): ID of the user who created the export\n- export_type (string): Type of export - either \"contacts\" or \"companies\"\n- contact_count (integer): Number of contacts in the export (0 for company exports)\n- company_count (integer): Number of companies in the export (0 for contact exports)\n- status (string): Export status - pending, completed, or failed\n- created_at (datetime): When the export was created\n- expires_at (datetime, optional): When the download URL expires\n- download_url (string, optional): Signed download URL (null if export is not completed)\n\n**Notes:**\n- Returns all exports for the authenticated user, regardless of export type\n- Exports are ordered by creation date, newest first\n- Only exports created by the current user are returned\n- Expired exports are still included in the list"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete All CSV Files",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Must have admin role. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{baseUrlV2}}/exports/files",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"exports",
+								"files"
+							]
+						},
+						"description": "Delete all CSV files from the exports directory (admin only).\n\nThis endpoint deletes all CSV files in the exports directory and optionally cleans up expired export records from the database.\n\n**Response Codes:**\n- 200 OK: CSV files deleted successfully\n- 401 Unauthorized: Authentication required\n- 403 Forbidden: Admin role required\n- 500 Internal Server Error: Failed to delete CSV files\n\n**Response Fields:**\n- message (string): Success message\n- deleted_count (integer): Number of CSV files deleted\n\n**Notes:**\n- This endpoint requires admin authentication\n- Deletes all CSV files from the exports directory, regardless of ownership\n- Optionally cleans up expired export records from the database\n- Use with caution as this operation cannot be undone\n- Individual file deletion failures are logged but do not stop the overall operation"
+					},
+					"response": []
 				}
 			],
-			"description": "Contact export endpoints for creating CSV exports of selected contacts and downloading them via signed temporary URLs. All exports include complete contact, company, and metadata information."
+			"description": "Export endpoints for creating CSV exports of selected contacts and companies, listing user exports, and downloading them via signed temporary URLs. All exports include complete contact, company, and metadata information. Admin-only endpoint for CSV cleanup."
 		},
 		{
 			"name": "Contacts",
@@ -1116,10 +1316,10 @@
 											"disabled": true
 										},
 										{
-											"key": "limit",
-											"value": "25",
-											"description": "Number of contacts per page (>=1).",
-											"disabled": true
+									"key": "limit",
+									"value": "25",
+									"description": "Number of contacts per page (>=1). If not provided, returns all matching contacts (unlimited). When provided, limits results to the specified number.",
+									"disabled": true
 										},
 										{
 											"key": "offset",
@@ -1719,6 +1919,62 @@
 									]
 								},
 								"description": "Return the total number of contacts that satisfy the provided filters. Supports all ContactFilterParams. Use distinct=true to count unique contacts."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Contact UUIDs",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/contacts/count/uuids/?company={{sampleCompany}}&search=cyber",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"contacts",
+										"count",
+										"uuids",
+										""
+									],
+									"query": [
+										{
+											"key": "company",
+											"value": "{{sampleCompany}}",
+											"description": "Case-insensitive substring match against Company.name.",
+											"disabled": true
+										},
+										{
+											"key": "search",
+											"value": "cyber",
+											"description": "General-purpose search term applied across contact and company text columns (case-insensitive).",
+											"disabled": true
+										},
+										{
+											"key": "limit",
+											"value": "",
+											"description": "Optional limit on number of UUIDs returned. If not provided, returns all matching UUIDs (unlimited).",
+											"disabled": true
+										}
+									]
+								},
+								"description": "Return a list of contact UUIDs that match the provided filters. Supports all ContactFilterParams. Returns count and list of UUIDs. Useful for bulk operations or exporting specific contact sets.\n\n**Response Format:**\n```json\n{\n  \"count\": 1234,\n  \"uuids\": [\"uuid1\", \"uuid2\", \"uuid3\", ...]\n}\n```\n\n**Query Parameters:**\nAll filter parameters from `/api/v1/contacts/` are supported. Additionally:\n- `limit` (integer, optional): Maximum number of UUIDs to return. If not provided, returns all matching UUIDs (unlimited)."
 							},
 							"response": []
 						},
@@ -2696,10 +2952,10 @@
 									],
 									"query": [
 										{
-											"key": "limit",
-											"value": "25",
-											"description": "Number of companies per page (>=1).",
-											"disabled": true
+									"key": "limit",
+									"value": "25",
+									"description": "Number of companies per page (>=1). If not provided, returns all matching companies (unlimited). When provided, limits results to the specified number.",
+									"disabled": true
 										},
 										{
 											"key": "offset",
@@ -2991,6 +3247,60 @@
 									]
 								},
 								"description": "Return the total number of companies that satisfy the provided filters. Supports all CompanyFilterParams."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Company UUIDs",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/companies/count/uuids/?industries=Technology&employees_min=100",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"companies",
+										"count",
+										"uuids",
+										""
+									],
+									"query": [
+										{
+											"key": "industries",
+											"value": "Technology",
+											"description": "Substring match within Company.industries array."
+										},
+										{
+											"key": "employees_min",
+											"value": "100",
+											"description": "Lower-bound filter for Company.employees_count (>=0)."
+										},
+										{
+											"key": "limit",
+											"value": "",
+											"description": "Optional limit on number of UUIDs returned. If not provided, returns all matching UUIDs (unlimited).",
+											"disabled": true
+										}
+									]
+								},
+								"description": "Return a list of company UUIDs that match the provided filters. Supports all CompanyFilterParams. Returns count and list of UUIDs. Useful for bulk operations or exporting specific company sets.\n\n**Response Format:**\n```json\n{\n  \"count\": 567,\n  \"uuids\": [\"uuid1\", \"uuid2\", \"uuid3\", ...]\n}\n```\n\n**Query Parameters:**\nAll filter parameters from `/api/v1/companies/` are supported. Additionally:\n- `limit` (integer, optional): Maximum number of UUIDs to return. If not provided, returns all matching UUIDs (unlimited)."
 							},
 							"response": []
 						},
@@ -3813,6 +4123,52 @@
 									]
 								},
 								"description": "Return the total count of contacts for a specific company matching filters."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Company Contact UUIDs",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/companies/company/{{sampleCompanyUuid}}/contacts/count/uuids/?title=engineer",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"companies",
+										"company",
+										"{{sampleCompanyUuid}}",
+										"contacts",
+										"count",
+										"uuids",
+										""
+									],
+									"query": [
+										{
+											"key": "title",
+											"value": "engineer",
+											"description": "Filter by job title"
+										},
+										{
+											"key": "limit",
+											"value": "",
+											"description": "Optional limit on number of UUIDs returned. If not provided, returns all matching UUIDs (unlimited).",
+											"disabled": true
+										}
+									]
+								},
+								"description": "Return a list of contact UUIDs for a specific company that match the provided filters. Returns count and list of UUIDs. Useful for bulk operations on company contacts.\n\n**Response Format:**\n```json\n{\n  \"count\": 45,\n  \"uuids\": [\"uuid1\", \"uuid2\", \"uuid3\", ...]\n}\n```\n\n**Query Parameters:**\nAll filter parameters from company contacts endpoints are supported. Additionally:\n- `limit` (integer, optional): Maximum number of UUIDs to return. If not provided, returns all matching UUIDs (unlimited)."
 							},
 							"response": []
 						},

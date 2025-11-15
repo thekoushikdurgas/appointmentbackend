@@ -130,7 +130,7 @@ class ContactsService:
         session: AsyncSession,
         filters: ContactFilterParams,
         *,
-        limit: int,
+        limit: Optional[int],
         offset: int,
         request_url: str,
         use_cursor: bool = False,
@@ -138,12 +138,17 @@ class ContactsService:
         """List contacts and build pagination metadata."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         self.logger.info(
-            "Service listing contacts: limit=%d offset=%d use_cursor=%s filters=%s",
+            "Service listing contacts: limit=%s offset=%d use_cursor=%s filters=%s",
             limit,
             offset,
             use_cursor,
             active_filter_keys,
         )
+        if limit is None:
+            self.logger.warning(
+                "Unlimited query requested for contacts - this may return a large dataset. filters=%s",
+                active_filter_keys,
+            )
         try:
             rows = await self.repository.list_contacts(session, filters, limit, offset)
         except ValueError as exc:
@@ -157,7 +162,8 @@ class ContactsService:
         ]
 
         next_link = None
-        if len(results) == limit:
+        # Only show next link if we have a limit and returned exactly that many results
+        if limit is not None and len(results) == limit:
             if use_cursor:
                 next_cursor = encode_offset_cursor(offset + limit)
                 next_link = build_cursor_link(request_url, next_cursor)
@@ -170,11 +176,11 @@ class ContactsService:
         previous_link = None
         if offset > 0:
             if use_cursor:
-                prev_offset = max(offset - limit, 0)
+                prev_offset = max(offset - (limit or 0), 0)
                 prev_cursor = encode_offset_cursor(prev_offset)
                 previous_link = build_cursor_link(request_url, prev_cursor)
             else:
-                prev_offset = max(offset - limit, 0)
+                prev_offset = max(offset - (limit or 0), 0)
                 previous_link = build_pagination_link(request_url, limit=limit, offset=prev_offset)
         self.logger.info(
             "List contacts pagination prepared: next=%s previous=%s",
@@ -194,7 +200,7 @@ class ContactsService:
         session: AsyncSession,
         filters: ContactFilterParams,
         *,
-        limit: int,
+        limit: Optional[int],
         offset: int,
         request_url: str,
         use_cursor: bool = False,
@@ -202,12 +208,17 @@ class ContactsService:
         """List contacts in simplified projection for view=simple."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         self.logger.info(
-            "Service listing contacts (simple): limit=%d offset=%d use_cursor=%s filters=%s",
+            "Service listing contacts (simple): limit=%s offset=%d use_cursor=%s filters=%s",
             limit,
             offset,
             use_cursor,
             active_filter_keys,
         )
+        if limit is None:
+            self.logger.warning(
+                "Unlimited query requested for contacts (simple) - this may return a large dataset. filters=%s",
+                active_filter_keys,
+            )
         try:
             rows = await self.repository.list_contacts(session, filters, limit, offset)
         except ValueError as exc:
@@ -238,7 +249,7 @@ class ContactsService:
             )
 
         next_link = None
-        if len(simple_results) == limit:
+        if limit is not None and len(simple_results) == limit:
             if use_cursor:
                 next_cursor = encode_offset_cursor(offset + limit)
                 next_link = build_cursor_link(request_url, next_cursor)
@@ -272,6 +283,63 @@ class ContactsService:
         self.logger.info("Service counted contacts: total=%d", total)
         self.logger.debug("Exiting ContactsService.count_contacts")
         return CountResponse(count=total)
+
+    async def get_uuids_by_filters(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        limit: Optional[int] = None,
+    ) -> list[str]:
+        """Return contact UUIDs that match the supplied filters."""
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        self.logger.info(
+            "Service getting contact UUIDs: limit=%s filters=%s",
+            limit,
+            active_filter_keys,
+        )
+        if limit is None:
+            self.logger.warning(
+                "Unlimited UUID query requested - this may return a large dataset. filters=%s",
+                active_filter_keys,
+            )
+        uuids = await self.repository.get_uuids_by_filters(session, filters, limit)
+        self.logger.info("Service retrieved %d contact UUIDs", len(uuids))
+        return uuids
+
+    async def get_uuids_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        filters: "CompanyContactFilterParams",
+        limit: Optional[int] = None,
+    ) -> list[str]:
+        """Return contact UUIDs for a specific company that match the supplied filters."""
+        from app.schemas.filters import CompanyContactFilterParams
+        from app.repositories.companies import CompanyRepository
+        
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        self.logger.info(
+            "Service getting contact UUIDs for company %s: limit=%s filters=%s",
+            company_uuid,
+            limit,
+            active_filter_keys,
+        )
+        if limit is None:
+            self.logger.warning(
+                "Unlimited UUID query requested for company contacts - this may return a large dataset. company_uuid=%s",
+                company_uuid,
+            )
+        
+        # Verify company exists
+        company_repo = CompanyRepository()
+        company = await company_repo.get_by_uuid(session, company_uuid)
+        if not company:
+            self.logger.warning("Company not found: %s", company_uuid)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+        
+        uuids = await self.repository.get_uuids_by_company(session, company_uuid, filters, limit)
+        self.logger.info("Service retrieved %d contact UUIDs for company %s", len(uuids), company_uuid)
+        return uuids
 
     async def get_contact(
         self,
@@ -307,12 +375,17 @@ class ContactsService:
         """Return a list of attribute values for contacts."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         self.logger.info(
-            "Service listing attribute values: limit=%d offset=%d distinct=%s filters=%s",
+            "Service listing attribute values: limit=%s offset=%d distinct=%s filters=%s",
             params.limit,
             params.offset,
             params.distinct,
             active_filter_keys,
         )
+        if params.limit is None:
+            self.logger.warning(
+                "Unlimited attribute query requested - this may return a large dataset. filters=%s",
+                active_filter_keys,
+            )
         try:
             values = await self.repository.list_attribute_values(
                 session,
@@ -485,7 +558,7 @@ class ContactsService:
         session: AsyncSession,
         company_uuid: str,
         filters: "CompanyContactFilterParams",
-        limit: int,
+        limit: Optional[int],
         offset: int,
         request_url: str,
         use_cursor: bool = False,
@@ -496,12 +569,17 @@ class ContactsService:
         from app.utils.pagination import build_cursor_link, build_pagination_link
         
         self.logger.info(
-            "Listing contacts for company %s: limit=%d offset=%d use_cursor=%s",
+            "Listing contacts for company %s: limit=%s offset=%d use_cursor=%s",
             company_uuid,
             limit,
             offset,
             use_cursor,
         )
+        if limit is None:
+            self.logger.warning(
+                "Unlimited query requested for company contacts - this may return a large dataset. company_uuid=%s",
+                company_uuid,
+            )
         
         # Verify company exists
         company_repo = CompanyRepository()
@@ -527,7 +605,7 @@ class ContactsService:
         
         # Build pagination URLs
         next_link = None
-        if len(items) == limit:
+        if limit is not None and len(items) == limit:
             if use_cursor:
                 next_offset = offset + limit
                 next_cursor = encode_offset_cursor(next_offset)
@@ -539,11 +617,11 @@ class ContactsService:
         previous_link = None
         if offset > 0:
             if use_cursor:
-                prev_offset = max(offset - limit, 0)
+                prev_offset = max(offset - (limit or 0), 0)
                 prev_cursor = encode_offset_cursor(prev_offset)
                 previous_link = build_cursor_link(request_url, prev_cursor)
             else:
-                prev_offset = max(offset - limit, 0)
+                prev_offset = max(offset - (limit or 0), 0)
                 previous_link = build_pagination_link(request_url, limit=limit, offset=prev_offset)
         
         self.logger.info(

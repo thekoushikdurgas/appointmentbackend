@@ -21,6 +21,13 @@ class CountResponse(BaseModel):
     count: int
 
 
+class UuidListResponse(BaseModel):
+    """Response payload containing count and list of UUIDs."""
+
+    count: int
+    uuids: List[str]
+
+
 class MessageResponse(BaseModel):
     """Wrapper for simple status/message API responses."""
 
