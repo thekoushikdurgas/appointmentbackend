@@ -1,0 +1,101 @@
+#,id,uuid,linkedin_url,facebook_url,twitter_url,website,work_direct_phone,home_phone,city,state,country,other_phone,stage
+1,5001,d80cb960-0ef5-53fe-95f3-2e30ba144f57,http://www.linkedin.com/in/dean-schamore-216894,_,_,https://dcplus.net,"","",Hardinsburg,Kentucky,United States,"",Cold
+2,5002,a6cea464-5a12-5be4-8ac2-8411e84f3cee,http://www.linkedin.com/in/brion-morrison-13b60267,_,_,https://cpmccorp.com,"","",Los Angeles,California,United States,"",Cold
+3,5003,b0b16ac9-fe98-5644-b79a-a58e3ced6577,http://www.linkedin.com/in/amangour,_,_,https://furtherai.com,"","",San Francisco,California,United States,"",Cold
+4,5004,5dcf7039-8f75-5e74-9b5b-912e1458c0f7,http://www.linkedin.com/in/dirk-mcmanus-11430338,_,_,https://sback.com,"","",San Francisco,California,United States,"",Cold
+5,5005,26cbbfe2-2aab-54d5-8d06-267568174cdc,http://www.linkedin.com/in/tahir-mansoor,_,_,https://blackwidowtech.com,"","",Frisco,Texas,United States,"",Cold
+6,5006,310156a3-3149-56b2-9c8d-b3a28f521a28,http://www.linkedin.com/in/kevindixon1980,_,_,https://anthemtech.net,"","",Huntsville,Texas,United States,"",Cold
+7,5007,7bf10d83-c770-5247-baf8-2050d0c8a608,http://www.linkedin.com/in/robertboyich,_,_,https://bluewire.ai,"","",Walnut Creek,California,United States,"",Cold
+8,5008,34772eb2-e8c4-5fbd-9cb2-e9c145efb296,http://www.linkedin.com/in/jeff-loether,_,_,https://electro-media.com,"","",Myrtle Beach,South Carolina,United States,"",Cold
+9,5009,d692838c-cf66-5ec8-a8f7-34007db5843f,http://www.linkedin.com/in/ryan-janosevic-633a20155,_,_,https://retrospectlabs.com,"","",Conroe,Texas,United States,"",Cold
+10,5010,8a8ddd12-bba4-5416-b863-f2bc713455dd,http://www.linkedin.com/in/amy-f-altman-ba41486,_,_,https://gss-law.com,"","",New York,New York,United States,"",Cold
+11,5011,c425b2ea-03f3-5e56-beb9-62b29ccfc8c9,http://www.linkedin.com/in/fangchin,_,_,https://zettar.com,"","",Palo Alto,California,United States,"",Cold
+12,5012,102b1327-d799-537d-95b9-895c765422ff,http://www.linkedin.com/in/swihartpike,_,_,https://infield.ai,"","",New York,New York,United States,"",Cold
+13,5013,a58322d0-2b31-5c0d-b7f9-71c5dbfc464a,http://www.linkedin.com/in/trey-price,_,_,https://guidepostenergy.com,"","",Tyler,Texas,United States,"",Cold
+14,5014,c610c8f4-498e-50c2-9848-1692a73cfaeb,http://www.linkedin.com/in/peter-quinttus-97b19612,_,_,https://nimbl.io,"","",Dallas,Texas,United States,"",Cold
+15,5015,e914b056-2afe-5af8-a153-9e23974ac4a1,http://www.linkedin.com/in/lester-mower-7a0a4a22,_,_,https://guarddog.ai,"","",Salt Lake City,Utah,United States,"",Cold
+16,5016,806d38d2-6db2-534f-a36c-8950ee0e6ceb,http://www.linkedin.com/in/bowlesmark,_,_,https://rangersolutions.com,"","",Dallas,Texas,United States,"",Cold
+17,5017,86ad514f-1dcc-5d46-979d-37f4613c190a,http://www.linkedin.com/in/zak-snoussi-4a526b57,_,_,https://losangelesgeeks.com,"","","","",United States,"",Cold
+18,5018,14e99378-aa53-56fc-8e57-c6e10801e252,http://www.linkedin.com/in/doug-schwarzwalder,_,_,https://ignite.team,"","",Columbus,Ohio,United States,"",Cold
+19,5019,13b0cf1b-05c3-5627-9b4c-8fad317d63fb,http://www.linkedin.com/in/donshin1,_,_,https://crosscomm.com,"","",Durham,North Carolina,United States,"",Cold
+20,5020,a429047e-5723-5b10-9af1-dc7164b45b6a,http://www.linkedin.com/in/rich-schwartz-21188011,_,_,https://gridtekus.com,"","",Seattle,Washington,United States,"",Cold
+21,5021,8b9b2a84-71fc-5708-9817-a3e8acadd3dc,http://www.linkedin.com/in/paula-vesely-09847433,_,_,https://axisinsurance.net,"","",Schofield,Wisconsin,United States,"",Cold
+22,5022,f6c5f285-d85a-5e85-b75b-b49c7e4c4c99,http://www.linkedin.com/in/raul-zayas-mia,_,_,https://zteksolutions.com,"","",Fort Lauderdale,Florida,United States,"",Cold
+23,5023,e14dee8c-8aaf-5843-a150-ec469ea49019,http://www.linkedin.com/in/cida-goldbach-78b2475,_,_,https://usxcyber.com,"","",Vienna,Virginia,United States,"",Cold
+24,5024,1df0a5e3-b3e5-5711-b38d-941533e9a670,http://www.linkedin.com/in/kyle-bolivar-a3064b107,_,_,https://bbcoinsurance.com,"","",Lafayette,Louisiana,United States,"",Cold
+25,5025,29d21f2b-32cf-57cc-83e2-b6647873eeed,http://www.linkedin.com/in/john-chapman-67a6696,_,_,https://chapman-insurance.com,"","",Raleigh,North Carolina,United States,"",Cold
+26,5026,ba7a79cb-6294-5fd6-9104-f447b961a6f0,http://www.linkedin.com/in/dwight-neptune-2219b3124,_,_,https://beaglelabs.ai,"","",New York,New York,United States,"",Cold
+27,5027,7a5f7b65-302a-53e9-a3f8-36e1fb5b952f,http://www.linkedin.com/in/patricia-murphy-a4694021,_,_,https://astrusins.com,"","",New York,New York,United States,"",Cold
+28,5028,d163a5e9-106e-520a-aee4-543a14e3ad8a,http://www.linkedin.com/in/ken-stein-7a80a512,_,_,https://gss-law.com,"","",New York,New York,United States,"",Cold
+29,5029,3d26a316-8a68-5c5f-b2d5-dc6c8d0ddbff,http://www.linkedin.com/in/audrey-marcum-488196174,_,_,https://inflectra.com,"","",New York,New York,United States,"",Cold
+30,5030,e35189bd-f400-5ccb-ae10-d8dddb1aeb3f,http://www.linkedin.com/in/huiqin-an-99649028,_,_,https://pacotechnologies.com,"","",New York,New York,United States,"",Cold
+31,5031,1c6da620-6377-54ea-81ef-08b756c48ab0,http://www.linkedin.com/in/randy-niemeier-828b0510,_,_,https://masonclaims.com,"","",Boerne,Texas,United States,"",Cold
+32,5032,5e639557-94ef-5a3b-b9ed-4b3f51b632c7,http://www.linkedin.com/in/rmatthewporter,_,_,https://cabnit.com,"","",Dallas,Texas,United States,"",Cold
+33,5033,f6ab908b-3033-5425-8fb8-7f14326b2f64,http://www.linkedin.com/in/john-dempsey-b5ab63,_,_,https://insightrisktec.com,"","",Naples,Florida,United States,"",Cold
+34,5034,4eaa1e38-48df-5505-a672-b0c2ab8bb395,http://www.linkedin.com/in/larryboggis,_,_,https://priveon.com,"","",Raleigh,North Carolina,United States,"",Cold
+35,5035,0acca67a-1f05-5c45-b0ef-6e1a45b4fcbf,http://www.linkedin.com/in/william-peters-8829245,_,_,https://ethink.net,"","",Brick,New Jersey,United States,"",Cold
+36,5036,a804b8f9-367d-58d4-91d0-b5d598d57ca6,http://www.linkedin.com/in/lisa-copeland-strickland-508ab37b,_,_,https://thecopelandgroup.com,"","","","",United States,"",Cold
+37,5037,8eace8f0-c262-53a9-955b-696941972887,http://www.linkedin.com/in/jim-gallagher-73645a8,_,_,https://cglsecurity.com,"","",Norwood,Massachusetts,United States,"",Cold
+38,5038,20da6ffc-b856-5a93-948e-1c620b34465e,http://www.linkedin.com/in/larry-rienton-8a162a14,_,_,https://nobletecllc.com,"","",Lombard,Illinois,United States,"",Cold
+39,5039,9101c933-0c10-5613-a362-22ac61cbf49f,http://www.linkedin.com/in/kevin-smith-2234078,_,_,https://nettechn.com,"","",Rocky Mount,North Carolina,United States,"",Cold
+40,5040,d9b108f6-70b9-5d6c-b010-b1c5011599ab,http://www.linkedin.com/in/herb-miner-93572495,_,_,https://systemconfidence.com,"","",Denver,Colorado,United States,"",Cold
+41,5041,1cbb27ce-36c9-5ea8-9bcf-af4aa0cecee8,http://www.linkedin.com/in/bannor-michael-macgregor-95503531,_,_,https://americanpicturehouse.com,"","","","",United States,"",Cold
+42,5042,00dc4341-cf41-5749-811d-a87481a226bd,http://www.linkedin.com/in/rick-capka-1b1a0b13,_,_,https://dawsonassociates.com,"","",Washington,District of Columbia,United States,"",Cold
+43,80732,50e33448-fa3e-5cbc-89c6-a94e1ae574c3,http://www.linkedin.com/in/smitharaj,_,_,https://corpcomm.com,"","","","",United States,"",Cold
+44,5043,d5d9f58d-60d1-525a-bc26-721d4aaa37f0,http://www.linkedin.com/in/ranjith-raghunath,_,_,https://cxdatalabs.com,"","",Dallas,Texas,United States,"",Cold
+45,5044,8b18d8e2-307e-510c-a7e7-129e8624482c,http://www.linkedin.com/in/davidarthurwalsh,_,_,https://activ8growthpartners.com,"","",New York,New York,United States,"",Cold
+46,5045,b7bef214-a842-508e-be0a-ec780ebc272b,http://www.linkedin.com/in/robert-hutcherson-55521a7,_,_,https://optimize-consulting.biz,"","",Jacksonville,Florida,United States,"",Cold
+47,5046,0240a73c-cca3-56cf-a968-812d662b094c,http://www.linkedin.com/in/lisa-slater-50a86813b,_,_,https://lexingtonnational.com,"","",Cockeysville,Maryland,United States,"",Cold
+48,5047,e4046dd0-d5dc-5c60-a9b2-7e9dffb387e4,http://www.linkedin.com/in/tan-tran-949238b,_,_,https://vemanti.com,"","",Irvine,California,United States,"",Cold
+49,5048,2f627d8f-8ccd-5b33-beb2-b91caacb709b,http://www.linkedin.com/in/david-molnar-b90b4557,_,_,https://davescomputersinc.com,"","",Hillsborough Township,New Jersey,United States,"",Cold
+50,5049,84c07881-b632-5ba5-a73c-2cf04f970abd,http://www.linkedin.com/in/tom-avery-9579b76,_,_,https://signal-sync.com,"","",Sacramento,California,United States,"",Cold
+51,5050,97fae2f8-9c8c-5dd5-90fe-8dbf2a19bfbb,http://www.linkedin.com/in/jeremy-koomler-01b6544,_,_,https://frameworkarchs.com,"","",Austin,Texas,United States,"",Cold
+52,5051,1b360e34-dee1-5391-84c5-a14d38ebf83e,http://www.linkedin.com/in/donna-anselmo-4163345,_,_,https://comvergence.com,"","",Nesconset,New York,United States,"",Cold
+53,5052,25c7429b-baa1-5116-b742-594f4a5609f0,http://www.linkedin.com/in/jill-atkinson-tharp-a0b18a38,_,_,https://milemarker.io,"","",Marathon,Florida,United States,"",Cold
+54,5053,c723da6e-1023-5f3c-b640-07706ee5e62e,http://www.linkedin.com/in/jeremy-colson-51012114,_,_,https://ccbtg.com,"","",Valdosta,Georgia,United States,"",Cold
+55,5054,fd50456a-ecb4-5c25-94e0-6489f3521a0b,http://www.linkedin.com/in/joshuapfrank,_,_,https://rsmfederal.com,"","",Chesterfield,Missouri,United States,"",Cold
+56,5055,f7425f94-222d-517f-ac63-bba128023f5d,http://www.linkedin.com/in/john-stacy-69417314,_,_,https://rogue10labs.com,"","","","",United States,"",Cold
+57,5056,b557bbb3-9d28-58f4-9f8b-6dba76c88fc0,http://www.linkedin.com/in/matthew-jason-1b55468a,_,_,https://candidresearch.com,"","",Ohatchee,Alabama,United States,"",Cold
+58,5057,ac7119ec-eaf5-51c6-b762-36a152f5ca7f,http://www.linkedin.com/in/ashley-holley-grayson-0a0b15a0,_,_,https://oncnational.com,"","","","",United States,"",Cold
+59,5058,016bac77-31df-52f6-a6d6-f23704696702,http://www.linkedin.com/in/hiteshjangra,_,_,https://talentechdigital.com,"","",Austin,Texas,United States,"",Cold
+60,5059,d3a02aac-d92e-5f44-a50e-9f455b2946fa,http://www.linkedin.com/in/andrew-moffitt-5a3a2954,_,_,https://hdsoftware.com,"","",Pompano Beach,Florida,United States,"",Cold
+61,5060,177b6838-9b40-5f01-9b33-017312926f9c,http://www.linkedin.com/in/kathy-holtz-78877436,_,_,https://wizmo.com,"","",Minneapolis,Minnesota,United States,"",Cold
+62,5061,ac2bc661-6b97-5553-800e-5ad53a691f24,http://www.linkedin.com/in/sami-abunasser-131661b8,_,_,https://brbcorp.com,"","",New York,New York,United States,"",Cold
+63,5062,e3e6c628-e744-5366-af75-f034ceb45358,http://www.linkedin.com/in/taylorhaddix,_,_,https://oarex.com,"","","","",United States,"",Cold
+64,5063,ddf67a06-0fc0-5d83-9cb6-eb2f117b213d,http://www.linkedin.com/in/jeffrey-mcdonald-88a8b51a,_,_,https://mac3defense.com,"","",Huntsville,Alabama,United States,"",Cold
+65,5064,6f293f76-5308-53c3-810a-d1aabd768fda,http://www.linkedin.com/in/bhavikparyani,_,_,https://paryaniconstruction.com,"","",Atlanta,Georgia,United States,"",Cold
+66,5065,e958ba26-4742-50e1-8641-f153dbbab50e,http://www.linkedin.com/in/kimberly-jones-6936b83,_,_,https://ereflow.com,"","",Philadelphia,Pennsylvania,United States,"",Cold
+67,5066,11ca7bee-c5eb-56b5-a6f2-14f3b1be452c,http://www.linkedin.com/in/tim-liao-89603b265,_,_,https://flashweather.ai,"","","","",United States,"",Cold
+68,5067,76c6ef89-d0d4-5c41-b498-4efcf2a70036,http://www.linkedin.com/in/keithbrandgiftcards,_,_,https://tot.us,"","",Santa Rosa Beach,Florida,United States,"",Cold
+69,5068,1509c9c9-f501-567c-97f8-953bff954d5c,http://www.linkedin.com/in/terry-battcher-99373a45,_,_,https://dairyworks.com,"","",Fresno,California,United States,"",Cold
+70,5069,68c9826b-4ae4-5ce5-a485-241eac7e080d,http://www.linkedin.com/in/james-rounsville-6981487,_,_,https://hopzero.com,"","",Austin,Texas,United States,"",Cold
+71,5070,e91875a2-27cf-5072-84a5-3e35cd651712,http://www.linkedin.com/in/mayra-marquez-mba-5096461a1,_,_,https://lasalle-group.com,"","","",North Carolina,United States,"",Cold
+72,5071,0a29ef16-e20d-5760-8bd0-e64b1a3f61ca,http://www.linkedin.com/in/joestellato,_,_,https://sjrollins.com,"","",Brewer,Maine,United States,"",Cold
+73,5072,7c3561fa-ee81-5f67-a83f-5df20132ba83,http://www.linkedin.com/in/jose-pedro-albert-bosch-49476144,_,_,https://kumori.systems,"","",Orlando,Florida,United States,"",Cold
+74,5073,f394da01-628c-5fd9-a093-5523ed71549d,http://www.linkedin.com/in/jon-coon-a3451b20a,_,_,https://highbitsecurity.com,"","",Port Sanilac,Michigan,United States,"",Cold
+75,5074,fe3a81aa-42d6-5980-baed-e2426673b6c9,http://www.linkedin.com/in/darinhicks,_,_,https://litlingo.com,"","",Austin,Texas,United States,"",Cold
+76,5075,c59ba591-da16-5932-9e82-350fa62c21fd,http://www.linkedin.com/in/conikee,_,_,https://qwiet.ai,"","",San Francisco,California,United States,"",Cold
+77,5076,ead529f4-ad2d-55ad-a020-c5b87a273166,http://www.linkedin.com/in/johnlondoncfocpabig4mergers,_,_,https://solcyber.com,"","",Plano,Texas,United States,"",Cold
+78,5077,9bddd0b6-74c3-527d-9bd7-8a30bc8a5f78,http://www.linkedin.com/in/venkat-reddy-beeram-2525ba13b,_,_,https://btssi.net,"","",Frisco,Texas,United States,"",Cold
+79,5078,2247d705-4747-5334-badd-4c746f21aab5,http://www.linkedin.com/in/kylebhiro,_,_,https://pensarai.com,"","",New York,New York,United States,"",Cold
+80,5079,fdf200cd-eca9-5259-a4d2-ea9b00bc5836,http://www.linkedin.com/in/wiqar,_,_,https://xymbia.com,"","",New York,New York,United States,"",Cold
+81,5080,5d76ae9f-3939-52a0-8c5d-6b469a401c71,http://www.linkedin.com/in/tim-davis-14801617,_,_,https://powersinsurance.com,"","",St. Louis,Missouri,United States,"",Cold
+82,5081,ca4d0b20-d281-53f8-b667-70114b746316,http://www.linkedin.com/in/cameronflannery,_,_,https://navier.ai,"","",San Francisco,California,United States,"",Cold
+83,5082,538ae9b8-1b21-5cd4-b143-8088a2c15eab,http://www.linkedin.com/in/joebonnell,_,_,https://alchemysecurity.com,"","",Breckenridge,Colorado,United States,"",Cold
+84,5083,74716f82-19ef-5a46-97b0-4fb8889f0e00,http://www.linkedin.com/in/leon-stanley-40a693b,_,_,https://snsone.com,"","",Columbia,Maryland,United States,"",Cold
+85,5084,1a4d7d7e-b37c-59d0-b63d-ce31cf4a7230,http://www.linkedin.com/in/john-crowley-51a41542,_,_,https://mwbc.com,"","",Kansas City,Missouri,United States,"",Cold
+86,5085,f7a940a5-9a8f-58ad-a533-78ea8fe47534,http://www.linkedin.com/in/jeff-williamson-0660543,_,_,https://elixistechnology.com,"","",Las Vegas,Nevada,United States,"",Cold
+87,5086,87811016-d4a8-5922-8df1-bdcf6aa399dd,http://www.linkedin.com/in/juan-flores-681a5317,_,_,https://floodmanagement.com,"","","","",United States,"",Cold
+88,5087,cfb9221e-a9c0-588b-a0e9-b802bf744c81,http://www.linkedin.com/in/greg-swiecicki-20690b132,_,_,https://ritcompany.com,"","",Addison,Illinois,United States,"",Cold
+89,5088,474eb704-5bc6-5f26-b583-7f5e2bbbc841,http://www.linkedin.com/in/antonio-leal-414a85b1,_,_,https://loyalit.net,"","",Round Rock,Texas,United States,"",Cold
+90,5089,d81a0d1c-a59f-524f-9c7a-497dc9987cf7,http://www.linkedin.com/in/trentharvey,_,_,https://covie.io,"","",Austin,Texas,United States,"",Cold
+91,5090,ddda0497-d400-5ea6-99bd-c9a4957a36c7,http://www.linkedin.com/in/benjamin-cummings-20646473,_,_,https://backchecked.com,"","",Glenwood Springs,Colorado,United States,"",Cold
+92,5091,ac33d7e1-2e53-5975-83e6-4f0b28e07a20,http://www.linkedin.com/in/anthony-vallario-783a07227,_,_,https://anautics.com,"","",Dallas,Texas,United States,"",Cold
+93,5092,fb51557a-bd4c-5f6b-957a-dd55352920cd,http://www.linkedin.com/in/bart-bickel-8516a88,_,_,https://jqoffice.com,"","",Omaha,Nebraska,United States,"",Cold
+94,5093,035570c1-5e66-57ab-b715-95b1f9062f52,http://www.linkedin.com/in/annie-alvarez-1073a838,_,_,https://excellenceinsurance.net,"","",Miami,Florida,United States,"",Cold
+95,5094,73866deb-843c-5f7e-98c8-16564cab1cfe,http://www.linkedin.com/in/aaron-reiter,_,_,https://interprose.com,"","",Portland,Oregon,United States,"",Cold
+96,5095,3e7d7bd7-de10-59c3-8bb5-5ea5cf9b2707,http://www.linkedin.com/in/andrewro,_,_,https://ariento.com,"","",Lake Forest,California,United States,"",Cold
+97,5096,39badd17-0f32-5bdb-8e9a-b40eecc4d9a5,http://www.linkedin.com/in/everard-martin-jr-252a7040,_,_,https://exmgroupllc.com,"","",New York,New York,United States,"",Cold
+98,5097,c98e0869-9538-52f3-93d9-f70b25003343,http://www.linkedin.com/in/linda-graves-42874940,_,_,https://nodisolutions.com,"","",Rockville,Maryland,United States,"",Cold
+99,5098,2a431ccf-7ae9-510e-b79a-4544aaace93f,http://www.linkedin.com/in/jeffrey-w-623b7ba,_,_,https://haversinefunding.com,"","",Irving,Texas,United States,"",Cold
+100,5099,b4762a57-b208-5d8e-bb2b-9127b543faae,http://www.linkedin.com/in/kevin-morse-784aa022,_,_,https://questinghound.com,"","",Deerfield Beach,Florida,United States,"",Cold

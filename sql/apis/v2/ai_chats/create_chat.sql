@@ -1,0 +1,140 @@
+-- ============================================================================
+-- Endpoint: POST /api/v2/ai-chats/
+-- API Version: v2
+-- Description: Create a new AI chat conversation. The user is automatically set from the authenticated user's token. The chat ID is a UUID generated automatically. Messages can be empty initially and added later via update.
+-- ============================================================================
+--
+-- Parameters:
+--   $1: user_id (text, required) - User ID from authenticated session
+--   $2: title (text, optional, max 255 chars, default: '') - Chat title
+--   $3: messages (jsonb, optional, default: '[]'::jsonb) - List of messages as JSON array
+--
+-- Request Body Fields (All optional):
+--   title (string, optional, max 255 characters, default: empty string) - Chat title
+--   messages (array, optional, default: empty list) - List of messages
+--
+-- Message Format:
+--   Each message must be an object with:
+--   - sender (string, required): Must be either "user" or "ai"
+--   - text (string, required): Message text content
+--   - contacts (array, optional): Array of contact objects when AI returns search results
+--
+-- Response Structure:
+-- {
+--   "id": "uuid",
+--   "user_id": "user-uuid",
+--   "title": "Who are my most recent leads?",
+--   "messages": [
+--     {
+--       "sender": "ai",
+--       "text": "Hello! I'm NexusAI, your smart CRM assistant. How can I help you find contacts today?"
+--     },
+--     {
+--       "sender": "user",
+--       "text": "Who are my most recent leads?"
+--     }
+--   ],
+--   "created_at": "2024-01-15T10:30:00Z",
+--   "updated_at": null
+-- }
+--
+-- Response Codes:
+--   201 Created: Chat created successfully
+--   400 Bad Request: Invalid request data
+--   401 Unauthorized: Authentication required
+--   500 Internal Server Error: An error occurred while processing the request
+--
+-- Example Usage:
+--   POST /api/v2/ai-chats/
+--   Content-Type: application/json
+--   Authorization: Bearer <access_token>
+--   
+--   {
+--     "title": "Who are my most recent leads?",
+--     "messages": [
+--       {
+--         "sender": "ai",
+--         "text": "Hello! I'm NexusAI, your smart CRM assistant. How can I help you find contacts today?"
+--       },
+--       {
+--         "sender": "user",
+--         "text": "Who are my most recent leads?"
+--       }
+--     ]
+--   }
+-- ============================================================================
+
+-- Step 1: Insert new chat record
+INSERT INTO ai_chats (
+    id,
+    user_id,
+    title,
+    messages,
+    created_at,
+    updated_at
+) VALUES (
+    gen_random_uuid()::text,
+    $1,
+    COALESCE($2, ''),
+    COALESCE($3, '[]'::jsonb),
+    NOW(),
+    NULL
+)
+RETURNING 
+    id,
+    user_id,
+    title,
+    messages,
+    created_at,
+    updated_at;
+
+-- Query 2: Create chat with empty title and messages
+-- POST /api/v2/ai-chats/ (empty body)
+INSERT INTO ai_chats (
+    id,
+    user_id,
+    title,
+    messages,
+    created_at,
+    updated_at
+) VALUES (
+    gen_random_uuid()::text,
+    $1,
+    '',
+    '[]'::jsonb,
+    NOW(),
+    NULL
+)
+RETURNING 
+    id,
+    user_id,
+    title,
+    messages,
+    created_at,
+    updated_at;
+
+-- Query 3: Create chat with title only
+-- POST /api/v2/ai-chats/ with {"title": "My Chat"}
+INSERT INTO ai_chats (
+    id,
+    user_id,
+    title,
+    messages,
+    created_at,
+    updated_at
+) VALUES (
+    gen_random_uuid()::text,
+    $1,
+    $2,
+    '[]'::jsonb,
+    NOW(),
+    NULL
+)
+RETURNING 
+    id,
+    user_id,
+    title,
+    messages,
+    created_at,
+    updated_at;
+

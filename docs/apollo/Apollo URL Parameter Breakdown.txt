@@ -1,0 +1,273 @@
+﻿Apollo Filter Mapping Guide
+
+Filter Parameter Structure
+Parameter
+	Value(s)
+	Explanation
+	qKeywords
+	techstars.com
+	Keyword search in profiles or organizations
+	sortAscending
+	false
+	Sorting in descending order (highest score first)
+	sortByField
+	recommendations_score
+	Sort profiles by recommendation score
+	contactEmailStatusV2[]
+	verified, unverified
+	Filter people by email verification status
+	personTitles[]
+	manager, consultant
+	Include only people with these job titles
+	personNotTitles[]
+	teacher
+	Exclude people with this job title
+	personSeniorities[]
+	head
+	Filter by seniority e.g. “Head”
+	personDepartmentOrSubdepartments[]
+	master_engineering_technical
+	Filter by technical department/subdepartment
+	organizationIds[]
+	57c4ace7a6da9867ee5599e7
+	Only include this organization ID
+	notOrganizationIds[]
+	5f2a39cb77a7440112460cf5
+	Explicitly exclude this organization ID
+	personLocations[]
+	Boston, Massachusetts US, United States
+	Restrict people’s location
+	organizationNumEmployeesRanges[]
+	11,20
+	Organization employee count range
+	qOrganizationKeywordTags[]
+	business consulting & services
+	Organization must match one of these keyword tags
+	includedOrganizationKeywordFields[]
+	tags, name
+	Where to look for ANY of the organization keyword tags
+	organizationIndustryTagIds[]
+	5567cd4773696439b10b0000
+	Organization industry tag filter
+	qAndedOrganizationKeywordTags[]
+	it services & it consulting
+	Organization must match ALL tags
+	includedAndedOrganizationKeywordFields[]
+	tags, name
+	Where to look for ALL organization keyword tags
+	qNotOrganizationKeywordTags[]
+	advertising services
+	Exclude organizations matching these tags
+	excludedOrganizationKeywordFields[]
+	tags, name, social_media_description
+	Fields for exclusion on organization tags
+	page
+	1
+	Pagination: show page 1
+	organizationLocations[]
+	United Kingdom, New York
+	Organization location filters
+	marketSegments[]
+	b2b, b2c, b2b2c, e-commerce, fintech, d2c, saas, non-profit...
+	Organization market segments (multi-industry filter)
+	currentlyUsingAnyOfTechnologyUids[]
+	mobile_friendly, google_tag_manager
+	Organization must use any of these technologies
+	organizationTradingStatus[]
+	private, public
+	Organization trading status filter
+	revenueRange[max]
+	500000
+	Organization revenue maximum
+	revenueRange[min]
+	100000
+	Organization revenue minimum
+	organizationLatestFundingStageCd[]
+	0,1,10,2,3,4,5,6,7,13,14,15,11,12
+	Latest funding stage codes (covering all stages from seed to equity, convertible note, etc.)
+	Detailed Decoding
+
+qKeywords=techstars.com
+sortAscending=false
+sortByField=recommendations_score
+contactEmailStatusV2[]=verified
+contactEmailStatusV2[]=unverified
+personTitles[]=manager
+personTitles[]=consultant
+personNotTitles[]=teacher
+personSeniorities[]=head
+personDepartmentOrSubdepartments[]=master_engineering_technical
+organizationIds[]=57c4ace7a6da9867ee5599e7
+notOrganizationIds[]=5f2a39cb77a7440112460cf5
+personLocations[]=Boston
+personLocations[]=Massachusetts, US
+personLocations[]=United States
+organizationNumEmployeesRanges[]=11,20
+qOrganizationKeywordTags[]=business consulting & services
+includedOrganizationKeywordFields[]=tags
+includedOrganizationKeywordFields[]=name
+organizationIndustryTagIds[]=5567cd4773696439b10b0000
+qAndedOrganizationKeywordTags[]=it services & it consulting
+includedAndedOrganizationKeywordFields[]=tags
+includedAndedOrganizationKeywordFields[]=name
+qNotOrganizationKeywordTags[]=advertising services
+excludedOrganizationKeywordFields[]=tags
+excludedOrganizationKeywordFields[]=name
+excludedOrganizationKeywordFields[]=social_media_description
+page=1
+organizationLocations[]=United Kingdom
+organizationLocations[]=new york
+marketSegments[]=b2b
+marketSegments[]=b2c
+marketSegments[]=b2b2c
+marketSegments[]=e-commerce
+marketSegments[]=fintech
+marketSegments[]=d2c
+marketSegments[]=saas
+marketSegments[]=non-profit
+marketSegments[]=consulting
+marketSegments[]=services
+marketSegments[]=retail
+currentlyUsingAnyOfTechnologyUids[]=mobile_friendly
+currentlyUsingAnyOfTechnologyUids[]=google_tag_manager
+organizationTradingStatus[]=private
+organizationTradingStatus[]=public
+revenueRange[max]=500000
+revenueRange[min]=100000
+organizationLatestFundingStageCd[]=0
+organizationLatestFundingStageCd[]=1
+organizationLatestFundingStageCd[]=10
+organizationLatestFundingStageCd[]=2
+organizationLatestFundingStageCd[]=3
+organizationLatestFundingStageCd[]=4
+organizationLatestFundingStageCd[]=5
+organizationLatestFundingStageCd[]=6
+organizationLatestFundingStageCd[]=7
+organizationLatestFundingStageCd[]=13
+organizationLatestFundingStageCd[]=14
+organizationLatestFundingStageCd[]=15
+organizationLatestFundingStageCd[]=11
+organizationLatestFundingStageCd[]=12
+
+The Example URL We Used Here
+
+https://app.apollo.io/#/people?qKeywords=techstars.com&sortAscending=false&sortByField=recommendations_score&contactEmailStatusV2[]=verified&contactEmailStatusV2[]=unverified&personTitles[]=manager&personTitles[]=consultant&personNotTitles[]=teacher&personSeniorities[]=head&personDepartmentOrSubdepartments[]=master_engineering_technical&organizationIds[]=57c4ace7a6da9867ee5599e7&notOrganizationIds[]=5f2a39cb77a7440112460cf5&personLocations[]=Boston&personLocations[]=Massachusetts%2C%20US&personLocations[]=United%20States&organizationNumEmployeesRanges[]=11%2C20&qOrganizationKeywordTags[]=business%20consulting%20%26%20services&includedOrganizationKeywordFields[]=tags&includedOrganizationKeywordFields[]=name&organizationIndustryTagIds[]=5567cd4773696439b10b0000&qAndedOrganizationKeywordTags[]=it%20services%20%26%20it%20consulting&includedAndedOrganizationKeywordFields[]=tags&includedAndedOrganizationKeywordFields[]=name&qNotOrganizationKeywordTags[]=advertising%20services&excludedOrganizationKeywordFields[]=tags&excludedOrganizationKeywordFields[]=name&excludedOrganizationKeywordFields[]=social_media_description&page=1&organizationLocations[]=United%20Kingdom&organizationLocations[]=new%20york&marketSegments[]=b2b&marketSegments[]=b2c&marketSegments[]=b2b2c&marketSegments[]=e-commerce&marketSegments[]=fintech&marketSegments[]=d2c&marketSegments[]=saas&marketSegments[]=non-profit&marketSegments[]=consulting&marketSegments[]=services&marketSegments[]=retail&currentlyUsingAnyOfTechnologyUids[]=mobile_friendly&currentlyUsingAnyOfTechnologyUids[]=google_tag_manager&organizationTradingStatus[]=private&organizationTradingStatus[]=public&revenueRange[max]=500000&revenueRange[min]=100000&organizationLatestFundingStageCd[]=0&organizationLatestFundingStageCd[]=1&organizationLatestFundingStageCd[]=10&organizationLatestFundingStageCd[]=2&organizationLatestFundingStageCd[]=3&organizationLatestFundingStageCd[]=4&organizationLatestFundingStageCd[]=5&organizationLatestFundingStageCd[]=6&organizationLatestFundingStageCd[]=7&organizationLatestFundingStageCd[]=13&organizationLatestFundingStageCd[]=14&organizationLatestFundingStageCd[]=15&organizationLatestFundingStageCd[]=11&organizationLatestFundingStageCd[]=12
+
+
+
+
+Here’s an analysis mapping Apollo filter parameters to our database columns. This will help us match
+
+
+Apollo Filter URL Parameter
+	Our DB Column(s)
+	Explanation / Notes
+	qKeywords
+	keywords, company, industry
+	For keyword matching in multiple columns
+	sortAscending, sortByField
+	(any sortable column)
+	Implement custom sort using any field (e.g., by stage, employees)
+	contactEmailStatusV2[]
+	email_status
+	Email verification match
+	personTitles[]
+	title
+	Direct job title match
+	personNotTitles[]
+	title
+	Exclude specific titles
+	personSeniorities[]
+	seniority
+	Seniority filter
+	personDepartmentOrSubdepartments[]
+	departments
+	Department filter
+	organizationIds[], notOrganizationIds[]
+	account_id
+	Organization/company by unique ID
+	personLocations[]
+	city, state, country
+	People location fields
+	organizationNumEmployeesRanges[]
+	employees
+	Numeric company employee range
+	qOrganizationKeywordTags[]
+	keywords, industry
+	Tags or keywords for company/industry
+	includedOrganizationKeywordFields[]
+	keywords, company, company_name_for_emails, industry
+	Which columns to scan for keyword match
+	organizationIndustryTagIds[]
+	industry
+	Industry field
+	qAndedOrganizationKeywordTags[]
+	keywords, industry
+	Tags with AND logic
+	qNotOrganizationKeywordTags[]
+	keywords, industry
+	Exclude by tags/industry
+	organizationLocations[]
+	company_city, company_state, company_country
+	Organization location fields
+	marketSegments[]
+	industry, keywords
+	Market segment could map to industry/keywords
+	currentlyUsingAnyOfTechnologyUids[]
+	technologies
+	Technologies used by company
+	organizationTradingStatus[]
+	stage
+	Trading status could map to funding/stage (public/private etc.)
+	revenueRange[min], revenueRange[max]
+	annual_evenue
+	Annual revenue range filter
+	page
+	(pagination/id based)
+	Page/pagination logic
+	
+
+
+
+There are some URL parameters in the Apollo filtering that are using some kind of tag IDs or IDs instead of the actual filter value. Here’s the information. We need to build some logic to parse them in our filtering process.
+
+
+
+
+Parameter
+	Example Value
+	What the ID Represents
+	organizationIds[]
+	57c4ace7a6da9867ee5599e7
+	Organization unique ID (internal Apollo/company ID)
+	notOrganizationIds[]
+	5f2a39cb77a7440112460cf5
+	Organization unique ID to exclude
+	organizationIndustryTagIds[]
+	5567cd4773696439b10b0000
+	Industry tag ID (not a plain text industry name)
+	organizationLatestFundingStageCd[]
+	0, 1, 2, 10, etc.
+	Funding stage codes (IDs for funding stages)
+	
+
+Notes
+* Arrays in parameters use [] and can have multiple values.
+* All fields support URL encoding (e.g., spaces as %20, ampersands as %26).
+* IDs are internal Apollo database references for organizations and industries.
+* For company keyword matching/exclusion, related fields determine in which metadata (e.g., tags, name, social media description) the operation applies.
+* All filters are optional; omit unused ones for broader results.
+________________
+
+
+Subfilter Example
+* Umbrella: Job Titles
+   * Include: personTitles[]=manager, personTitles[]=consultant
+   * Exclude: personNotTitles[]=teacher
+* Umbrella: Companies
+   * Include: organizationIds[]=...
+   * Exclude: notOrganizationIds[]=...
+* Umbrella: Company Keywords
+   * ANY include: qOrganizationKeywordTags[]=..., field: includedOrganizationKeywordFields[]
+   * ALL include: qAndedOrganizationKeywordTags[]=..., field: includedAndedOrganizationKeywordFields[]
+   * ANY exclude: qNotOrganizationKeywordTags[]=..., field: excludedOrganizationKeywordFields[]

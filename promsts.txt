@@ -1,0 +1,74 @@
+now my full project and all pages, tabs, components, buttons, input boxes, and text in dark-light ui, more icons and a more user-friendly modern style
+
+Now, create a good-looking loading page for my project, and then welcome page
+
+Now, add a loading screen for my project, and then create an auth flow for my project
+
+Now, create a good-looking loading page, and then a welcome page, and all auth pages
+
+Now my full project and all pages, tabs, components, buttons, input boxes, and text will be fully responsive on all screen sizes.
+
+The loading is still loading, not going to the welcome pages. What happened? This issue has occurred repeatedly. Please fix it permanently.
+
+See the image, and then, like that on the Contacts page, the Contacts table should be fully responsive on all screen sizes. Please add both a vertical scroll bar and a horizontal scroll bar.
+
+Now implement Firebase for the auth flow and storage for my codebase
+{
+  "apiKey": "AIzaSyAZYzNlpWNQVHMN1_R3_XEh2W4_mDWyJmw",
+  "authDomain": "studio-3226400778-b5249.firebaseapp.com",
+  "projectId": "studio-3226400778-b5249",
+  "storageBucket": "studio-3226400778-b5249.appspot.com",
+  "messagingSenderId": "749960864381",
+  "appId": "1:749960864381:web:8d56f877c29d28d7a20714"
+}
+
+So now, when the user logs in and signs up completely, create a session or cookie or local storage for the user so next time this user comes so he automatically logs in and signs up. 
+
+
+Now give me SQL code for inserting User Profiles, contacts.
+
+    "database_url": "postgresql://postgres.woqnlgszvkqxaqabtqfv:[YOUR-PASSWORD]@aws-1-ap-south-1.pooler.supabase.com:6543/postgres",
+    "database_host": "aws-1-ap-south-1.pooler.supabase.com",
+    "database_port": 6543,
+    "database_name": "postgres",
+    "database_user": "postgres.woqnlgszvkqxaqabtqfv",
+    "database_password": "njAbg1RUZSaXh8vO",
+
+
+Now implement Superbase for the auth flow and storage for my codebase
+
+SUPABASE_URL=https://woqnlgszvkqxaqabtqfv.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvcW5sZ3N6dmtxeGFxYWJ0cWZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzMTM4ODYsImV4cCI6MjA3Njg4OTg4Nn0.DpePQML323-gdbbPxidrq-up8PXeBdXlG_8AtcIMW0o
+
+Now check all files in my codebase and break all files into pages, components, utilities, services, hooks, contexts, etc
+
+Also, all texts will be in dark-light theme
+
+Please read the files and folders thoroughly to learn about Genkit in JavaScript. After that, implement it correctly into my codebase and make the necessary modifications. Take the time to understand and analyze the material deeply. Once you have a good grasp of it, break your tasks into smaller parts and create a plan in the @genkit.md file.
+
+in my codebase find all console statements and remove all console statements and replace with logger statements and then modify my codebase  , Learn, understand, and analyse this deeply, and then break your tasks into smaller tasks and  then create a plan here @logger.md 
+
+Please proceed with modifying my codebase as planned, as  check all Progress Tracker and all Checkboxes, and if all tasks are completed, then fill all checkboxes one by one, Learn, understand, and analyse this deeply, and then break your tasks into smaller tasks.
+
+read my codebase @Laravel  and then thick about this app create in django python codebase , create Progress Tracker and all Checkboxs Learn, understand, and analyse this deeply, and then break your tasks into smaller tasks so make a plan in  @structure.md 
+
+how many pages in my codebase
+
+read all pages in my codebase and then thick about this app create in django python codebase , create Progress Tracker and all Checkboxs Learn, understand, and analyse this deeply, and then break your tasks into smaller tasks so make a plan in  @pages.md 
+
+how many flows in my codebase
+
+read all flows in my codebase and then thick about this app create in django python codebase , create Progress Tracker and all Checkboxs Learn, understand, and analyse this deeply, and then break your tasks into smaller tasks so make a plan in  @flows.md 
+
+
+
+
+also in root codebase also modify thsThe src folder codebase is modified, but the changes are not applied to the root codebase.
+
+
+
+
+Reviewing key files to understand the project structure and determine how to run it.
+
+
+https://app.apollo.io/#/people?page=1&contactEmailStatusV2[]=verified&personTitles[]=Chief%20Financial%20Officer&personTitles[]=CFO&personTitles[]=Vice%20President%20of%20Finance&personTitles[]=VP%20Finance&personTitles[]=Controller&personTitles[]=Director%20of%20Finance&personTitles[]=Owner&personTitles[]=Founder&personTitles[]=President&personTitles[]=Chief%20Executive%20Officer&personTitles[]=CEO&personTitles[]=Managing%20Partner&personTitles[]=HR%20Director&personTitles[]=Director%20of%20Human%20Resources&personTitles[]=Benefits%20Manager&personTitles[]=People%20Operations%20Director&personTitles[]=Chief%20Operating%20Officer&personTitles[]=COO&personTitles[]=Director%20of%20Operations&personTitles[]=VP%20of%20Finance&personTitles[]=C.E.O.&personNotTitles[]=foreman&personNotTitles[]=lead&personNotTitles[]=%22team%20lead%22&personNotTitles[]=coordinator&personNotTitles[]=specialist&personNotTitles[]=assistant&personNotTitles[]=administrator&personNotTitles[]=associate&personNotTitles[]=representative&personNotTitles[]=rep&personNotTitles[]=agent&personNotTitles[]=%22account%20manager%22&personNotTitles[]=%22customer%20service%22&personNotTitles[]=%22business%20development%22&personNotTitles[]=%22sales%20manager%22&personNotTitles[]=estimator&personNotTitles[]=superintendent&personNotTitles[]=technician&personNotTitles[]=installer&personNotTitles[]=roofer&personNotTitles[]=laborer&personNotTitles[]=dispatcher&personNotTitles[]=recruiter&personNotTitles[]=intern&personNotTitles[]=trainee&personNotTitles[]=apprentice&personNotTitles[]=Technology&personNotTitles[]=engineer&personNotTitles[]=product&personNotTitles[]=branch&personNotTitles[]=project&personNotTitles[]=insurance&personNotTitles[]=consultant&personNotTitles[]=customer&includeSimilarTitles=false&personLocations[]=Mississippi%2C%20US&personLocations[]=Florida%2C%20US&personLocations[]=Indiana%2C%20US&personLocations[]=Ohio%2C%20US&personLocations[]=Kentucky%2C%20US&personLocations[]=Texas%2C%20US&personLocations[]=Alabama%2C%20US&personLocations[]=Georgia%2C%20US&personLocations[]=South%20Carolina%2C%20US&personLocations[]=North%20Carolina%2C%20US&personLocations[]=Tennessee%2C%20US&organizationLocations[]=Tennessee%2C%20US&organizationLocations[]=North%20Carolina%2C%20US&organizationLocations[]=South%20Carolina%2C%20US&organizationLocations[]=Georgia%2C%20US&organizationLocations[]=Alabama%2C%20US&organizationLocations[]=Texas%2C%20US&organizationLocations[]=Kentucky%2C%20US&organizationLocations[]=Ohio%2C%20US&organizationLocations[]=Indiana%2C%20US&organizationLocations[]=Florida%2C%20US&organizationLocations[]=Mississippi%2C%20US&organizationNumEmployeesRanges[]=101%2C200&organizationNumEmployeesRanges[]=201%2C500&organizationNumEmployeesRanges[]=501%2C1000&organizationIndustryTagIds[]=5567cd4773696439dd350000&organizationIndustryTagIds[]=5567e1a17369641ea9d30100&organizationIndustryTagIds[]=5567ce9c7369643bc9980000&organizationIndustryTagIds[]=5567e134736964214f5e0000&organizationIndustryTagIds[]=5567cd4c73696439c9030000&organizationIndustryTagIds[]=5567e14673696416d38c0300&organizationIndustryTagIds[]=5567cd4973696439b9010000&organizationIndustryTagIds[]=5567e127736964181e700200&organizationIndustryTagIds[]=5567cd4e7369644cf93b0000&organizationIndustryTagIds[]=5567cdf27369644cfd800000&organizationIndustryTagIds[]=5567e36973696431a4480000&organizationIndustryTagIds[]=5567e1b3736964208b280000&organizationIndustryTagIds[]=5567cdda7369644cf95d0000&organizationIndustryTagIds[]=5567cddb7369644d250c0000&organizationIndustryTagIds[]=5567d02b7369645d8b140000&organizationIndustryTagIds[]=5567ce9d7369643bc19c0000&organizationIndustryTagIds[]=5567e0e0736964198de70700&organizationIndustryTagIds[]=5567d1127261697f2b1d0000&organizationIndustryTagIds[]=5567e09973696410db020800&organizationIndustryTagIds[]=5567cdd67369643e64020000&organizationIndustryTagIds[]=5567ce2d7369644d25250000&organizationIndustryTagIds[]=5567ce5b736964540d280000&organizationIndustryTagIds[]=5567ce1f7369643b78570000&organizationNotIndustryTagIds[]=5567cd527369643981050000&organizationNotIndustryTagIds[]=5567e29b736964256c370100&organizationNotIndustryTagIds[]=5567ce9e736964540d540000&organizationNotIndustryTagIds[]=5567cd4c73696453e1300000&organizationNotIndustryTagIds[]=5567cdd97369645430680000&organizationNotIndustryTagIds[]=5567cd4773696454303a0000&organizationNotIndustryTagIds[]=5567e0f27369640e5aed0c00&organizationNotIndustryTagIds[]=5567cdde73696439812c0000&qOrganizationKeywordTags[]=construction&qOrganizationKeywordTags[]=manufacturing&qOrganizationKeywordTags[]=logistics&qOrganizationKeywordTags[]=transportation&qOrganizationKeywordTags[]=trucking&qOrganizationKeywordTags[]=warehousing&qOrganizationKeywordTags[]=distribution&qOrganizationKeywordTags[]=supply%20chain&qOrganizationKeywordTags[]=industrial&qOrganizationKeywordTags[]=automation&qOrganizationKeywordTags[]=equipment&qOrganizationKeywordTags[]=engineering&qOrganizationKeywordTags[]=operations&qOrganizationKeywordTags[]=maintenance&qOrganizationKeywordTags[]=facilities&qOrganizationKeywordTags[]=materials&qOrganizationKeywordTags[]=packaging&qOrganizationKeywordTags[]=containers&qOrganizationKeywordTags[]=production&qOrganizationKeywordTags[]=assembly&qOrganizationKeywordTags[]=fabrication&qOrganizationKeywordTags[]=plant&qOrganizationKeywordTags[]=processing&qOrganizationKeywordTags[]=machinery&qOrganizationKeywordTags[]=automotive&qOrganizationKeywordTags[]=fleet&qOrganizationKeywordTags[]=repair&qOrganizationKeywordTags[]=installation&qOrganizationKeywordTags[]=service&qOrganizationKeywordTags[]=contractor&qOrganizationKeywordTags[]=building&qOrganizationKeywordTags[]=infrastructure&qOrganizationKeywordTags[]=project%20management&qOrganizationKeywordTags[]=HVAC&qOrganizationKeywordTags[]=electrical&qOrganizationKeywordTags[]=plumbing&qOrganizationKeywordTags[]=food%20production&qOrganizationKeywordTags[]=plastics&qOrganizationKeywordTags[]=manufacturing%20plant&qOrganizationKeywordTags[]=hospitality&qOrganizationKeywordTags[]=restaurant&qOrganizationKeywordTags[]=catering&qOrganizationKeywordTags[]=cleaning&qOrganizationKeywordTags[]=property%20management&qOrganizationKeywordTags[]=health&qOrganizationKeywordTags[]=wellness&qOrganizationKeywordTags[]=fitness&qOrganizationKeywordTags[]=assisted%20living&qOrganizationKeywordTags[]=senior%20care&qOrganizationKeywordTags[]=healthcare&qOrganizationKeywordTags[]=staffing&qOrganizationKeywordTags[]=recruiting&qOrganizationKeywordTags[]=services&qOrganizationKeywordTags[]=consulting&qOrganizationKeywordTags[]=business%20services&qOrganizationKeywordTags[]=workforce&qOrganizationKeywordTags[]=operations%20management&qOrganizationKeywordTags[]=sustainability&qOrganizationKeywordTags[]=safety&qOrganizationKeywordTags[]=compliance&qOrganizationKeywordTags[]=quality%20control&qOrganizationKeywordTags[]=procurement&qOrganizationKeywordTags[]=logistics%20management&qOrganizationKeywordTags[]=delivery&qOrganizationKeywordTags[]=fulfillment&qOrganizationKeywordTags[]=transportation%20services&qOrganizationKeywordTags[]=freight&qOrganizationKeywordTags[]=inventory&qOrganizationKeywordTags[]=warehouse%20management&qOrganizationKeywordTags[]=cold%20storage&qOrganizationKeywordTags[]=mechanical&qOrganizationKeywordTags[]=metalworking&qOrganizationKeywordTags[]=automation%20systems&qOrganizationKeywordTags[]=robotics&qOrganizationKeywordTags[]=machining&qOrganizationKeywordTags[]=tooling&qOrganizationKeywordTags[]=components&qOrganizationKeywordTags[]=supply%20management&qOrganizationKeywordTags[]=packaging%20design&qOrganizationKeywordTags[]=labeling&qOrganizationKeywordTags[]=bottling&qOrganizationKeywordTags[]=recycling&qOrganizationKeywordTags[]=environmental%20services&qOrganizationKeywordTags[]=sanitation&qOrganizationKeywordTags[]=janitorial&qOrganizationKeywordTags[]=energy%20management&qOrganizationKeywordTags[]=facility%20services&qOrganizationKeywordTags[]=customer%20service&qOrganizationKeywordTags[]=field%20services&qOrganizationKeywordTags[]=technical%20services&qOrganizationKeywordTags[]=installation%20services&qOrganizationKeywordTags[]=maintenance%20services&qOrganizationKeywordTags[]=distribution%20center&qOrganizationKeywordTags[]=OEM&qOrganizationKeywordTags[]=aftermarket&qOrganizationKeywordTags[]=industrial%20services&qOrganizationKeywordTags[]=utilities&qOrganizationKeywordTags[]=transport%20logistics&qOrganizationKeywordTags[]=B2B%20services&qOrganizationKeywordTags[]=manufacturing%20services&qOrganizationKeywordTags[]=managed%20services&includedOrganizationKeywordFields[]=tags&includedOrganizationKeywordFields[]=name&revenueRange[max]=250000000&revenueRange[min]=5000000&organizationTradingStatus[]=private&sortAscending=false&sortByField=%5Bnone%5D

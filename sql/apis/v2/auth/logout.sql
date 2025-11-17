@@ -1,0 +1,37 @@
+-- ============================================================================
+-- Endpoint: POST /api/v2/auth/logout/
+-- API Version: v2
+-- Description: Logout the current user and invalidate refresh token. Logout succeeds even if refresh token is not provided.
+-- ============================================================================
+--
+-- Parameters:
+--   $1: refresh_token (text, optional) - Refresh token to blacklist
+--   $2: user_id (text, required) - User ID from authenticated session
+--
+-- Request Body:
+--   {
+--     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." (optional)
+--   }
+--
+-- Response Codes:
+--   200 OK: Logout successful
+--
+-- Note: In a production system, you would blacklist the refresh token in a database table.
+-- For now, logout succeeds even if refresh token is not provided.
+-- This SQL shows a placeholder for token blacklisting if implemented.
+--
+-- Example Usage (if token blacklist table exists):
+--   INSERT INTO token_blacklist (token, user_id, blacklisted_at)
+--   VALUES ($1, $2, NOW())
+--   ON CONFLICT (token) DO NOTHING;
+-- ============================================================================
+
+-- Placeholder for token blacklisting (if implemented)
+-- If a token_blacklist table exists, you would insert the token here:
+-- INSERT INTO token_blacklist (token, user_id, blacklisted_at)
+-- VALUES ($1, $2, NOW())
+-- ON CONFLICT (token) DO NOTHING;
+
+-- Currently, logout succeeds without database operations
+-- No SQL query required - logout is handled in application layer
+

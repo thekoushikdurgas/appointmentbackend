@@ -1,0 +1,2711 @@
+"""Repository providing contact-specific query utilities."""
+
+from __future__ import annotations
+
+from typing import Any, Callable, Optional, Sequence
+
+from sqlalchemy import Select, and_, cast, distinct, func, or_, select, true, union_all, literal
+from sqlalchemy.types import Text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
+from sqlalchemy.sql import lateral
+
+from app.core.logging import get_logger
+from app.models.companies import Company, CompanyMetadata
+from app.models.contacts import Contact, ContactMetadata
+from app.repositories.base import AsyncRepository
+from app.schemas.filters import AttributeListParams, CompanyContactFilterParams, ContactFilterParams
+from app.utils.domain import extract_domain_from_url
+from app.utils.query import (
+    apply_ilike_filter,
+    apply_numeric_range_filter,
+    apply_ordering,
+    apply_search,
+)
+from app.utils.query_batch import QueryBatcher
+
+logger = get_logger(__name__)
+
+
+class ContactRepository(AsyncRepository[Contact]):
+    """Data access helpers for contact-centric queries."""
+
+    def __init__(self) -> None:
+        """Initialize the repository for the Contact model."""
+        logger.debug("Entering ContactRepository.__init__")
+        super().__init__(Contact)
+        logger.debug("Exiting ContactRepository.__init__")
+
+    @staticmethod
+    def _needs_company_join(filters: ContactFilterParams) -> bool:
+        """Determine if Company table join is needed based on filters."""
+        # Company fields that require join
+        company_fields = [
+            filters.company, filters.include_company_name, filters.company_location,
+            filters.employees_count, filters.employees_min, filters.employees_max,
+            filters.annual_revenue, filters.annual_revenue_min, filters.annual_revenue_max,
+            filters.total_funding, filters.total_funding_min, filters.total_funding_max,
+            filters.technologies, filters.technologies_uids, filters.keywords,
+            filters.keywords_and, filters.industries, filters.exclude_company_locations,
+            filters.exclude_company_name, filters.exclude_technologies,
+            filters.exclude_keywords, filters.exclude_industries, filters.company_address,
+        ]
+        return any(field is not None for field in company_fields)
+
+    @staticmethod
+    def _needs_contact_metadata_join(filters: ContactFilterParams) -> bool:
+        """Determine if ContactMetadata table join is needed based on filters."""
+        contact_meta_fields = [
+            filters.work_direct_phone, filters.home_phone, filters.other_phone,
+            filters.city, filters.state, filters.country, filters.person_linkedin_url,
+            filters.website, filters.stage, filters.facebook_url, filters.twitter_url,
+        ]
+        return any(field is not None for field in contact_meta_fields)
+
+    @staticmethod
+    def _needs_company_metadata_join(filters: ContactFilterParams) -> bool:
+        """Determine if CompanyMetadata table join is needed based on filters."""
+        company_meta_fields = [
+            filters.include_domain_list, filters.exclude_domain_list,
+            filters.company_name_for_emails, filters.corporate_phone, filters.company_phone,
+            filters.company_city, filters.company_state, filters.company_country,
+            filters.company_linkedin_url, filters.latest_funding_amount_min,
+            filters.latest_funding_amount_max, filters.facebook_url, filters.twitter_url,
+        ]
+        return any(field is not None for field in company_meta_fields)
+
+    @staticmethod
+    def _needs_company_join_for_search(search: Optional[str]) -> bool:
+        """Determine if Company join is needed for search term."""
+        # Search can include company fields, so we need the join
+        return search is not None and bool(search.strip())
+
+    def base_query_minimal(self) -> Select:
+        """Construct minimal query with only Contact table (no joins)."""
+        logger.debug("Entering ContactRepository.base_query_minimal")
+        stmt: Select = select(Contact)
+        logger.debug("Exiting ContactRepository.base_query_minimal")
+        return stmt
+
+    def base_query_with_company(self) -> tuple[Select, Company]:
+        """Construct query with Contact and Company tables only."""
+        logger.debug("Entering ContactRepository.base_query_with_company")
+        company_alias = aliased(Company, name="company")
+        stmt: Select = (
+            select(Contact, company_alias)
+            .select_from(Contact)
+            .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+        )
+        logger.debug("Exiting ContactRepository.base_query_with_company")
+        return stmt, company_alias
+
+    def base_query_with_metadata(self) -> tuple[Select, Company, ContactMetadata, CompanyMetadata]:
+        """Construct the base query with joins to related company and metadata tables."""
+        logger.debug("Entering ContactRepository.base_query_with_metadata")
+        company_alias = aliased(Company, name="company")
+        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata")
+        company_meta_alias = aliased(CompanyMetadata, name="company_metadata")
+
+        stmt: Select = (
+            select(Contact, company_alias, contact_meta_alias, company_meta_alias)
+            .select_from(Contact)
+            .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+            .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+        )
+        logger.debug("Exiting ContactRepository.base_query_with_metadata")
+        return stmt, company_alias, contact_meta_alias, company_meta_alias
+
+    def base_query(self) -> tuple[Select, Company, ContactMetadata, CompanyMetadata]:
+        """
+        Construct the base query with joins to related company and metadata tables.
+        
+        DEPRECATED: Use base_query_with_metadata() instead for clarity.
+        This method is kept for backward compatibility.
+        """
+        return self.base_query_with_metadata()
+
+    def apply_filters(
+        self,
+        stmt: Select,
+        filters: ContactFilterParams,
+        company: Company,
+        company_meta: CompanyMetadata | None = None,
+        contact_meta: ContactMetadata | None = None,
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """Apply filter parameters to the given SQLAlchemy statement."""
+        logger.debug(
+            "Entering ContactRepository.apply_filters filters=%s",
+            sorted(filters.model_dump(exclude_none=True).keys()),
+        )
+        dialect = (dialect_name or "").lower()
+        stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
+        stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
+        # Use trigram optimization for title column (has trigram index)
+        stmt = self._apply_multi_value_filter(
+            stmt, Contact.title, filters.title, 
+            dialect_name=dialect_name, 
+            use_trigram_optimization=True
+        )
+        stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
+        stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
+        stmt = self._apply_multi_value_filter(stmt, company.name, filters.company)
+        stmt = self._apply_multi_value_filter(stmt, company.name, filters.include_company_name)
+        stmt = self._apply_multi_value_filter(stmt, company.text_search, filters.company_location)
+        stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
+        if filters.employees_count is not None:
+            stmt = stmt.where(company.employees_count == filters.employees_count)
+        stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority)
+        if filters.exclude_company_locations:
+            stmt = self._apply_multi_value_exclusion(stmt, company.text_search, filters.exclude_company_locations)
+        if filters.exclude_company_name:
+            stmt = self._apply_multi_value_exclusion(stmt, company.name, filters.exclude_company_name)
+        if filters.exclude_contact_locations:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
+        if filters.exclude_seniorities:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
+        if filters.exclude_titles:
+            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
+            if lowered_titles:
+                stmt = stmt.where(
+                    or_(
+                        Contact.title.is_(None),
+                        func.lower(Contact.title).notin_(lowered_titles),
+                    )
+                )
+        if filters.exclude_company_ids:
+            exclusion_values = tuple(filters.exclude_company_ids)
+            exclusion_condition = ~Contact.company_id.in_(exclusion_values)
+            stmt = stmt.where(or_(Contact.company_id.is_(None), exclusion_condition))
+        if company_meta is not None:
+            if filters.latest_funding_amount_min is not None:
+                stmt = stmt.where(company_meta.latest_funding_amount >= filters.latest_funding_amount_min)
+            if filters.latest_funding_amount_max is not None:
+                stmt = stmt.where(company_meta.latest_funding_amount <= filters.latest_funding_amount_max)
+            # Apply domain filtering
+            if filters.include_domain_list:
+                stmt = self._apply_domain_filter(
+                    stmt,
+                    company_meta.website,
+                    filters.include_domain_list,
+                    dialect=dialect,
+                )
+            if filters.exclude_domain_list:
+                stmt = self._apply_domain_exclusion(
+                    stmt,
+                    company_meta.website,
+                    filters.exclude_domain_list,
+                    dialect=dialect,
+                )
+        stmt = apply_numeric_range_filter(
+            stmt,
+            company.employees_count,
+            filters.employees_min,
+            filters.employees_max,
+        )
+        if filters.annual_revenue is not None:
+            stmt = stmt.where(company.annual_revenue == filters.annual_revenue)
+        stmt = apply_numeric_range_filter(
+            stmt,
+            company.annual_revenue,
+            filters.annual_revenue_min,
+            filters.annual_revenue_max,
+        )
+        if filters.total_funding is not None:
+            stmt = stmt.where(company.total_funding == filters.total_funding)
+        stmt = apply_numeric_range_filter(
+            stmt,
+            company.total_funding,
+            filters.total_funding_min,
+            filters.total_funding_max,
+        )
+
+        if filters.technologies:
+            stmt = self._apply_array_text_filter(
+                stmt,
+                company.technologies,
+                filters.technologies,
+                dialect=dialect,
+            )
+        if filters.technologies_uids:
+            # Technology UIDs are passed as comma-separated string for substring matching
+            stmt = self._apply_array_text_filter(
+                stmt,
+                company.technologies,
+                filters.technologies_uids,
+                dialect=dialect,
+            )
+        if filters.exclude_technologies:
+            stmt = self._apply_array_text_exclusion(
+                stmt,
+                company.technologies,
+                filters.exclude_technologies,
+                dialect=dialect,
+            )
+        if filters.keywords:
+            # Apply keyword filter with field control if specified
+            if filters.keyword_search_fields or filters.keyword_exclude_fields:
+                stmt = self._apply_keyword_search_with_fields(
+                    stmt,
+                    filters.keywords,
+                    company,
+                    filters.keyword_search_fields,
+                    filters.keyword_exclude_fields,
+                    dialect=dialect,
+                )
+            else:
+                # Standard keyword filter (OR logic)
+                stmt = self._apply_array_text_filter(
+                    stmt,
+                    company.keywords,
+                    filters.keywords,
+                    dialect=dialect,
+                )
+        if filters.keywords_and:
+            # AND logic keywords with optional field control
+            if filters.keyword_search_fields or filters.keyword_exclude_fields:
+                stmt = self._apply_keyword_search_with_fields(
+                    stmt,
+                    filters.keywords_and,
+                    company,
+                    filters.keyword_search_fields,
+                    filters.keyword_exclude_fields,
+                    dialect=dialect,
+                    use_and_logic=True,
+                )
+            else:
+                # AND logic on keywords field only
+                stmt = self._apply_array_text_filter_and(
+                    stmt,
+                    company.keywords,
+                    filters.keywords_and,
+                    dialect=dialect,
+                )
+        if filters.exclude_keywords:
+            stmt = self._apply_array_text_exclusion(
+                stmt,
+                company.keywords,
+                filters.exclude_keywords,
+                dialect=dialect,
+            )
+        if filters.industries:
+            stmt = self._apply_array_text_filter(
+                stmt,
+                company.industries,
+                filters.industries,
+                dialect=dialect,
+            )
+        if filters.exclude_industries:
+            stmt = self._apply_array_text_exclusion(
+                stmt,
+                company.industries,
+                filters.exclude_industries,
+                dialect=dialect,
+            )
+
+        if filters.department:
+            stmt = self._apply_array_text_filter(
+                stmt,
+                Contact.departments,
+                filters.department,
+                dialect=dialect,
+            )
+        if filters.exclude_departments:
+            stmt = self._apply_array_text_exclusion(
+                stmt,
+                Contact.departments,
+                filters.exclude_departments,
+                dialect=dialect,
+            )
+
+        if filters.company_address:
+            stmt = self._apply_multi_value_filter(stmt, company.text_search, filters.company_address)
+        stmt = self._apply_multi_value_filter(stmt, Contact.mobile_phone, filters.mobile_phone)
+        if contact_meta is not None:
+            stmt = self._apply_multi_value_filter(
+                stmt,
+                contact_meta.work_direct_phone,
+                filters.work_direct_phone,
+            )
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.home_phone, filters.home_phone)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.other_phone, filters.other_phone)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.city, filters.city)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.state, filters.state)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.country, filters.country)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.linkedin_url, filters.person_linkedin_url)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.website, filters.website)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.stage, filters.stage)
+        if company_meta is not None:
+            stmt = self._apply_multi_value_filter(
+                stmt,
+                company_meta.company_name_for_emails,
+                filters.company_name_for_emails,
+            )
+            stmt = self._apply_multi_value_filter(stmt, company_meta.phone_number, filters.corporate_phone)
+            stmt = self._apply_multi_value_filter(stmt, company_meta.phone_number, filters.company_phone)
+            stmt = self._apply_multi_value_filter(stmt, company_meta.city, filters.company_city)
+            stmt = self._apply_multi_value_filter(stmt, company_meta.state, filters.company_state)
+            stmt = self._apply_multi_value_filter(stmt, company_meta.country, filters.company_country)
+            stmt = self._apply_multi_value_filter(stmt, company_meta.linkedin_url, filters.company_linkedin_url)
+
+        if filters.facebook_url and (contact_meta is not None or company_meta is not None):
+            facebook_tokens = self._split_filter_values(filters.facebook_url) or [filters.facebook_url.strip()]
+            facebook_tokens = [token for token in facebook_tokens if token]
+            if facebook_tokens:
+                or_conditions = []
+                for token in facebook_tokens:
+                    like_expression = f"%{token}%"
+                    column_conditions = []
+                    if contact_meta is not None:
+                        column_conditions.append(contact_meta.facebook_url.ilike(like_expression))
+                    if company_meta is not None:
+                        column_conditions.append(company_meta.facebook_url.ilike(like_expression))
+                    if column_conditions:
+                        or_conditions.append(or_(*column_conditions))
+                if or_conditions:
+                    stmt = stmt.where(or_(*or_conditions))
+
+        if filters.twitter_url and (contact_meta is not None or company_meta is not None):
+            twitter_tokens = self._split_filter_values(filters.twitter_url) or [filters.twitter_url.strip()]
+            twitter_tokens = [token for token in twitter_tokens if token]
+            if twitter_tokens:
+                or_conditions = []
+                for token in twitter_tokens:
+                    like_expression = f"%{token}%"
+                    column_conditions = []
+                    if contact_meta is not None:
+                        column_conditions.append(contact_meta.twitter_url.ilike(like_expression))
+                    if company_meta is not None:
+                        column_conditions.append(company_meta.twitter_url.ilike(like_expression))
+                    if column_conditions:
+                        or_conditions.append(or_(*column_conditions))
+                if or_conditions:
+                    stmt = stmt.where(or_(*or_conditions))
+
+        if filters.created_at_after is not None:
+            stmt = stmt.where(Contact.created_at >= filters.created_at_after)
+        if filters.created_at_before is not None:
+            stmt = stmt.where(Contact.created_at <= filters.created_at_before)
+        if filters.updated_at_after is not None:
+            stmt = stmt.where(Contact.updated_at >= filters.updated_at_after)
+        if filters.updated_at_before is not None:
+            stmt = stmt.where(Contact.updated_at <= filters.updated_at_before)
+
+        logger.debug("Exiting ContactRepository.apply_filters")
+        return stmt
+
+    def apply_search_terms(
+        self,
+        stmt: Select,
+        search: Optional[str],
+        company: Company,
+        company_meta: CompanyMetadata | None = None,
+        contact_meta: ContactMetadata | None = None,
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """Apply case-insensitive search across selected text columns."""
+        logger.debug(
+            "Entering ContactRepository.apply_search_terms search_present=%s",
+            bool(search),
+        )
+        if not search:
+            logger.debug("Exiting ContactRepository.apply_search_terms (no search provided)")
+            return stmt
+        dialect = (dialect_name or "").lower()
+        columns: list[Any] = [
+            Contact.first_name,
+            Contact.last_name,
+            Contact.email,
+            Contact.title,
+            Contact.seniority,
+            Contact.text_search,
+            company.name,
+            company.address,
+            self._array_column_as_text(company.industries, dialect),
+            self._array_column_as_text(company.keywords, dialect),
+        ]
+        if company_meta is not None:
+            columns.extend(
+                [
+                    company_meta.city,
+                    company_meta.state,
+                    company_meta.country,
+                    company_meta.phone_number,
+                    company_meta.website,
+                ]
+            )
+        if contact_meta is not None:
+            columns.extend(
+                [
+                    contact_meta.city,
+                    contact_meta.state,
+                    contact_meta.country,
+                    contact_meta.linkedin_url,
+                    contact_meta.twitter_url,
+                ]
+            )
+        stmt = apply_search(stmt, search, columns)
+        logger.debug("Exiting ContactRepository.apply_search_terms")
+        return stmt
+
+    def _needs_joins_for_ordering(self, ordering: Optional[str]) -> tuple[bool, bool, bool]:
+        """Determine which joins are needed based on ordering field."""
+        needs_company = False
+        needs_contact_meta = False
+        needs_company_meta = False
+        
+        if not ordering:
+            return needs_company, needs_contact_meta, needs_company_meta
+        
+        ordering_lower = ordering.lower()
+        # Company fields
+        if any(field in ordering_lower for field in ["employees", "annual_revenue", "total_funding", "company", "industry", "keywords", "technologies", "company_address"]):
+            needs_company = True
+        # CompanyMetadata fields
+        if any(field in ordering_lower for field in ["latest_funding_amount", "company_name_for_emails", "corporate_phone", "company_phone", "company_city", "company_state", "company_country", "company_linkedin_url", "latest_funding", "last_raised_at"]):
+            needs_company = True
+            needs_company_meta = True
+        # ContactMetadata fields
+        if any(field in ordering_lower for field in ["work_direct_phone", "home_phone", "other_phone", "stage", "person_linkedin_url", "website", "city", "state", "country", "facebook_url", "twitter_url"]):
+            needs_contact_meta = True
+        
+        return needs_company, needs_contact_meta, needs_company_meta
+
+    async def list_contacts(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        limit: Optional[int],
+        offset: int,
+    ) -> Sequence[tuple[Contact, Company, ContactMetadata, CompanyMetadata]]:
+        """Return contacts with associated company and metadata rows.
+        
+        Optimized to only join tables that are needed based on filters and ordering.
+        """
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Listing contacts: limit=%s offset=%d ordering=%s filters=%s",
+            limit,
+            offset,
+            filters.ordering,
+            active_filter_keys,
+        )
+        
+        # Determine which joins are needed
+        needs_company = self._needs_company_join(filters) or self._needs_company_join_for_search(filters.search)
+        needs_contact_meta = self._needs_contact_metadata_join(filters)
+        needs_company_meta = self._needs_company_metadata_join(filters)
+        
+        # Check ordering requirements
+        order_company, order_contact_meta, order_company_meta = self._needs_joins_for_ordering(filters.ordering)
+        needs_company = needs_company or order_company
+        needs_contact_meta = needs_contact_meta or order_contact_meta
+        needs_company_meta = needs_company_meta or order_company_meta
+        
+        # Always need company for response hydration (ContactListItem includes company data)
+        # But we can optimize by not joining metadata tables when they're not needed
+        if needs_company_meta or needs_contact_meta:
+            # Need all joins
+            stmt, company_alias, contact_meta_alias, company_meta_alias = self.base_query_with_metadata()
+        else:
+            # Only need company join (metadata can be None in response)
+            stmt, company_alias = self.base_query_with_company()
+            contact_meta_alias = None
+            company_meta_alias = None
+        
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        
+        # Apply filters - use appropriate method based on joins
+        if company_alias is not None:
+            stmt = self.apply_filters(
+                stmt,
+                filters,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            stmt = self.apply_search_terms(
+                stmt,
+                filters.search,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+        else:
+            # No joins - apply filters with EXISTS
+            stmt = self._apply_filters_with_exists(stmt, filters, dialect_name=dialect_name)
+            if filters.search:
+                stmt = self._apply_search_terms_with_exists(stmt, filters.search, filters, dialect_name=dialect_name)
+        
+        # Build ordering map based on available joins
+        ordering_map = {
+            "created_at": Contact.created_at,
+            "updated_at": Contact.updated_at,
+            "first_name": Contact.first_name,
+            "last_name": Contact.last_name,
+            "title": Contact.title,
+            "email": Contact.email,
+            "email_status": Contact.email_status,
+            "primary_email_catch_all_status": getattr(
+                Contact, "primary_email_catch_all_status", Contact.email_status
+            ),
+            "seniority": Contact.seniority,
+            "departments": cast(Contact.departments, Text),
+            "mobile_phone": Contact.mobile_phone,
+        }
+        
+        if company_alias is not None:
+            ordering_map.update({
+                "employees": company_alias.employees_count,
+                "annual_revenue": company_alias.annual_revenue,
+                "total_funding": company_alias.total_funding,
+                "company": company_alias.name,
+                "industry": cast(company_alias.industries, Text),
+                "keywords": cast(company_alias.keywords, Text),
+                "technologies": cast(company_alias.technologies, Text),
+                "company_address": company_alias.address,
+            })
+        
+        if company_meta_alias is not None:
+            ordering_map.update({
+                "latest_funding_amount": company_meta_alias.latest_funding_amount,
+                "company_name_for_emails": company_meta_alias.company_name_for_emails,
+                "corporate_phone": company_meta_alias.phone_number,
+                "company_phone": company_meta_alias.phone_number,
+                "company_city": company_meta_alias.city,
+                "company_state": company_meta_alias.state,
+                "company_country": company_meta_alias.country,
+                "company_linkedin_url": company_meta_alias.linkedin_url,
+                "latest_funding": company_meta_alias.latest_funding,
+                "last_raised_at": company_meta_alias.last_raised_at,
+            })
+        
+        if contact_meta_alias is not None:
+            ordering_map.update({
+                "work_direct_phone": contact_meta_alias.work_direct_phone,
+                "home_phone": contact_meta_alias.home_phone,
+                "other_phone": contact_meta_alias.other_phone,
+                "stage": contact_meta_alias.stage,
+                "person_linkedin_url": contact_meta_alias.linkedin_url,
+                "website": contact_meta_alias.website,
+                "city": contact_meta_alias.city,
+                "state": contact_meta_alias.state,
+                "country": contact_meta_alias.country,
+            })
+            if company_meta_alias is not None:
+                ordering_map.update({
+                    "facebook_url": func.coalesce(
+                        contact_meta_alias.facebook_url, company_meta_alias.facebook_url
+                    ),
+                    "twitter_url": func.coalesce(
+                        contact_meta_alias.twitter_url, company_meta_alias.twitter_url
+                    ),
+                })
+            else:
+                ordering_map.update({
+                    "facebook_url": contact_meta_alias.facebook_url,
+                    "twitter_url": contact_meta_alias.twitter_url,
+                })
+        
+        stmt = apply_ordering(stmt, filters.ordering, ordering_map)
+        stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        
+        # Use streaming for large result sets to reduce memory usage
+        if limit and limit > 10000:
+            logger.debug("Using batched query for large result set limit=%d", limit)
+            batcher = QueryBatcher(session, stmt, batch_size=5000)
+            rows = await batcher.fetch_all()
+        else:
+            result = await session.execute(stmt)
+            rows = result.fetchall()
+        
+        # Normalize results to always return 4-tuple format for compatibility
+        normalized_rows = []
+        for row in rows:
+            if isinstance(row, tuple) and len(row) == 4:
+                normalized_rows.append(row)
+            elif isinstance(row, tuple) and len(row) == 2:
+                # Only Contact and Company
+                contact, company = row
+                normalized_rows.append((contact, company, None, None))
+            elif isinstance(row, Contact):
+                # Only Contact
+                normalized_rows.append((row, None, None, None))
+            else:
+                # Fallback
+                normalized_rows.append((row, None, None, None))
+        
+        logger.debug("Retrieved %d contacts from repository query", len(normalized_rows))
+        return normalized_rows
+
+    async def create_contact(self, session: AsyncSession, data: dict[str, Any]) -> Contact:
+        """Persist a new contact record."""
+        logger.debug("Creating contact with fields: %s", sorted(data.keys()))
+        contact = Contact(**data)
+        bind = session.get_bind()
+        if bind is not None and bind.dialect.name == "sqlite":
+            result = await session.execute(select(func.max(Contact.id)))
+            next_id = (result.scalar_one_or_none() or 0) + 1
+            contact.id = next_id
+        session.add(contact)
+        await session.flush()
+        await session.refresh(contact)
+        logger.debug("Created contact: id=%s uuid=%s", contact.id, contact.uuid)
+        return contact
+
+    def _apply_filters_with_exists(
+        self,
+        stmt: Select,
+        filters: ContactFilterParams,
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """Apply filters using EXISTS subqueries instead of joins for better performance in count queries."""
+        from sqlalchemy import exists
+        
+        logger.debug("Applying filters with EXISTS subqueries")
+        dialect = (dialect_name or "").lower()
+        
+        # Contact-only filters (no EXISTS needed)
+        stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
+        stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
+        # Use trigram optimization for title column
+        stmt = self._apply_multi_value_filter(
+            stmt, Contact.title, filters.title, 
+            dialect_name=dialect_name, 
+            use_trigram_optimization=True
+        )
+        stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
+        stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
+        stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
+        stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority)
+        stmt = self._apply_multi_value_filter(stmt, Contact.mobile_phone, filters.mobile_phone)
+        
+        if filters.exclude_contact_locations:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
+        if filters.exclude_seniorities:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
+        if filters.exclude_titles:
+            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
+            if lowered_titles:
+                stmt = stmt.where(
+                    or_(
+                        Contact.title.is_(None),
+                        func.lower(Contact.title).notin_(lowered_titles),
+                    )
+                )
+        if filters.exclude_company_ids:
+            exclusion_values = tuple(filters.exclude_company_ids)
+            exclusion_condition = ~Contact.company_id.in_(exclusion_values)
+            stmt = stmt.where(or_(Contact.company_id.is_(None), exclusion_condition))
+        
+        if filters.department:
+            stmt = self._apply_array_text_filter(
+                stmt,
+                Contact.departments,
+                filters.department,
+                dialect=dialect,
+            )
+        if filters.exclude_departments:
+            stmt = self._apply_array_text_exclusion(
+                stmt,
+                Contact.departments,
+                filters.exclude_departments,
+                dialect=dialect,
+            )
+        
+        # Company filters using EXISTS
+        if self._needs_company_join(filters):
+            company_subq = select(1).select_from(Company).where(
+                Company.uuid == Contact.company_id
+            )
+            
+            # Apply company filters to subquery
+            if filters.company:
+                company_subq = self._apply_multi_value_filter(company_subq, Company.name, filters.company)
+            if filters.include_company_name:
+                company_subq = self._apply_multi_value_filter(company_subq, Company.name, filters.include_company_name)
+            if filters.company_location:
+                company_subq = self._apply_multi_value_filter(company_subq, Company.text_search, filters.company_location)
+            if filters.company_address:
+                company_subq = self._apply_multi_value_filter(company_subq, Company.text_search, filters.company_address)
+            if filters.employees_count is not None:
+                company_subq = company_subq.where(Company.employees_count == filters.employees_count)
+            company_subq = apply_numeric_range_filter(
+                company_subq,
+                Company.employees_count,
+                filters.employees_min,
+                filters.employees_max,
+            )
+            if filters.annual_revenue is not None:
+                company_subq = company_subq.where(Company.annual_revenue == filters.annual_revenue)
+            company_subq = apply_numeric_range_filter(
+                company_subq,
+                Company.annual_revenue,
+                filters.annual_revenue_min,
+                filters.annual_revenue_max,
+            )
+            if filters.total_funding is not None:
+                company_subq = company_subq.where(Company.total_funding == filters.total_funding)
+            company_subq = apply_numeric_range_filter(
+                company_subq,
+                Company.total_funding,
+                filters.total_funding_min,
+                filters.total_funding_max,
+            )
+            if filters.technologies:
+                company_subq = self._apply_array_text_filter(
+                    company_subq,
+                    Company.technologies,
+                    filters.technologies,
+                    dialect=dialect,
+                )
+            if filters.technologies_uids:
+                company_subq = self._apply_array_text_filter(
+                    company_subq,
+                    Company.technologies,
+                    filters.technologies_uids,
+                    dialect=dialect,
+                )
+            if filters.exclude_technologies:
+                company_subq = self._apply_array_text_exclusion(
+                    company_subq,
+                    Company.technologies,
+                    filters.exclude_technologies,
+                    dialect=dialect,
+                )
+            if filters.keywords:
+                company_subq = self._apply_array_text_filter(
+                    company_subq,
+                    Company.keywords,
+                    filters.keywords,
+                    dialect=dialect,
+                )
+            if filters.exclude_keywords:
+                company_subq = self._apply_array_text_exclusion(
+                    company_subq,
+                    Company.keywords,
+                    filters.exclude_keywords,
+                    dialect=dialect,
+                )
+            if filters.industries:
+                company_subq = self._apply_array_text_filter(
+                    company_subq,
+                    Company.industries,
+                    filters.industries,
+                    dialect=dialect,
+                )
+            if filters.exclude_industries:
+                company_subq = self._apply_array_text_exclusion(
+                    company_subq,
+                    Company.industries,
+                    filters.exclude_industries,
+                    dialect=dialect,
+                )
+            if filters.exclude_company_locations:
+                company_subq = self._apply_multi_value_exclusion(
+                    company_subq, Company.text_search, filters.exclude_company_locations
+                )
+            if filters.exclude_company_name:
+                company_subq = self._apply_multi_value_exclusion(
+                    company_subq, Company.name, filters.exclude_company_name
+                )
+            
+            stmt = stmt.where(exists(company_subq))
+        
+        # CompanyMetadata filters using EXISTS
+        if self._needs_company_metadata_join(filters):
+            company_meta_subq = (
+                select(1)
+                .select_from(CompanyMetadata)
+                .join(Company, Company.uuid == CompanyMetadata.uuid)
+                .where(Company.uuid == Contact.company_id)
+            )
+            
+            if filters.latest_funding_amount_min is not None:
+                company_meta_subq = company_meta_subq.where(
+                    CompanyMetadata.latest_funding_amount >= filters.latest_funding_amount_min
+                )
+            if filters.latest_funding_amount_max is not None:
+                company_meta_subq = company_meta_subq.where(
+                    CompanyMetadata.latest_funding_amount <= filters.latest_funding_amount_max
+                )
+            if filters.include_domain_list:
+                company_meta_subq = self._apply_domain_filter(
+                    company_meta_subq,
+                    CompanyMetadata.website,
+                    filters.include_domain_list,
+                    dialect=dialect,
+                )
+            if filters.exclude_domain_list:
+                company_meta_subq = self._apply_domain_exclusion(
+                    company_meta_subq,
+                    CompanyMetadata.website,
+                    filters.exclude_domain_list,
+                    dialect=dialect,
+                )
+            if filters.company_name_for_emails:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.company_name_for_emails, filters.company_name_for_emails
+                )
+            if filters.corporate_phone or filters.company_phone:
+                phone_filter = filters.corporate_phone or filters.company_phone
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.phone_number, phone_filter
+                )
+            if filters.company_city:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.city, filters.company_city
+                )
+            if filters.company_state:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.state, filters.company_state
+                )
+            if filters.company_country:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.country, filters.company_country
+                )
+            if filters.company_linkedin_url:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.linkedin_url, filters.company_linkedin_url
+                )
+            
+            stmt = stmt.where(exists(company_meta_subq))
+        
+        # ContactMetadata filters using EXISTS
+        if self._needs_contact_metadata_join(filters):
+            contact_meta_subq = (
+                select(1)
+                .select_from(ContactMetadata)
+                .where(ContactMetadata.uuid == Contact.uuid)
+            )
+            
+            if filters.work_direct_phone:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.work_direct_phone, filters.work_direct_phone
+                )
+            if filters.home_phone:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.home_phone, filters.home_phone
+                )
+            if filters.other_phone:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.other_phone, filters.other_phone
+                )
+            if filters.city:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.city, filters.city
+                )
+            if filters.state:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.state, filters.state
+                )
+            if filters.country:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.country, filters.country
+                )
+            if filters.person_linkedin_url:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.linkedin_url, filters.person_linkedin_url
+                )
+            if filters.website:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.website, filters.website
+                )
+            if filters.stage:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.stage, filters.stage
+                )
+            if filters.facebook_url:
+                contact_meta_subq = contact_meta_subq.where(
+                    ContactMetadata.facebook_url.ilike(f"%{filters.facebook_url}%")
+                )
+            if filters.twitter_url:
+                contact_meta_subq = contact_meta_subq.where(
+                    ContactMetadata.twitter_url.ilike(f"%{filters.twitter_url}%")
+                )
+            
+            stmt = stmt.where(exists(contact_meta_subq))
+        
+        # Temporal filters
+        if filters.created_at_after is not None:
+            stmt = stmt.where(Contact.created_at >= filters.created_at_after)
+        if filters.created_at_before is not None:
+            stmt = stmt.where(Contact.created_at <= filters.created_at_before)
+        if filters.updated_at_after is not None:
+            stmt = stmt.where(Contact.updated_at >= filters.updated_at_after)
+        if filters.updated_at_before is not None:
+            stmt = stmt.where(Contact.updated_at <= filters.updated_at_before)
+        
+        return stmt
+
+    async def count_contacts(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        *,
+        use_approximate: bool = False,
+    ) -> int:
+        """
+        Count contacts that match the supplied filters.
+        
+        Optimized for large datasets by using EXISTS subqueries instead of joins
+        when filters don't require data from joined tables.
+        
+        Args:
+            session: Database session
+            filters: Filter parameters
+            use_approximate: If True, use approximate count from pg_class for very large result sets
+        """
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug("Counting contacts with filters=%s use_approximate=%s", active_filter_keys, use_approximate)
+        
+        # For very large unfiltered queries, use approximate count
+        if use_approximate and not active_filter_keys:
+            dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+            if dialect_name == "postgresql":
+                try:
+                    from sqlalchemy import text
+                    result = await session.execute(
+                        text("SELECT COALESCE(reltuples::bigint, 0) FROM pg_class WHERE relname = 'contacts'")
+                    )
+                    total = result.scalar_one() or 0
+                    logger.debug("Counted contacts (approximate) total=%d", total)
+                    return int(total)
+                except Exception as e:
+                    logger.debug("Could not use approximate count, falling back to exact: %s", e)
+        
+        # Use minimal query with EXISTS subqueries instead of joins
+        stmt = select(func.count(Contact.id)).select_from(Contact)
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        stmt = self._apply_filters_with_exists(stmt, filters, dialect_name=dialect_name)
+        
+        # Apply search terms if needed
+        if filters.search:
+            stmt = self._apply_search_terms_with_exists(stmt, filters.search, filters, dialect_name=dialect_name)
+        
+        result = await session.execute(stmt)
+        total = result.scalar_one() or 0
+        logger.debug("Counted contacts total=%d", total)
+        return total
+    
+    def _apply_search_terms_with_exists(
+        self,
+        stmt: Select,
+        search: str,
+        filters: ContactFilterParams,
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """Apply search terms using EXISTS subqueries when needed."""
+        from sqlalchemy import exists
+        
+        search_stripped = search.strip()
+        if not search_stripped:
+            return stmt
+        
+        pattern = f"%{search_stripped}%"
+        dialect = (dialect_name or "").lower()
+        
+        # Contact columns (no EXISTS needed)
+        contact_conditions = [
+            Contact.first_name.ilike(pattern),
+            Contact.last_name.ilike(pattern),
+            Contact.email.ilike(pattern),
+            Contact.title.ilike(pattern),
+            Contact.seniority.ilike(pattern),
+            Contact.text_search.ilike(pattern),
+        ]
+        
+        # Company search using EXISTS
+        if self._needs_company_join_for_search(search):
+            company_search_subq = (
+                select(1)
+                .select_from(Company)
+                .where(Company.uuid == Contact.company_id)
+                .where(
+                    or_(
+                        Company.name.ilike(pattern),
+                        Company.address.ilike(pattern),
+                        Company.text_search.ilike(pattern),
+                        self._array_column_as_text(Company.industries, dialect).ilike(pattern),
+                        self._array_column_as_text(Company.keywords, dialect).ilike(pattern),
+                        self._array_column_as_text(Company.technologies, dialect).ilike(pattern),
+                    )
+                )
+            )
+            contact_conditions.append(exists(company_search_subq))
+        
+        # CompanyMetadata search using EXISTS
+        if self._needs_company_metadata_join(filters) or self._needs_company_join_for_search(search):
+            company_meta_search_subq = (
+                select(1)
+                .select_from(CompanyMetadata)
+                .join(Company, Company.uuid == CompanyMetadata.uuid)
+                .where(Company.uuid == Contact.company_id)
+                .where(
+                    or_(
+                        CompanyMetadata.city.ilike(pattern),
+                        CompanyMetadata.state.ilike(pattern),
+                        CompanyMetadata.country.ilike(pattern),
+                        CompanyMetadata.phone_number.ilike(pattern),
+                        CompanyMetadata.website.ilike(pattern),
+                        CompanyMetadata.linkedin_url.ilike(pattern),
+                    )
+                )
+            )
+            contact_conditions.append(exists(company_meta_search_subq))
+        
+        # ContactMetadata search using EXISTS
+        if self._needs_contact_metadata_join(filters):
+            contact_meta_search_subq = (
+                select(1)
+                .select_from(ContactMetadata)
+                .where(ContactMetadata.uuid == Contact.uuid)
+                .where(
+                    or_(
+                        ContactMetadata.city.ilike(pattern),
+                        ContactMetadata.state.ilike(pattern),
+                        ContactMetadata.country.ilike(pattern),
+                        ContactMetadata.linkedin_url.ilike(pattern),
+                        ContactMetadata.twitter_url.ilike(pattern),
+                    )
+                )
+            )
+            contact_conditions.append(exists(contact_meta_search_subq))
+        
+        if contact_conditions:
+            stmt = stmt.where(or_(*contact_conditions))
+        
+        return stmt
+
+    async def list_attribute_values(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        params: AttributeListParams,
+        *,
+        array_mode: bool = False,
+        column_factory: Callable[[Contact, Company, ContactMetadata, CompanyMetadata], Any] | None = None,
+    ) -> list[str]:
+        """Return attribute values for autocomplete/dropdown endpoints.
+        
+        Optimized to only join tables needed for filtering.
+        """
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Listing attribute values: limit=%d offset=%d ordering=%s filters=%s",
+            params.limit,
+            params.offset,
+            params.ordering,
+            active_filter_keys,
+        )
+        bind = session.bind
+        dialect_name = getattr(bind.dialect, "name", None) if bind is not None else None
+        use_array_optimization = array_mode and dialect_name == "postgresql"
+
+        if use_array_optimization and column_factory is not None:
+            values = await self._list_array_attribute_values(session, column_factory, filters, params)
+            logger.debug("Retrieved %d array attribute values (optimized)", len(values))
+            return values
+
+        if column_factory is None:
+            raise ValueError("column_factory must be provided for attribute value queries.")
+
+        # Determine which joins are needed for filters
+        needs_company = self._needs_company_join(filters) or self._needs_company_join_for_search(params.search or filters.search)
+        needs_contact_meta = self._needs_contact_metadata_join(filters)
+        needs_company_meta = self._needs_company_metadata_join(filters)
+        
+        # Create aliases - always create them for column_factory
+        company_alias = aliased(Company, name="company_attribute")
+        contact_meta_alias = aliased(ContactMetadata, name="contact_meta_attribute")
+        company_meta_alias = aliased(CompanyMetadata, name="company_meta_attribute")
+
+        # Get column expression first to check what it references
+        # Note: We can't easily inspect which table the column comes from,
+        # so we'll be conservative and join Company (most attributes are from Company)
+        # but only join metadata when filters require it
+        column_expression = column_factory(Contact, company_alias, contact_meta_alias, company_meta_alias)
+
+        stmt = select(column_expression).select_from(Contact)
+        
+        # Always join Company for attribute queries (most attributes are from Company)
+        # This is still an optimization because we're not joining metadata tables unnecessarily
+        stmt = stmt.outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+        
+        # Only join metadata tables when filters require them
+        if needs_company_meta:
+            stmt = stmt.outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+        if needs_contact_meta:
+            stmt = stmt.outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        
+        # Apply filters - Company is always joined, but metadata may not be
+        stmt = self.apply_filters(
+            stmt,
+            filters,
+            company_alias,
+            company_meta_alias if needs_company_meta else None,
+            contact_meta_alias if needs_contact_meta else None,
+            dialect_name=dialect_name,
+        )
+        stmt = self.apply_search_terms(
+            stmt,
+            params.search or filters.search,
+            company_alias,
+            company_meta_alias if needs_company_meta else None,
+            contact_meta_alias if needs_contact_meta else None,
+            dialect_name=dialect_name,
+        )
+        
+        stmt = stmt.where(column_expression.isnot(None))
+        
+        # Apply distinct BEFORE ordering to avoid SQL issues
+        if params.distinct:
+            stmt = stmt.distinct()
+        
+        # Apply ordering after distinct - only order by the selected column
+        ordering_map = {"value": column_expression}
+        stmt = apply_ordering(
+            stmt,
+            params.ordering,
+            ordering_map,
+        )
+        
+        # When using DISTINCT, ensure there's always an explicit ORDER BY
+        if params.distinct and not params.ordering:
+            stmt = stmt.order_by(column_expression.asc())
+        
+        stmt = stmt.offset(params.offset)
+        if params.limit is not None:
+            stmt = stmt.limit(params.limit)
+        result = await session.execute(stmt)
+        values = []
+        for (value,) in result.fetchall():
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            values.append(value)
+        logger.debug("Retrieved %d attribute values", len(values))
+        return values
+
+    async def _list_array_attribute_values(
+        self,
+        session: AsyncSession,
+        column_factory: Callable[[Contact, Company, ContactMetadata, CompanyMetadata], Any],
+        filters: ContactFilterParams,
+        params: AttributeListParams,
+    ) -> list[str]:
+        """Optimized array attribute extraction using lateral unnesting."""
+        stmt, company_alias, contact_meta_alias, company_meta_alias = self.base_query()
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        stmt = self.apply_filters(
+            stmt,
+            filters,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+        stmt = self.apply_search_terms(
+            stmt,
+            filters.search,
+            company_alias,
+            company_meta_alias,
+            contact_meta_alias,
+            dialect_name=dialect_name,
+        )
+
+        filtered_companies = (
+            stmt.with_only_columns(company_alias.uuid)
+            .where(company_alias.uuid.isnot(None))
+            .distinct()
+            .subquery()
+        )
+
+        source_company = aliased(Company, name="array_company")
+        source_contact_meta = aliased(ContactMetadata, name="array_contact_meta")
+        source_company_meta = aliased(CompanyMetadata, name="array_company_meta")
+        array_column = column_factory(Contact, source_company, source_contact_meta, source_company_meta)
+
+        value_selectable = lateral(
+            select(func.unnest(array_column).label("value"))
+        ).alias("attribute_values")
+        value_column = value_selectable.c.value
+
+        attr_stmt = (
+            select(value_column)
+            .select_from(filtered_companies)
+            .join(source_company, source_company.uuid == filtered_companies.c.uuid)
+            .join(value_selectable, true())
+        )
+
+        trimmed_value = func.nullif(func.trim(value_column), "")
+        attr_stmt = attr_stmt.where(value_column.isnot(None))
+        attr_stmt = attr_stmt.where(trimmed_value.isnot(None))
+        search_term = params.search or filters.search
+        if search_term:
+            attr_stmt = attr_stmt.where(value_column.ilike(f"%{search_term}%"))
+
+        ordering_map = {"value": value_column}
+        attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+        if params.ordering is None:
+            attr_stmt = attr_stmt.order_by(value_column.asc())
+        
+        # Apply distinct to the statement if requested
+        if params.distinct:
+            attr_stmt = attr_stmt.distinct()
+
+        attr_stmt = attr_stmt.offset(params.offset)
+        if params.limit is not None:
+            attr_stmt = attr_stmt.limit(params.limit)
+        result = await session.execute(attr_stmt)
+        values = [value for (value,) in result.fetchall() if value]
+        return values
+
+    async def get_uuids_by_filters(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        limit: Optional[int] = None,
+    ) -> list[str]:
+        """Return contact UUIDs that match the supplied filters (efficient UUID-only query).
+        
+        Optimized to use EXISTS subqueries instead of joins for better performance.
+        """
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Getting contact UUIDs: limit=%s filters=%s",
+            limit,
+            active_filter_keys,
+        )
+
+        # Use minimal query with EXISTS subqueries instead of joins
+        stmt = select(Contact.uuid).select_from(Contact)
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        stmt = self._apply_filters_with_exists(stmt, filters, dialect_name=dialect_name)
+        
+        # Apply search terms if needed
+        if filters.search:
+            stmt = self._apply_search_terms_with_exists(stmt, filters.search, filters, dialect_name=dialect_name)
+        
+        stmt = stmt.where(Contact.uuid.isnot(None))
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await session.execute(stmt)
+        uuids = [uuid for (uuid,) in result.fetchall() if uuid]
+        logger.debug("Retrieved %d contact UUIDs", len(uuids))
+        return uuids
+
+    async def get_uuids_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        filters: CompanyContactFilterParams,
+        limit: Optional[int] = None,
+    ) -> list[str]:
+        """Return contact UUIDs for a specific company that match the supplied filters.
+        
+        Optimized to use EXISTS subqueries instead of joins for better performance.
+        """
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Getting contact UUIDs for company %s: limit=%s filters=%s",
+            company_uuid,
+            limit,
+            active_filter_keys,
+        )
+
+        # Use minimal query with EXISTS subqueries
+        stmt = select(Contact.uuid).select_from(Contact)
+        stmt = stmt.where(Contact.company_id == company_uuid)
+        
+        # Apply contact-only filters directly
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        dialect = (dialect_name or "").lower()
+        
+        stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name)
+        stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name)
+        stmt = self._apply_multi_value_filter(stmt, Contact.title, filters.title)
+        stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority)
+        stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
+        stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
+        stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
+        stmt = self._apply_multi_value_filter(stmt, Contact.mobile_phone, filters.mobile_phone)
+        
+        if filters.department:
+            stmt = self._apply_array_text_filter(
+                stmt,
+                Contact.departments,
+                filters.department,
+                dialect=dialect,
+            )
+        if filters.exclude_departments:
+            stmt = self._apply_array_text_exclusion(
+                stmt,
+                Contact.departments,
+                filters.exclude_departments,
+                dialect=dialect,
+            )
+        if filters.exclude_titles:
+            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
+            if lowered_titles:
+                stmt = stmt.where(
+                    or_(
+                        Contact.title.is_(None),
+                        func.lower(Contact.title).notin_(lowered_titles),
+                    )
+                )
+        if filters.exclude_contact_locations:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
+        if filters.exclude_seniorities:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
+        
+        # ContactMetadata filters using EXISTS
+        contact_meta_fields = [
+            filters.work_direct_phone, filters.home_phone, filters.other_phone,
+            filters.city, filters.state, filters.country, filters.person_linkedin_url,
+            filters.website, filters.stage, filters.facebook_url, filters.twitter_url,
+        ]
+        if any(field is not None for field in contact_meta_fields):
+            from sqlalchemy import exists
+            contact_meta_subq = (
+                select(1)
+                .select_from(ContactMetadata)
+                .where(ContactMetadata.uuid == Contact.uuid)
+            )
+            
+            if filters.work_direct_phone:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.work_direct_phone, filters.work_direct_phone
+                )
+            if filters.home_phone:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.home_phone, filters.home_phone
+                )
+            if filters.other_phone:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.other_phone, filters.other_phone
+                )
+            if filters.city:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.city, filters.city
+                )
+            if filters.state:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.state, filters.state
+                )
+            if filters.country:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.country, filters.country
+                )
+            if filters.person_linkedin_url:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.linkedin_url, filters.person_linkedin_url
+                )
+            if filters.website:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.website, filters.website
+                )
+            if filters.stage:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.stage, filters.stage
+                )
+            if filters.facebook_url:
+                contact_meta_subq = contact_meta_subq.where(
+                    ContactMetadata.facebook_url.ilike(f"%{filters.facebook_url}%")
+                )
+            if filters.twitter_url:
+                contact_meta_subq = contact_meta_subq.where(
+                    ContactMetadata.twitter_url.ilike(f"%{filters.twitter_url}%")
+                )
+            
+            stmt = stmt.where(exists(contact_meta_subq))
+        
+        # Apply search if needed
+        if filters.search:
+            from sqlalchemy import exists
+            search_stripped = filters.search.strip()
+            if search_stripped:
+                pattern = f"%{search_stripped}%"
+                contact_conditions = [
+                    Contact.first_name.ilike(pattern),
+                    Contact.last_name.ilike(pattern),
+                    Contact.email.ilike(pattern),
+                    Contact.title.ilike(pattern),
+                    Contact.seniority.ilike(pattern),
+                    Contact.text_search.ilike(pattern),
+                ]
+                
+                # ContactMetadata search using EXISTS
+                if any(field is not None for field in contact_meta_fields):
+                    contact_meta_search_subq = (
+                        select(1)
+                        .select_from(ContactMetadata)
+                        .where(ContactMetadata.uuid == Contact.uuid)
+                        .where(
+                            or_(
+                                ContactMetadata.city.ilike(pattern),
+                                ContactMetadata.state.ilike(pattern),
+                                ContactMetadata.country.ilike(pattern),
+                                ContactMetadata.linkedin_url.ilike(pattern),
+                                ContactMetadata.twitter_url.ilike(pattern),
+                            )
+                        )
+                    )
+                    contact_conditions.append(exists(contact_meta_search_subq))
+                
+                if contact_conditions:
+                    stmt = stmt.where(or_(*contact_conditions))
+        
+        # Temporal filters
+        if filters.created_at_after is not None:
+            stmt = stmt.where(Contact.created_at >= filters.created_at_after)
+        if filters.created_at_before is not None:
+            stmt = stmt.where(Contact.created_at <= filters.created_at_before)
+        if filters.updated_at_after is not None:
+            stmt = stmt.where(Contact.updated_at >= filters.updated_at_after)
+        if filters.updated_at_before is not None:
+            stmt = stmt.where(Contact.updated_at <= filters.updated_at_before)
+        
+        stmt = stmt.where(Contact.uuid.isnot(None))
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await session.execute(stmt)
+        uuids = [uuid for (uuid,) in result.fetchall() if uuid]
+        logger.debug("Retrieved %d contact UUIDs for company %s", len(uuids), company_uuid)
+        return uuids
+
+    @staticmethod
+    def _split_filter_values(raw_value: str) -> list[str]:
+        """Normalize comma-delimited filter strings into a list of tokens."""
+        return [token.strip() for token in raw_value.split(",") if token.strip()]
+
+    @staticmethod
+    def _apply_multi_value_filter(
+        stmt: Select,
+        column,
+        raw_value: str | None,
+        *,
+        dialect_name: str | None = None,
+        use_trigram_optimization: bool = False,
+        max_or_conditions: int = 50,
+    ) -> Select:
+        """
+        Apply substring matching supporting comma-separated values with OR semantics.
+        
+        Optimized for PostgreSQL with trigram indexes when many values are provided.
+        Strategy selection:
+        - Small lists (<10): Standard ILIKE
+        - Medium lists (10-20): Trigram similarity with OR conditions
+        - Large lists (>20): VALUES clause JOIN (much more efficient)
+        - Very large lists (>50): Batched processing
+        
+        Args:
+            stmt: SQLAlchemy select statement
+            column: Column to filter
+            raw_value: Comma-separated values or single value
+            dialect_name: Database dialect name (e.g., 'postgresql')
+            use_trigram_optimization: If True, use trigram similarity for title column
+            max_or_conditions: Maximum number of OR conditions before using alternative approach
+        """
+        if raw_value is None:
+            return stmt
+
+        values = ContactRepository._split_filter_values(raw_value)
+        if not values:
+            return apply_ilike_filter(stmt, column, raw_value.strip(), dialect_name=dialect_name)
+
+        if len(values) == 1:
+            return apply_ilike_filter(stmt, column, values[0], dialect_name=dialect_name)
+
+        dialect = (dialect_name or "").lower()
+        num_values = len(values)
+        
+        logger.debug(
+            "Applying multi-value filter: num_values=%d use_trigram=%s column=%s.%s dialect=%s",
+            num_values,
+            use_trigram_optimization,
+            column.table.name if hasattr(column, 'table') else 'unknown',
+            column.name if hasattr(column, 'name') else 'unknown',
+            dialect,
+        )
+        
+        # For PostgreSQL with many values, use optimized approaches
+        if dialect == "postgresql" and num_values > 10:
+            # Use trigram similarity for better index usage with many values
+            if use_trigram_optimization or num_values > max_or_conditions:
+                return ContactRepository._apply_trigram_similarity_filter(
+                    stmt, column, values, max_or_conditions
+                )
+            else:
+                # For 10-50 values, use optimized ILIKE with trigram index
+                # PostgreSQL can use the GIN trigram index even with leading wildcards
+                conditions = [column.ilike(f"%{value}%") for value in values]
+                if len(conditions) <= max_or_conditions:
+                    return stmt.where(or_(*conditions))
+                else:
+                    # Split into batches if exceeds max
+                    return ContactRepository._apply_batched_filter(stmt, column, values, max_or_conditions)
+        else:
+            # For small lists or non-PostgreSQL, use standard ILIKE
+            conditions = [column.ilike(f"%{value}%") for value in values]
+            if len(conditions) <= max_or_conditions:
+                return stmt.where(or_(*conditions))
+            else:
+                # Split into batches if exceeds max
+                return ContactRepository._apply_batched_filter(stmt, column, values, max_or_conditions)
+
+    @staticmethod
+    def _apply_trigram_similarity_filter(
+        stmt: Select,
+        column,
+        values: list[str],
+        max_or_conditions: int = 50,
+    ) -> Select:
+        """
+        Apply filter using PostgreSQL trigram operators for better index usage.
+        
+        Uses pg_trgm '%' operator which efficiently uses GIN trigram indexes
+        for substring matching. This is more efficient than ILIKE with leading wildcards.
+        For very large lists (>20), uses VALUES clause JOIN for better performance.
+        For medium lists (10-20), uses OR conditions with trigram operator.
+        For very large lists (>50), splits into batches.
+        
+        Args:
+            stmt: SQLAlchemy select statement
+            column: Column to filter (should have trigram index)
+            values: List of search values
+            max_or_conditions: Maximum conditions per batch
+        """
+        num_values = len(values)
+        
+        # For >20 values, use VALUES clause JOIN - much more efficient than many OR conditions
+        if num_values > 20:
+            logger.debug(
+                "Triggering VALUES clause optimization: num_values=%d column=%s.%s",
+                num_values,
+                column.table.name,
+                column.name,
+            )
+            return ContactRepository._apply_values_join_filter(stmt, column, values)
+        
+        # For <=20 values, use OR conditions with trigram operator
+        if num_values <= max_or_conditions:
+            # Use PostgreSQL trigram '%' operator for efficient substring matching
+            # The '%' operator uses the GIN trigram index efficiently
+            conditions = []
+            for value in values:
+                # Use trigram operator: column % value (case-insensitive)
+                # This is equivalent to ILIKE '%value%' but uses trigram index better
+                # We use func.lower for case-insensitive matching
+                trigram_op = func.lower(column).op('%')(func.lower(func.cast(value, Text)))
+                conditions.append(trigram_op)
+            
+            if conditions:
+                return stmt.where(or_(*conditions))
+        else:
+            # Split into batches and combine with OR
+            return ContactRepository._apply_batched_filter(
+                stmt, column, values, max_or_conditions, use_similarity=True
+            )
+        
+        return stmt
+
+    @staticmethod
+    def _apply_values_join_filter(
+        stmt: Select,
+        column,
+        values: list[str],
+    ) -> Select:
+        """
+        Apply filter using PostgreSQL VALUES clause with EXISTS for many values.
+        
+        This approach is much more efficient than many OR conditions when dealing
+        with large value lists (>20). It uses a VALUES clause to create a temporary
+        table and joins it using EXISTS, which PostgreSQL can optimize better.
+        
+        Example SQL:
+        SELECT COUNT(*) FROM contacts c
+        WHERE EXISTS (
+            SELECT 1 FROM (VALUES ('title1'), ('title2'), ...) AS titles(val)
+            WHERE lower(c.title) % lower(titles.val)
+        )
+        
+        Args:
+            stmt: SQLAlchemy select statement
+            column: Column to filter (should have trigram index)
+            values: List of search values (should be >20 for this method)
+        """
+        if not values:
+            return stmt
+        
+        from sqlalchemy import text
+        
+        logger.debug(
+            "Using VALUES clause optimization for %d values on column %s.%s",
+            len(values),
+            column.table.name,
+            column.name,
+        )
+        
+        # Build VALUES clause with escaped values
+        # Escape single quotes by doubling them (PostgreSQL escaping)
+        escaped_values = []
+        for value in values:
+            # Escape single quotes and backslashes for SQL safety
+            escaped = str(value).replace("\\", "\\\\").replace("'", "''")
+            escaped_values.append(f"('{escaped}')")
+        
+        values_clause = ", ".join(escaped_values)
+        
+        # Get table and column names for the SQL reference
+        # Use the column's table and name directly - PostgreSQL will resolve from outer query
+        table_name = column.table.name
+        column_name = column.name
+        
+        # Create the entire EXISTS condition as raw SQL text
+        # This allows proper column correlation because the column reference
+        # in the text() will be part of the outer query context
+        # The VALUES clause creates a derived table that PostgreSQL can optimize
+        # Note: The column reference {table_name}.{column_name} will be resolved by PostgreSQL
+        # from the outer query context, so this should work correctly
+        exists_sql = text(
+            f"EXISTS ("
+            f"  SELECT 1 FROM (VALUES {values_clause}) AS titles(val) "
+            f"  WHERE lower({table_name}.{column_name}) % lower(titles.val::text)"
+            f")"
+        )
+        
+        logger.debug(
+            "Applied VALUES clause filter: table=%s column=%s num_values=%d",
+            table_name,
+            column_name,
+            len(values),
+        )
+        
+        # Apply the condition to the statement
+        return stmt.where(exists_sql)
+
+    @staticmethod
+    def _apply_batched_filter(
+        stmt: Select,
+        column,
+        values: list[str],
+        batch_size: int = 20,
+        *,
+        use_similarity: bool = False,
+    ) -> Select:
+        """
+        Apply filter by splitting values into batches to avoid query planner issues.
+        
+        For very large value lists, splits into smaller batches and combines with OR.
+        This prevents the query planner from creating inefficient execution plans.
+        
+        Args:
+            stmt: SQLAlchemy select statement
+            column: Column to filter
+            values: List of search values
+            batch_size: Number of values per batch
+            use_similarity: If True, use trigram similarity instead of ILIKE
+        """
+        if not values:
+            return stmt
+        
+        # Split into batches
+        batches = [values[i:i + batch_size] for i in range(0, len(values), batch_size)]
+        batch_conditions = []
+        
+        for batch in batches:
+            if use_similarity:
+                # Use PostgreSQL trigram '%' operator for this batch
+                batch_conds = [
+                    func.lower(column).op('%')(func.lower(func.cast(value, Text)))
+                    for value in batch
+                ]
+            else:
+                # Use ILIKE for this batch
+                batch_conds = [column.ilike(f"%{value}%") for value in batch]
+            
+            if batch_conds:
+                # Combine batch conditions with OR
+                batch_conditions.append(or_(*batch_conds))
+        
+        if batch_conditions:
+            # Combine all batches with OR
+            return stmt.where(or_(*batch_conditions))
+        
+        return stmt
+
+    @staticmethod
+    def _apply_array_text_filter(
+        stmt: Select,
+        column,
+        raw_value: str,
+        *,
+        dialect: str,
+    ) -> Select:
+        """
+        Apply substring matching to a text-array column.
+        Optimized to use array operators when possible for better GIN index usage.
+        """
+        normalized_values = ContactRepository._split_filter_values(raw_value)
+        search_terms = normalized_values or ([raw_value] if raw_value else [])
+        if not search_terms:
+            return stmt
+
+        if dialect == "postgresql":
+            # Use array operators for better performance with GIN indexes
+            # For substring matching, we still need array_to_string, but optimize the query
+            # Try to use array overlap (&&) for exact matches first
+            conditions = []
+            for value in search_terms:
+                # For exact array element matches, use array overlap operator
+                # For substring matches, use array_to_string (still needed for ILIKE)
+                # The GIN index on the array column will help with performance
+                array_text = func.array_to_string(column, ",")
+                conditions.append(array_text.ilike(f"%{value}%"))
+            
+            if conditions:
+                return stmt.where(or_(*conditions))
+        else:
+            # Fallback for other databases
+            array_text = ContactRepository._array_column_as_text(column, dialect)
+            conditions = [array_text.ilike(f"%{value}%") for value in search_terms]
+            if conditions:
+                return stmt.where(or_(*conditions))
+        
+        return stmt
+
+    @staticmethod
+    def _apply_multi_value_exclusion(
+        stmt: Select,
+        column,
+        values: list[str] | None,
+    ) -> Select:
+        """Exclude rows whose column matches any provided substring (case-insensitive)."""
+        if not values:
+            return stmt
+        tokens = [token.strip() for token in values if isinstance(token, str) and token.strip()]
+        if not tokens:
+            return stmt
+        negative_conditions = [~column.ilike(f"%{token}%") for token in tokens]
+        combined_negative = and_(*negative_conditions)
+        return stmt.where(or_(column.is_(None), combined_negative))
+
+    @staticmethod
+    def _apply_array_text_exclusion(
+        stmt: Select,
+        column,
+        values: list[str] | None,
+        *,
+        dialect: str,
+    ) -> Select:
+        """Exclude rows whose array text representation matches any provided substring."""
+        if not values:
+            return stmt
+        tokens = [token.strip() for token in values if isinstance(token, str) and token.strip()]
+        if not tokens:
+            return stmt
+        array_text = ContactRepository._array_column_as_text(column, dialect)
+        negative_conditions = [~array_text.ilike(f"%{token}%") for token in tokens]
+        combined_negative = and_(*negative_conditions)
+        return stmt.where(or_(column.is_(None), combined_negative))
+
+    @staticmethod
+    def _extract_domain_from_url_sql(column, dialect: str):
+        """
+        Extract domain from URL column using SQL functions.
+        
+        Uses PostgreSQL regex to extract domain from URLs like:
+        - https://www.example.com -> example.com
+        - http://example.com/path -> example.com
+        - example.com -> example.com
+        """
+        if dialect == "postgresql":
+            # Extract domain using regex:
+            # 1. Remove protocol (http://, https://, etc.)
+            # 2. Extract hostname (everything before first / or end of string)
+            # 3. Remove port if present
+            # 4. Remove www. prefix
+            # 5. Convert to lowercase
+            no_protocol = func.regexp_replace(
+                func.coalesce(column, ""),
+                r"^https?://",
+                "",
+                "i"
+            )
+            # Extract hostname (everything before first /)
+            hostname = func.split_part(no_protocol, "/", 1)
+            # Remove port
+            no_port = func.split_part(hostname, ":", 1)
+            # Remove www. prefix and convert to lowercase
+            domain = func.lower(
+                func.regexp_replace(no_port, r"^www\.", "", "i")
+            )
+            return domain
+        # For other dialects, return column as-is (fallback)
+        return func.lower(cast(column, Text))
+
+    @staticmethod
+    def _apply_domain_filter(
+        stmt: Select,
+        website_column,
+        domains: list[str] | None,
+        *,
+        dialect: str,
+    ) -> Select:
+        """
+        Include contacts whose website domain matches any provided domain (OR logic).
+        
+        Contacts with NULL website are excluded.
+        """
+        if not domains:
+            return stmt
+        normalized_domains = [
+            extract_domain_from_url(d) or d.lower().strip()
+            for d in domains
+            if d and d.strip()
+        ]
+        normalized_domains = [d for d in normalized_domains if d]
+        if not normalized_domains:
+            return stmt
+        
+        # Extract domain from website URL and compare
+        extracted_domain = ContactRepository._extract_domain_from_url_sql(
+            website_column, dialect
+        )
+        # Create OR conditions for any domain match
+        conditions = [
+            extracted_domain == func.lower(domain)
+            for domain in normalized_domains
+        ]
+        if conditions:
+            # Include only if domain matches AND website is not NULL
+            stmt = stmt.where(
+                and_(
+                    website_column.isnot(None),
+                    or_(*conditions)
+                )
+            )
+        return stmt
+
+    @staticmethod
+    def _apply_domain_exclusion(
+        stmt: Select,
+        website_column,
+        domains: list[str] | None,
+        *,
+        dialect: str,
+    ) -> Select:
+        """
+        Exclude contacts whose website domain matches any provided domain.
+        
+        Contacts with NULL website are included (not excluded).
+        """
+        if not domains:
+            return stmt
+        normalized_domains = [
+            extract_domain_from_url(d) or d.lower().strip()
+            for d in domains
+            if d and d.strip()
+        ]
+        normalized_domains = [d for d in normalized_domains if d]
+        if not normalized_domains:
+            return stmt
+        
+        # Extract domain from website URL and compare
+        extracted_domain = ContactRepository._extract_domain_from_url_sql(
+            website_column, dialect
+        )
+        # Create conditions to exclude matching domains
+        exclusion_conditions = [
+            extracted_domain != func.lower(domain)
+            for domain in normalized_domains
+        ]
+        if exclusion_conditions:
+            # Exclude if domain matches any in the list
+            # Include if website is NULL OR domain doesn't match any
+            stmt = stmt.where(
+                or_(
+                    website_column.is_(None),
+                    and_(*exclusion_conditions)
+                )
+            )
+        return stmt
+
+    @staticmethod
+    def _array_column_as_text(column, dialect: str):
+        """Return an expression suitable for ILIKE matching across dialects."""
+        if dialect == "postgresql":
+            return func.array_to_string(column, ",")
+        return cast(column, Text)
+
+    @staticmethod
+    def _apply_array_text_filter_and(
+        stmt: Select,
+        column,
+        raw_value: str,
+        *,
+        dialect: str,
+    ) -> Select:
+        """Apply substring matching to a text-array column with AND logic (all keywords must match)."""
+        normalized_values = ContactRepository._split_filter_values(raw_value)
+        search_terms = normalized_values or ([raw_value] if raw_value else [])
+        if not search_terms:
+            return stmt
+
+        array_text = ContactRepository._array_column_as_text(column, dialect)
+        conditions = [array_text.ilike(f"%{value}%") for value in search_terms]
+        return stmt.where(and_(*conditions))
+
+    @staticmethod
+    def _apply_keyword_search_with_fields(
+        stmt: Select,
+        keywords: str,
+        company: Company,
+        search_fields: list[str] | None,
+        exclude_fields: list[str] | None,
+        *,
+        dialect: str,
+        use_and_logic: bool = False,
+    ) -> Select:
+        """Apply keyword search to specific fields (company.name, industries, keywords) with optional AND logic."""
+        normalized_values = ContactRepository._split_filter_values(keywords)
+        search_terms = normalized_values or ([keywords] if keywords else [])
+        if not search_terms:
+            return stmt
+
+        # Determine which fields to search
+        fields_to_search = []
+        if search_fields:
+            # Only search in specified fields
+            search_fields_lower = [f.lower() for f in search_fields]
+            if "company" in search_fields_lower:
+                fields_to_search.append(("company", company.name))
+            if "industries" in search_fields_lower:
+                fields_to_search.append(("industries", ContactRepository._array_column_as_text(company.industries, dialect)))
+            if "keywords" in search_fields_lower:
+                fields_to_search.append(("keywords", ContactRepository._array_column_as_text(company.keywords, dialect)))
+        else:
+            # Default: search all fields
+            fields_to_search = [
+                ("company", company.name),
+                ("industries", ContactRepository._array_column_as_text(company.industries, dialect)),
+                ("keywords", ContactRepository._array_column_as_text(company.keywords, dialect)),
+            ]
+
+        # Remove excluded fields
+        if exclude_fields:
+            exclude_fields_lower = [f.lower() for f in exclude_fields]
+            fields_to_search = [
+                (name, col) for name, col in fields_to_search
+                if name not in exclude_fields_lower
+            ]
+
+        if not fields_to_search:
+            return stmt
+
+        # Build conditions for each keyword term
+        if use_and_logic:
+            # AND logic: all keywords must match in at least one field
+            field_conditions = []
+            for field_name, field_column in fields_to_search:
+                term_conditions = [field_column.ilike(f"%{term}%") for term in search_terms]
+                field_conditions.append(and_(*term_conditions))
+            # At least one field must match all terms
+            return stmt.where(or_(*field_conditions))
+        else:
+            # OR logic: any keyword matches in any field
+            conditions = []
+            for field_name, field_column in fields_to_search:
+                for term in search_terms:
+                    conditions.append(field_column.ilike(f"%{term}%"))
+            return stmt.where(or_(*conditions))
+
+    async def get_contact_with_relations(
+        self,
+        session: AsyncSession,
+        contact_uuid: str,
+    ) -> Optional[tuple[Contact, Company, ContactMetadata, CompanyMetadata]]:
+        """Fetch a contact and its related company metadata."""
+        logger.debug("Getting contact with relations: contact_uuid=%s", contact_uuid)
+        stmt, _, _, _ = self.base_query()
+        stmt = stmt.where(Contact.uuid == contact_uuid)
+        result = await session.execute(stmt)
+        row = result.first()
+        logger.debug(
+            "Contact with relations %sfound for contact_uuid=%s",
+            "" if row else "not ",
+            contact_uuid,
+        )
+        return row
+
+    async def list_contacts_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        filters: CompanyContactFilterParams,
+        limit: Optional[int],
+        offset: int,
+    ) -> Sequence[tuple[Contact, Company, ContactMetadata, CompanyMetadata]]:
+        """Return contacts for a specific company with associated metadata rows.
+        
+        Optimized to only join ContactMetadata when needed.
+        """
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Listing contacts for company %s: limit=%s offset=%d ordering=%s filters=%s",
+            company_uuid,
+            limit,
+            offset,
+            filters.ordering,
+            active_filter_keys,
+        )
+        
+        # Determine if ContactMetadata join is needed
+        needs_contact_meta = any([
+            filters.work_direct_phone, filters.home_phone, filters.other_phone,
+            filters.city, filters.state, filters.country, filters.person_linkedin_url,
+            filters.website, filters.stage, filters.facebook_url, filters.twitter_url,
+        ])
+        
+        # Check ordering requirements
+        _, order_contact_meta, _ = self._needs_joins_for_ordering(filters.ordering)
+        needs_contact_meta = needs_contact_meta or order_contact_meta
+        
+        # Always need company for response, but ContactMetadata is optional
+        if needs_contact_meta:
+            stmt, company_alias, contact_meta_alias, company_meta_alias = self.base_query_with_metadata()
+        else:
+            stmt, company_alias = self.base_query_with_company()
+            contact_meta_alias = None
+            company_meta_alias = None
+        
+        # Filter by company UUID
+        stmt = stmt.where(Contact.company_id == company_uuid)
+        
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        
+        if contact_meta_alias is not None:
+            stmt = self._apply_company_contact_filters(
+                stmt,
+                filters,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            stmt = self._apply_company_contact_search(
+                stmt,
+                filters.search,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+        else:
+            # Apply filters without metadata joins
+            dialect = (dialect_name or "").lower()
+            stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
+            stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
+            # Use trigram optimization for title column
+            stmt = self._apply_multi_value_filter(
+                stmt, Contact.title, filters.title, 
+                dialect_name=dialect_name, 
+                use_trigram_optimization=True
+            )
+            stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority, dialect_name=dialect_name)
+            stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
+            stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
+            stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
+            stmt = self._apply_multi_value_filter(stmt, Contact.mobile_phone, filters.mobile_phone)
+            
+            if filters.department:
+                stmt = self._apply_array_text_filter(
+                    stmt,
+                    Contact.departments,
+                    filters.department,
+                    dialect=dialect,
+                )
+            if filters.exclude_departments:
+                stmt = self._apply_array_text_exclusion(
+                    stmt,
+                    Contact.departments,
+                    filters.exclude_departments,
+                    dialect=dialect,
+                )
+            if filters.exclude_titles:
+                lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
+                if lowered_titles:
+                    stmt = stmt.where(
+                        or_(
+                            Contact.title.is_(None),
+                            func.lower(Contact.title).notin_(lowered_titles),
+                        )
+                    )
+            if filters.exclude_contact_locations:
+                stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
+            if filters.exclude_seniorities:
+                stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
+            
+            # Apply search if needed
+            if filters.search:
+                search_stripped = filters.search.strip()
+                if search_stripped:
+                    pattern = f"%{search_stripped}%"
+                    stmt = stmt.where(
+                        or_(
+                            Contact.first_name.ilike(pattern),
+                            Contact.last_name.ilike(pattern),
+                            Contact.email.ilike(pattern),
+                            Contact.title.ilike(pattern),
+                            Contact.seniority.ilike(pattern),
+                            Contact.text_search.ilike(pattern),
+                        )
+                    )
+            
+            # Temporal filters
+            if filters.created_at_after is not None:
+                stmt = stmt.where(Contact.created_at >= filters.created_at_after)
+            if filters.created_at_before is not None:
+                stmt = stmt.where(Contact.created_at <= filters.created_at_before)
+            if filters.updated_at_after is not None:
+                stmt = stmt.where(Contact.updated_at >= filters.updated_at_after)
+            if filters.updated_at_before is not None:
+                stmt = stmt.where(Contact.updated_at <= filters.updated_at_before)
+        
+        # Build ordering map
+        ordering_map = {
+            "created_at": Contact.created_at,
+            "updated_at": Contact.updated_at,
+            "first_name": Contact.first_name,
+            "last_name": Contact.last_name,
+            "title": Contact.title,
+            "email": Contact.email,
+            "email_status": Contact.email_status,
+            "seniority": Contact.seniority,
+            "departments": cast(Contact.departments, Text),
+            "mobile_phone": Contact.mobile_phone,
+        }
+        
+        if contact_meta_alias is not None:
+            ordering_map.update({
+                "work_direct_phone": contact_meta_alias.work_direct_phone,
+                "home_phone": contact_meta_alias.home_phone,
+                "other_phone": contact_meta_alias.other_phone,
+                "stage": contact_meta_alias.stage,
+                "person_linkedin_url": contact_meta_alias.linkedin_url,
+                "website": contact_meta_alias.website,
+                "facebook_url": contact_meta_alias.facebook_url,
+                "twitter_url": contact_meta_alias.twitter_url,
+                "city": contact_meta_alias.city,
+                "state": contact_meta_alias.state,
+                "country": contact_meta_alias.country,
+            })
+        
+        stmt = apply_ordering(stmt, filters.ordering, ordering_map)
+        stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await session.execute(stmt)
+        rows = result.fetchall()
+        
+        # Normalize results to always return 4-tuple format
+        normalized_rows = []
+        for row in rows:
+            if isinstance(row, tuple) and len(row) == 4:
+                normalized_rows.append(row)
+            elif isinstance(row, tuple) and len(row) == 2:
+                contact, company = row
+                normalized_rows.append((contact, company, None, None))
+            else:
+                normalized_rows.append((row, None, None, None))
+        
+        logger.debug("Retrieved %d contacts for company %s", len(normalized_rows), company_uuid)
+        return normalized_rows
+
+    async def count_contacts_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        filters: CompanyContactFilterParams,
+    ) -> int:
+        """Count contacts for a specific company that match the supplied filters.
+        
+        Optimized to use EXISTS subqueries instead of joins.
+        """
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug("Counting contacts for company %s with filters=%s", company_uuid, active_filter_keys)
+        
+        # Use minimal query with EXISTS subqueries
+        stmt = select(func.count(Contact.id)).select_from(Contact)
+        stmt = stmt.where(Contact.company_id == company_uuid)
+        
+        # Apply contact-only filters directly
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        dialect = (dialect_name or "").lower()
+        
+        stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
+        stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
+        # Use trigram optimization for title column
+        stmt = self._apply_multi_value_filter(
+            stmt, Contact.title, filters.title, 
+            dialect_name=dialect_name, 
+            use_trigram_optimization=True
+        )
+        stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority, dialect_name=dialect_name)
+        stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
+        stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
+        stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
+        stmt = self._apply_multi_value_filter(stmt, Contact.mobile_phone, filters.mobile_phone)
+        
+        if filters.department:
+            stmt = self._apply_array_text_filter(
+                stmt,
+                Contact.departments,
+                filters.department,
+                dialect=dialect,
+            )
+        if filters.exclude_departments:
+            stmt = self._apply_array_text_exclusion(
+                stmt,
+                Contact.departments,
+                filters.exclude_departments,
+                dialect=dialect,
+            )
+        if filters.exclude_titles:
+            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
+            if lowered_titles:
+                stmt = stmt.where(
+                    or_(
+                        Contact.title.is_(None),
+                        func.lower(Contact.title).notin_(lowered_titles),
+                    )
+                )
+        if filters.exclude_contact_locations:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
+        if filters.exclude_seniorities:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
+        
+        # ContactMetadata filters using EXISTS
+        contact_meta_fields = [
+            filters.work_direct_phone, filters.home_phone, filters.other_phone,
+            filters.city, filters.state, filters.country, filters.person_linkedin_url,
+            filters.website, filters.stage, filters.facebook_url, filters.twitter_url,
+        ]
+        if any(field is not None for field in contact_meta_fields):
+            from sqlalchemy import exists
+            contact_meta_subq = (
+                select(1)
+                .select_from(ContactMetadata)
+                .where(ContactMetadata.uuid == Contact.uuid)
+            )
+            
+            if filters.work_direct_phone:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.work_direct_phone, filters.work_direct_phone
+                )
+            if filters.home_phone:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.home_phone, filters.home_phone
+                )
+            if filters.other_phone:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.other_phone, filters.other_phone
+                )
+            if filters.city:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.city, filters.city
+                )
+            if filters.state:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.state, filters.state
+                )
+            if filters.country:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.country, filters.country
+                )
+            if filters.person_linkedin_url:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.linkedin_url, filters.person_linkedin_url
+                )
+            if filters.website:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.website, filters.website
+                )
+            if filters.stage:
+                contact_meta_subq = self._apply_multi_value_filter(
+                    contact_meta_subq, ContactMetadata.stage, filters.stage
+                )
+            if filters.facebook_url:
+                contact_meta_subq = contact_meta_subq.where(
+                    ContactMetadata.facebook_url.ilike(f"%{filters.facebook_url}%")
+                )
+            if filters.twitter_url:
+                contact_meta_subq = contact_meta_subq.where(
+                    ContactMetadata.twitter_url.ilike(f"%{filters.twitter_url}%")
+                )
+            
+            stmt = stmt.where(exists(contact_meta_subq))
+        
+        # Apply search if needed
+        if filters.search:
+            from sqlalchemy import exists
+            search_stripped = filters.search.strip()
+            if search_stripped:
+                pattern = f"%{search_stripped}%"
+                contact_conditions = [
+                    Contact.first_name.ilike(pattern),
+                    Contact.last_name.ilike(pattern),
+                    Contact.email.ilike(pattern),
+                    Contact.title.ilike(pattern),
+                    Contact.seniority.ilike(pattern),
+                    Contact.text_search.ilike(pattern),
+                ]
+                
+                # ContactMetadata search using EXISTS
+                if any(field is not None for field in contact_meta_fields):
+                    contact_meta_search_subq = (
+                        select(1)
+                        .select_from(ContactMetadata)
+                        .where(ContactMetadata.uuid == Contact.uuid)
+                        .where(
+                            or_(
+                                ContactMetadata.city.ilike(pattern),
+                                ContactMetadata.state.ilike(pattern),
+                                ContactMetadata.country.ilike(pattern),
+                                ContactMetadata.linkedin_url.ilike(pattern),
+                                ContactMetadata.twitter_url.ilike(pattern),
+                            )
+                        )
+                    )
+                    contact_conditions.append(exists(contact_meta_search_subq))
+                
+                if contact_conditions:
+                    stmt = stmt.where(or_(*contact_conditions))
+        
+        # Temporal filters
+        if filters.created_at_after is not None:
+            stmt = stmt.where(Contact.created_at >= filters.created_at_after)
+        if filters.created_at_before is not None:
+            stmt = stmt.where(Contact.created_at <= filters.created_at_before)
+        if filters.updated_at_after is not None:
+            stmt = stmt.where(Contact.updated_at >= filters.updated_at_after)
+        if filters.updated_at_before is not None:
+            stmt = stmt.where(Contact.updated_at <= filters.updated_at_before)
+        
+        result = await session.execute(stmt)
+        count = result.scalar() or 0
+        logger.debug("Counted %d contacts for company %s", count, company_uuid)
+        return count
+
+    async def list_attribute_values_by_company(
+        self,
+        session: AsyncSession,
+        company_uuid: str,
+        attribute: str,
+        filters: CompanyContactFilterParams,
+        params: AttributeListParams,
+    ) -> Sequence[str]:
+        """Return distinct attribute values for contacts within a specific company."""
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        logger.debug(
+            "Listing attribute %s values for company %s with filters=%s params=%s",
+            attribute,
+            company_uuid,
+            sorted(filters.model_dump(exclude_none=True).keys()),
+            params.model_dump(exclude_none=True),
+        )
+        
+        company_alias = aliased(Company, name="company_for_attr")
+        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata_for_attr")
+        company_meta_alias = aliased(CompanyMetadata, name="company_metadata_for_attr")
+        
+        # Map attribute names to columns
+        column_map = {
+            "first_name": Contact.first_name,
+            "last_name": Contact.last_name,
+            "title": Contact.title,
+            "seniority": Contact.seniority,
+            "email_status": Contact.email_status,
+            "department": Contact.departments,  # Array field
+            "city": contact_meta_alias.city,
+            "state": contact_meta_alias.state,
+            "country": contact_meta_alias.country,
+        }
+        
+        if attribute not in column_map:
+            logger.warning("Unknown attribute %s requested", attribute)
+            return []
+        
+        column = column_map[attribute]
+        
+        # Handle array fields specially
+        if attribute == "department":
+            # Use lateral unnest for array fields
+            unnest_subquery = (
+                select(func.unnest(Contact.departments).label("value"))
+                .select_from(Contact)
+                .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+                .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+                .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+                .where(Contact.company_id == company_uuid)
+            )
+            
+            dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+            unnest_subquery = self._apply_company_contact_filters(
+                unnest_subquery,
+                filters,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            unnest_subquery = self._apply_company_contact_search(
+                unnest_subquery,
+                filters.search,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            
+            stmt = (
+                select(unnest_subquery.c.value)
+                .where(unnest_subquery.c.value.isnot(None))
+                .where(unnest_subquery.c.value != "")
+            )
+            
+            if params.search:
+                stmt = stmt.where(unnest_subquery.c.value.ilike(f"%{params.search}%"))
+            
+            if params.distinct:
+                stmt = stmt.distinct()
+            
+            # Apply ordering
+            if params.ordering:
+                if params.ordering.startswith("-"):
+                    stmt = stmt.order_by(unnest_subquery.c.value.desc())
+                else:
+                    stmt = stmt.order_by(unnest_subquery.c.value.asc())
+            else:
+                stmt = stmt.order_by(unnest_subquery.c.value.asc())
+            
+            if params.limit:
+                stmt = stmt.limit(params.limit)
+            if params.offset:
+                stmt = stmt.offset(params.offset)
+        else:
+            # Regular scalar fields
+            stmt = (
+                select(column)
+                .select_from(Contact)
+                .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+                .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+                .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+                .where(Contact.company_id == company_uuid)
+                .where(column.isnot(None))
+                .where(column != "")
+            )
+            
+            dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+            stmt = self._apply_company_contact_filters(
+                stmt,
+                filters,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            stmt = self._apply_company_contact_search(
+                stmt,
+                filters.search,
+                company_alias,
+                company_meta_alias,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            
+            if params.search:
+                stmt = stmt.where(column.ilike(f"%{params.search}%"))
+            
+            if params.distinct:
+                stmt = stmt.distinct()
+            
+            # Apply ordering
+            if params.ordering:
+                if params.ordering.startswith("-"):
+                    stmt = stmt.order_by(column.desc())
+                else:
+                    stmt = stmt.order_by(column.asc())
+            else:
+                stmt = stmt.order_by(column.asc())
+            
+            if params.limit:
+                stmt = stmt.limit(params.limit)
+            if params.offset:
+                stmt = stmt.offset(params.offset)
+        
+        result = await session.execute(stmt)
+        values = [row[0] for row in result.fetchall() if row[0]]
+        logger.debug("Retrieved %d distinct %s values for company %s", len(values), attribute, company_uuid)
+        return values
+
+    def _apply_company_contact_filters(
+        self,
+        stmt: Select,
+        filters: CompanyContactFilterParams,
+        company: Company,
+        company_meta: CompanyMetadata | None = None,
+        contact_meta: ContactMetadata | None = None,
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """Apply CompanyContactFilterParams to the given SQLAlchemy statement."""
+        from app.schemas.filters import CompanyContactFilterParams
+        
+        logger.debug(
+            "Applying company contact filters: %s",
+            sorted(filters.model_dump(exclude_none=True).keys()),
+        )
+        
+        # Contact identity fields
+        dialect = (dialect_name or "").lower()
+        stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
+        stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
+        # Use trigram optimization for title column
+        stmt = self._apply_multi_value_filter(
+            stmt, Contact.title, filters.title, 
+            dialect_name=dialect_name, 
+            use_trigram_optimization=True
+        )
+        stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority, dialect_name=dialect_name)
+        stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
+        stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
+        stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
+        
+        # Department filter (array field)
+        if filters.department:
+            dialect = (dialect_name or "").lower()
+            if dialect == "postgresql":
+                stmt = stmt.where(
+                    func.array_to_string(Contact.departments, ",").ilike(f"%{filters.department}%")
+                )
+            else:
+                stmt = stmt.where(
+                    cast(Contact.departments, Text).ilike(f"%{filters.department}%")
+                )
+        
+        # Contact metadata fields
+        if contact_meta is not None:
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.work_direct_phone, filters.work_direct_phone)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.home_phone, filters.home_phone)
+            stmt = self._apply_multi_value_filter(stmt, Contact.mobile_phone, filters.mobile_phone)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.other_phone, filters.other_phone)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.city, filters.city)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.state, filters.state)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.country, filters.country)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.linkedin_url, filters.person_linkedin_url)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.website, filters.website)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.facebook_url, filters.facebook_url)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.twitter_url, filters.twitter_url)
+            stmt = self._apply_multi_value_filter(stmt, contact_meta.stage, filters.stage)
+        
+        # Exclusion filters
+        if filters.exclude_titles:
+            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
+            if lowered_titles:
+                stmt = stmt.where(
+                    or_(
+                        Contact.title.is_(None),
+                        func.lower(Contact.title).notin_(lowered_titles),
+                    )
+                )
+        
+        if filters.exclude_contact_locations:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
+        
+        if filters.exclude_seniorities:
+            stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
+        
+        if filters.exclude_departments:
+            dialect = (dialect_name or "").lower()
+            stmt = self._apply_array_text_exclusion(
+                stmt,
+                Contact.departments,
+                filters.exclude_departments,
+                dialect,
+            )
+        
+        # Temporal filters
+        if filters.created_at_after is not None:
+            stmt = stmt.where(Contact.created_at >= filters.created_at_after)
+        if filters.created_at_before is not None:
+            stmt = stmt.where(Contact.created_at <= filters.created_at_before)
+        if filters.updated_at_after is not None:
+            stmt = stmt.where(Contact.updated_at >= filters.updated_at_after)
+        if filters.updated_at_before is not None:
+            stmt = stmt.where(Contact.updated_at <= filters.updated_at_before)
+        
+        logger.debug("Company contact filters applied")
+        return stmt
+
+    def _apply_company_contact_search(
+        self,
+        stmt: Select,
+        search: Optional[str],
+        company: Company,
+        company_meta: CompanyMetadata | None = None,
+        contact_meta: ContactMetadata | None = None,
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """Apply case-insensitive search across contact text columns for company contacts."""
+        logger.debug("Applying company contact search: search_present=%s", bool(search))
+        
+        if not search:
+            return stmt
+        
+        dialect = (dialect_name or "").lower()
+        columns: list[Any] = [
+            Contact.first_name,
+            Contact.last_name,
+            Contact.email,
+            Contact.title,
+            Contact.seniority,
+            Contact.text_search,
+        ]
+        
+        if contact_meta is not None:
+            columns.extend([
+                contact_meta.city,
+                contact_meta.state,
+                contact_meta.country,
+                contact_meta.linkedin_url,
+                contact_meta.website,
+                contact_meta.facebook_url,
+                contact_meta.twitter_url,
+            ])
+        
+        stmt = apply_search(stmt, search, columns)
+        logger.debug("Company contact search applied")
+        return stmt
+

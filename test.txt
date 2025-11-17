@@ -1,0 +1,1 @@
+2025-11-17 21:54:06,201 - app.main - INFO - Application startup complete: project=Appointment360 API version=0.1.0
