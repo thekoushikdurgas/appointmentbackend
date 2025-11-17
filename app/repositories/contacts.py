@@ -136,9 +136,17 @@ class ContactRepository(AsyncRepository[Contact]):
         dialect_name: str | None = None,
     ) -> Select:
         """Apply filter parameters to the given SQLAlchemy statement."""
+        active_filters = sorted(filters.model_dump(exclude_none=True).keys())
         logger.debug(
-            "Entering ContactRepository.apply_filters filters=%s",
-            sorted(filters.model_dump(exclude_none=True).keys()),
+            "Entering ContactRepository.apply_filters filters=%s company_meta=%s contact_meta=%s",
+            active_filters,
+            company_meta is not None,
+            contact_meta is not None,
+        )
+        logger.info(
+            "Applying filters with JOINs: active_filters=%s filter_count=%d",
+            active_filters,
+            len(active_filters),
         )
         dialect = (dialect_name or "").lower()
         stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
@@ -501,6 +509,13 @@ class ContactRepository(AsyncRepository[Contact]):
         
         # Check ordering requirements
         order_company, order_contact_meta, order_company_meta = self._needs_joins_for_ordering(filters.ordering)
+        
+        # If no explicit ordering, we'll use default ordering by company.name
+        # Ensure company join is available for default ordering
+        if not filters.ordering:
+            order_company = True  # Need company for default ordering by company.name
+            logger.debug("Default ordering will be used - ensuring company join is available")
+        
         needs_company = needs_company or order_company
         needs_contact_meta = needs_contact_meta or order_contact_meta
         needs_company_meta = needs_company_meta or order_company_meta
@@ -613,9 +628,37 @@ class ContactRepository(AsyncRepository[Contact]):
                 })
         
         stmt = apply_ordering(stmt, filters.ordering, ordering_map)
+        
+        # Ensure deterministic ordering for pagination - add default ordering if none specified
+        # This is critical for consistent pagination results, especially with OFFSET
+        # When Apollo URL has sortByField=[none], order by company name
+        if not filters.ordering:
+            if company_alias is not None:
+                # Order by company name (ascending), then contact id for tie-breaking
+                # This ensures consistent ordering when no explicit ordering is provided
+                stmt = stmt.order_by(company_alias.name.asc().nulls_last(), Contact.id.asc())
+                logger.debug("Applied default ordering: company.name ASC NULLS LAST, id ASC")
+            else:
+                # Fallback to created_at if company join is not available
+                stmt = stmt.order_by(Contact.created_at.desc().nulls_last(), Contact.id.desc())
+                logger.debug("Applied default ordering (no company join): created_at DESC NULLS LAST, id DESC")
+        
         stmt = stmt.offset(offset)
         if limit is not None:
             stmt = stmt.limit(limit)
+        
+        # Log the SQL query for debugging
+        try:
+            compiled = stmt.compile(compile_kwargs={"literal_binds": False})
+            logger.debug(
+                "List contacts SQL query: limit=%s offset=%d ordering=%s\nSQL: %s",
+                limit,
+                offset,
+                filters.ordering,
+                str(compiled),
+            )
+        except Exception as e:
+            logger.debug("Could not compile SQL for logging: %s", e)
         
         # Use streaming for large result sets to reduce memory usage
         if limit and limit > 10000:
@@ -670,7 +713,13 @@ class ContactRepository(AsyncRepository[Contact]):
         """Apply filters using EXISTS subqueries instead of joins for better performance in count queries."""
         from sqlalchemy import exists
         
-        logger.debug("Applying filters with EXISTS subqueries")
+        active_filters = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug("Applying filters with EXISTS subqueries: filters=%s", active_filters)
+        logger.info(
+            "Applying filters with EXISTS: active_filters=%s filter_count=%d",
+            active_filters,
+            len(active_filters),
+        )
         dialect = (dialect_name or "").lower()
         
         # Contact-only filters (no EXISTS needed)
@@ -786,6 +835,14 @@ class ContactRepository(AsyncRepository[Contact]):
                     company_subq,
                     Company.keywords,
                     filters.keywords,
+                    dialect=dialect,
+                )
+            if filters.keywords_and:
+                # AND logic keywords - all keywords must be present
+                company_subq = self._apply_array_text_filter_and(
+                    company_subq,
+                    Company.keywords,
+                    filters.keywords_and,
                     dialect=dialect,
                 )
             if filters.exclude_keywords:
@@ -990,6 +1047,17 @@ class ContactRepository(AsyncRepository[Contact]):
         # Apply search terms if needed
         if filters.search:
             stmt = self._apply_search_terms_with_exists(stmt, filters.search, filters, dialect_name=dialect_name)
+        
+        # Log the SQL query for debugging
+        try:
+            compiled = stmt.compile(compile_kwargs={"literal_binds": False})
+            logger.debug(
+                "Count contacts SQL query: filters=%s\nSQL: %s",
+                active_filter_keys,
+                str(compiled),
+            )
+        except Exception as e:
+            logger.debug("Could not compile SQL for logging: %s", e)
         
         result = await session.execute(stmt)
         total = result.scalar_one() or 0

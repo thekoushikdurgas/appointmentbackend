@@ -359,15 +359,32 @@ async def search_contacts_from_apollo_url(
         # Step 4: Determine pagination settings
         # Use helper function to resolve pagination with proper priority
         page_limit = _resolve_pagination(filters, limit)
+        logger.debug(
+            "Pagination resolution: limit_query_param=%s filters.page_size=%s filters.page=%s resolved_page_limit=%s",
+            limit,
+            filters.page_size,
+            filters.page,
+            page_limit,
+        )
 
         use_cursor = False
         resolved_offset = 0 if offset is None else offset
         cursor_token = cursor or filters.cursor
         
+        logger.debug(
+            "Offset calculation start: offset_query_param=%s cursor_token=%s filters.page=%s page_limit=%s initial_resolved_offset=%d",
+            offset,
+            cursor_token,
+            filters.page,
+            page_limit,
+            resolved_offset,
+        )
+        
         if cursor_token:
             try:
                 from app.utils.cursor import decode_offset_cursor
                 resolved_offset = decode_offset_cursor(cursor_token)
+                logger.debug("Decoded cursor token: cursor=%s decoded_offset=%d", cursor_token, resolved_offset)
             except ValueError as exc:
                 logger.warning("Invalid cursor token: token=%s error=%s", cursor_token, exc)
                 raise HTTPException(
@@ -379,6 +396,12 @@ async def search_contacts_from_apollo_url(
             # Only use filters.page if no explicit offset was provided (offset is None)
             # This prevents the Apollo URL's page parameter from overriding explicit pagination
             resolved_offset = (filters.page - 1) * page_limit
+            logger.debug(
+                "Calculated offset from page: filters.page=%d page_limit=%d calculated_offset=%d",
+                filters.page,
+                page_limit,
+                resolved_offset,
+            )
 
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         if page_limit is None:
@@ -387,10 +410,11 @@ async def search_contacts_from_apollo_url(
                 active_filter_keys,
             )
         logger.info(
-            "Searching contacts with Apollo filters: limit=%s offset=%d use_cursor=%s filters=%s",
+            "Searching contacts with Apollo filters: limit=%s offset=%d use_cursor=%s filters.page=%s filters=%s",
             page_limit if page_limit is not None else "unlimited",
             resolved_offset,
             use_cursor,
+            filters.page,
             active_filter_keys,
         )
 
@@ -440,10 +464,20 @@ async def search_contacts_from_apollo_url(
             )
 
         logger.info(
-            "Apollo contacts search completed: user_id=%s returned=%d has_next=%s",
+            "Apollo contacts search completed: user_id=%s returned=%d has_next=%s offset_used=%d limit_used=%s",
             current_user.id,
             len(page.results),
             bool(page.next),
+            resolved_offset,
+            page_limit if page_limit is not None else "unlimited",
+        )
+        logger.debug(
+            "Query result details: results_count=%d filters.page=%s resolved_offset=%d page_limit=%s ordering=%s",
+            len(page.results),
+            filters.page,
+            resolved_offset,
+            page_limit,
+            filters.ordering,
         )
 
         # Step 6: Build unmapped categories structure from analysis
@@ -628,7 +662,13 @@ async def count_contacts_from_apollo_url(
 
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         logger.info(
-            "Counting contacts with Apollo filters: filters=%s",
+            "Counting contacts with Apollo filters: filters.page=%s filters=%s",
+            filters.page,
+            active_filter_keys,
+        )
+        logger.debug(
+            "Count endpoint filter details: filter_dict=%s active_filter_keys=%s",
+            filter_dict,
             active_filter_keys,
         )
 
