@@ -78,6 +78,23 @@ async def resolve_attribute_params(request: Request) -> AttributeListParams:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
 
 
+async def resolve_industry_attribute_params(request: Request) -> AttributeListParams:
+    """Parse attribute list query parameters for industry endpoint with distinct=True always enforced."""
+    query_params = dict(request.query_params)
+    # Always set distinct=True - remove it from query params so users can't override
+    query_params.pop("distinct", None)
+    query_params["distinct"] = "true"
+    try:
+        params = AttributeListParams.model_validate(query_params)
+        # Force distinct to True regardless of user input
+        params.distinct = True
+        return params
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 def _resolve_pagination(
     filters: ContactFilterParams,
@@ -397,60 +414,79 @@ async def list_titles(
     )
 
 
-@router.get("/company/", response_model=List[str])
+@router.get("/company/", response_model=CursorPage[str])
 async def list_companies(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
+    request: Request,
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return company names for contacts matching the filters."""
-    return await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.name,
-        "company",
+) -> CursorPage[str]:
+    """Return company names directly from Company table.
+    
+    This endpoint queries ONLY the Company table and ignores all contact filters.
+    Only uses: distinct, limit, offset, ordering, search parameters.
+    
+    Equivalent to: SELECT DISTINCT name FROM companies WHERE name IS NOT NULL
+    
+    Response includes next and previous pagination URLs.
+    """
+    logger.info(
+        "Listing company names (simple): distinct=%s limit=%d offset=%d ordering=%s search=%s",
+        params.distinct,
+        params.limit or 0,
+        params.offset,
+        params.ordering,
+        bool(params.search),
     )
+    request_url = str(request.url)
+    result = await service.list_company_names_simple(session, params, request_url)
+    logger.info(
+        "Listed company names (simple): count=%d next=%s previous=%s",
+        len(result.results),
+        bool(result.next),
+        bool(result.previous),
+    )
+    return result
 
 
-@router.get("/industry/", response_model=List[str])
+@router.get("/industry/", response_model=CursorPage[str])
 async def list_industries(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(resolve_attribute_params),
-    separated: bool = Query(False),
+    request: Request,
+    params: AttributeListParams = Depends(resolve_industry_attribute_params),
+    company: Optional[str] = Query(None, description="Filter by exact company name"),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return industry values sourced from related companies."""
-    column_factory = (
-        (
-            lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.industries
-        )
-        if separated
-        else (
-            lambda Contact, Company, ContactMetadata, CompanyMetadata: func.array_to_string(
-                Company.industries, ","
-            )
-        )
+) -> CursorPage[str]:
+    """Return industry values directly from Company table.
+    
+    This endpoint queries ONLY the Company table and ignores all contact filters.
+    Only uses: limit, offset, ordering, search, company parameters.
+    
+    Always uses: separated=true, distinct=true (hardcoded for optimal performance)
+    
+    Equivalent to: SELECT DISTINCT unnest(industries) FROM companies WHERE industries IS NOT NULL
+    
+    Response includes next and previous pagination URLs.
+    """
+    logger.info(
+        "Listing industries (simple): distinct=%s limit=%d offset=%d ordering=%s search=%s company=%s separated=true",
+        params.distinct,
+        params.limit or 0,
+        params.offset,
+        params.ordering,
+        bool(params.search),
+        bool(company),
     )
-    values = await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        column_factory,
-        "industry",
-        array_mode=separated,
+    request_url = str(request.url)
+    # Always use separated=True and distinct=True for optimal performance
+    result = await service.list_industries_simple(session, params, company, separated=True, request_url=request_url)
+    logger.info(
+        "Listed industries (simple): count=%d next=%s previous=%s",
+        len(result.results),
+        bool(result.next),
+        bool(result.previous),
     )
-    if separated:
-        deduped = _normalize_array_values(values)
-        if params.limit:
-            deduped = deduped[: params.limit]
-        logger.debug("Separated industry values count=%d", len(deduped))
-        return deduped
-    filtered = [value for value in values if value]
-    logger.debug("Collapsed industry values count=%d", len(filtered))
-    return filtered
+    return result
 
 
 @router.get("/keywords/", response_model=List[str])

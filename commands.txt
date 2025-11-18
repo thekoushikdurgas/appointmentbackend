@@ -38,7 +38,7 @@ python -m pytest > test_results.txt
 
 python -m json.tool "postman/Appointment360 API.postman_collection.json"
 
-python scripts/test_apollo_apis.py --token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjQxOThmNy01OWM4LTQwMzktYTEzYy0zZWFlMGIwMTUxMmUiLCJleHAiOjE3NjM0MTQ5NTYsInR5cGUiOiJhY2Nlc3MifQ.Zl6oBebnBEpIYLUlKzM3LwfVZENB2mb_VSlDa283sRQ" --csv "scripts/lead360data/instantlead.net Client A0560 - Sheet1.csv"
+python scripts/test_apollo_apis.py --token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjQxOThmNy01OWM4LTQwMzktYTEzYy0zZWFlMGIwMTUxMmUiLCJleHAiOjE3NjM0MTg0OTEsInR5cGUiOiJhY2Nlc3MifQ.w1KXxtm3-HlXIr1V4X9RVJzqYSpaOM64Vh_Wsp6Er04" --csv "scripts/lead360data/instantlead.net Client A0560 - Sheet1.csv"
 
 python -m pytest > test_results.txt
 

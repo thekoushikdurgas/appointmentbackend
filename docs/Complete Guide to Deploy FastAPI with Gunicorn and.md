@@ -14,7 +14,6 @@ Before starting, ensure you have:
 - Root or sudo access to the server
 - Your FastAPI application code ready
 
-
 ### Step 1: System Preparation and Dependencies
 
 Update your system and install required packages:[^1][^2]
@@ -24,10 +23,9 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install python3-pip python3-dev python3-venv build-essential nginx
 ```
 
-
 ### Step 2: Project Setup
 
-Create your project directory and set up a virtual environment:[^3][^4][^1]
+Create your project directory and set up a virtual environment:
 
 ```bash
 # Create project directory
@@ -45,7 +43,6 @@ source venv/bin/activate
 cd src
 ```
 
-
 ### Step 3: Deploy Your Application Code
 
 Pull your FastAPI application from your repository:[^1]
@@ -56,16 +53,14 @@ git remote add origin https://github.com/thekoushikdurgas/appointmentbackend.git
 git pull origin main
 ```
 
-
 ### Step 4: Install Python Dependencies
 
-Install FastAPI, Gunicorn, and Uvicorn along with your application dependencies:[^4][^5][^3]
+Install FastAPI, Gunicorn, and Uvicorn along with your application dependencies:
 
 ```bash
 pip install -r requirements.txt
 pip install fastapi gunicorn uvicorn[standard]
 ```
-
 
 ### Step 5: Test Your Application
 
@@ -130,7 +125,6 @@ Create the logs directory:
 sudo mkdir -p /var/www/appointmentbackend/logs
 ```
 
-
 ### Step 7: Enable and Start the Service
 
 Reload systemd, enable auto-start, and start your service:[^9][^1][^8]
@@ -187,7 +181,6 @@ server {
 - `proxy_set_header`: Pass client information to backend[^2][^1]
 - `client_max_body_size`: Maximum request body size[^11][^10]
 
-
 ### Step 9: Enable NGINX Configuration
 
 Create a symbolic link and restart NGINX:[^1][^2]
@@ -203,7 +196,6 @@ sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-
 ### Step 10: Verify Deployment
 
 Your FastAPI application should now be accessible through NGINX. Test by visiting:
@@ -218,7 +210,6 @@ Check the automatic API documentation:
 http://your_domain_or_ip/docs
 ```
 
-
 ### Optional Enhancements
 
 #### Environment Variables Management
@@ -226,18 +217,21 @@ http://your_domain_or_ip/docs
 For production environments, use `.env` files to manage configuration:[^12][^13]
 
 1. Install python-dotenv:
+
 ```bash
 pip install python-dotenv
 ```
 
 2. Create a `.env` file in your project root:
-```
+
+```txt
 DATABASE_URL=postgresql://user:password@localhost:5432/mydb
 SECRET_KEY=your-secret-key
 DEBUG=False
 ```
 
 3. Load environment variables in your FastAPI app:
+
 ```python
 import os
 from dotenv import load_dotenv
@@ -249,7 +243,6 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG") == "True"
 ```
 
-
 #### Adjust NGINX Timeouts
 
 For long-running requests, configure appropriate timeouts in your NGINX configuration:[^11]
@@ -260,7 +253,6 @@ proxy_read_timeout 300s;
 proxy_send_timeout 300s;
 ```
 
-
 #### Graceful Reloads
 
 To reload your application with zero downtime, send a HUP signal to Gunicorn:[^14]
@@ -270,7 +262,6 @@ sudo systemctl reload appointmentbackend
 # or
 sudo kill -HUP $(pgrep -f gunicorn)
 ```
-
 
 ### Troubleshooting
 
@@ -299,8 +290,7 @@ sudo tail -f /var/log/nginx/access.log
 - **Permission errors**: Ensure proper ownership of directories and files
 - **Port conflicts**: Verify port 8000 isn't in use by another service
 - **Import errors**: Confirm all dependencies are installed in the virtual environment
-- **Connection refused**: Check that Gunicorn is binding to `127.0.0.1:8000`[^5][^1]
-
+- **Connection refused**: Check that Gunicorn is binding to `127.0.0.1:8000`
 
 ### Production Considerations
 

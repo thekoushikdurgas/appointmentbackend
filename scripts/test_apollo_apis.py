@@ -34,7 +34,7 @@ except ImportError:
 # Configuration
 BASE_URL = "http://127.0.0.1:8000"
 API_VERSION = "v2"
-CONTACTS_ENDPOINT = f"/api/{API_VERSION}/apollo/contacts?limit=50&offset=0"
+CONTACTS_ENDPOINT = f"/api/{API_VERSION}/apollo/contacts/?limit=50"
 COUNT_ENDPOINT = f"/api/{API_VERSION}/apollo/contacts/count"
 
 # Request settings
@@ -64,7 +64,6 @@ class ComparisonResult:
     apollo_url: str
     contacts_api_count: Optional[int]
     count_api_count: Optional[int]
-    match: bool
     difference: Optional[int] = None
     contacts_api_success: bool = False
     count_api_success: bool = False
@@ -240,11 +239,19 @@ class ApolloApiTester:
         Returns:
             ComparisonResult with comparison data
         """
+        # Calculate difference (only if both succeeded)
+        difference = None
+        
+        if contacts_result.success and count_result.success:
+            if contacts_result.contacts_count is not None and count_result.total_count is not None:
+                difference = abs(contacts_result.contacts_count - count_result.total_count)
+        
         comparison = ComparisonResult(
             request_id=request_id,
             apollo_url=contacts_result.url,
             contacts_api_count=contacts_result.contacts_count,
             count_api_count=count_result.total_count,
+            difference=difference,
             contacts_api_success=contacts_result.success,
             count_api_success=count_result.success,
             contacts_api_error=contacts_result.error_message,
@@ -252,15 +259,6 @@ class ApolloApiTester:
             contacts_response_time=contacts_result.response_time,
             count_response_time=count_result.response_time,
         )
-        
-        # Only compare if both succeeded
-        if contacts_result.success and count_result.success:
-            if contacts_result.contacts_count is not None and count_result.total_count is not None:
-                comparison.difference = abs(contacts_result.contacts_count - count_result.total_count)
-                # Note: contacts_count might be limited by pagination, so we check if it matches or is less
-                # If contacts_count equals count_api_count, they match perfectly
-                # If contacts_count < count_api_count, it might be due to pagination limits
-                comparison.match = (contacts_result.contacts_count == count_result.total_count)
         
         return comparison
 
@@ -329,7 +327,9 @@ def generate_report(
     successful_contacts = sum(1 for c in comparisons if c.contacts_api_success)
     successful_count = sum(1 for c in comparisons if c.count_api_success)
     both_successful = sum(1 for c in comparisons if c.contacts_api_success and c.count_api_success)
-    matches = sum(1 for c in comparisons if c.match)
+    matches = sum(1 for c in comparisons if c.contacts_api_success and c.count_api_success and 
+                  c.contacts_api_count is not None and c.count_api_count is not None and
+                  c.contacts_api_count == c.count_api_count)
     
     # Response time statistics
     successful_contacts_times = [c.contacts_response_time for c in comparisons if c.contacts_api_success and c.contacts_response_time > 0]
@@ -390,7 +390,7 @@ def generate_report(
                 report_lines.append(f"      - Response Time: {comp.count_response_time:.3f}s (failed)")
         
         if comp.contacts_api_success and comp.count_api_success:
-            if comp.match:
+            if comp.contacts_api_count == comp.count_api_count:
                 report_lines.append(f"    Comparison: ✓ MATCH ({comp.contacts_api_count} == {comp.count_api_count})")
             else:
                 report_lines.append(f"    Comparison: ✗ MISMATCH ({comp.contacts_api_count} vs {comp.count_api_count}, diff: {comp.difference})")
@@ -528,7 +528,7 @@ Examples:
         comparisons.append(comparison)
         
         if comparison.contacts_api_success and comparison.count_api_success:
-            if comparison.match:
+            if comparison.contacts_api_count == comparison.count_api_count:
                 print(f"  → Comparison: ✓ MATCH")
             else:
                 print(f"  → Comparison: ✗ MISMATCH (diff: {comparison.difference})")
@@ -540,7 +540,13 @@ Examples:
     generate_report(comparisons, output_file)
     
     # Exit code based on results
-    if all(c.contacts_api_success and c.count_api_success and c.match for c in comparisons):
+    all_match = all(
+        c.contacts_api_success and c.count_api_success and 
+        c.contacts_api_count is not None and c.count_api_count is not None and
+        c.contacts_api_count == c.count_api_count
+        for c in comparisons
+    )
+    if all_match:
         print("\n✓ All tests passed!")
         sys.exit(0)
     else:

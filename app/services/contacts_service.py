@@ -363,6 +363,96 @@ class ContactsService:
         self.logger.debug("Exiting ContactsService.get_contact contact_uuid=%s", contact_uuid)
         return detail
 
+    async def list_company_names_simple(
+        self,
+        session: AsyncSession,
+        params: AttributeListParams,
+        request_url: str,
+    ) -> CursorPage[str]:
+        """List company names directly from Company table.
+        
+        This method queries ONLY the Company table and ignores all contact filters.
+        Only uses: distinct, limit, offset, ordering, search parameters.
+        
+        Returns paginated response with next and previous URLs.
+        """
+        self.logger.info(
+            "Service listing company names (simple): limit=%s offset=%d distinct=%s search=%s",
+            params.limit,
+            params.offset,
+            params.distinct,
+            bool(params.search),
+        )
+        values = await self.repository.list_company_names_simple(session, params)
+        
+        # Build pagination links
+        next_link = None
+        if params.limit is not None and len(values) == params.limit:
+            # If we got exactly 'limit' results, there might be more
+            next_offset = params.offset + params.limit
+            next_link = build_pagination_link(request_url, limit=params.limit, offset=next_offset)
+        
+        previous_link = None
+        if params.offset > 0:
+            # If we're not at the start, there's a previous page
+            prev_offset = max(params.offset - (params.limit or 0), 0)
+            previous_link = build_pagination_link(request_url, limit=params.limit or 25, offset=prev_offset)
+        
+        self.logger.info(
+            "Service retrieved %d company names (simple): next=%s previous=%s",
+            len(values),
+            bool(next_link),
+            bool(previous_link),
+        )
+        return CursorPage(next=next_link, previous=previous_link, results=values)
+
+    async def list_industries_simple(
+        self,
+        session: AsyncSession,
+        params: AttributeListParams,
+        company: Optional[str],
+        separated: bool,
+        request_url: str,
+    ) -> CursorPage[str]:
+        """List industry values directly from Company table.
+        
+        This method queries ONLY the Company table and ignores all contact filters.
+        Only uses: distinct, limit, offset, ordering, search, company, separated parameters.
+        
+        Returns paginated response with next and previous URLs.
+        """
+        self.logger.info(
+            "Service listing industries (simple): limit=%s offset=%d distinct=%s search=%s company=%s separated=%s",
+            params.limit,
+            params.offset,
+            params.distinct,
+            bool(params.search),
+            bool(company),
+            separated,
+        )
+        values = await self.repository.list_industries_simple(session, params, company, separated)
+        
+        # Build pagination links
+        next_link = None
+        if params.limit is not None and len(values) == params.limit:
+            # If we got exactly 'limit' results, there might be more
+            next_offset = params.offset + params.limit
+            next_link = build_pagination_link(request_url, limit=params.limit, offset=next_offset)
+        
+        previous_link = None
+        if params.offset > 0:
+            # If we're not at the start, there's a previous page
+            prev_offset = max(params.offset - (params.limit or 0), 0)
+            previous_link = build_pagination_link(request_url, limit=params.limit or 25, offset=prev_offset)
+        
+        self.logger.info(
+            "Service retrieved %d industry values (simple): next=%s previous=%s",
+            len(values),
+            bool(next_link),
+            bool(previous_link),
+        )
+        return CursorPage(next=next_link, previous=previous_link, results=values)
+
     async def list_attribute_values(
         self,
         session: AsyncSession,
