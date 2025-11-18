@@ -468,16 +468,27 @@ class ApolloAnalysisService:
                 # Map Apollo field names to contacts ordering fields
                 field_map = {
                     "contact_name": "first_name",
+                    "person_name.raw": "first_name",  # Person name sorting
                     "title": "title",
                     "company": "company",
+                    "sanitized_organization_name_unanalyzed": "company",  # Organization name sorting
                     "employees": "employees",
                     "revenue": "annual_revenue",
                     "funding": "total_funding",
                     "location": "city",
+                    "organization_linkedin_industry_tag_ids": "industry",  # Industry tag sorting
                     "recommendations_score": "created_at",  # Default fallback
                 }
 
-                mapped_field = field_map.get(sort_field, sort_field)
+                mapped_field = field_map.get(sort_field)
+                if mapped_field is None:
+                    # Unknown Apollo sort field - log warning and use default
+                    logger.warning(
+                        "Unknown Apollo sortByField: %s, falling back to created_at",
+                        sort_field
+                    )
+                    mapped_field = "created_at"
+                
                 # Prepend '-' for descending (when sortAscending is false)
                 if sort_ascending == "false":
                     contact_filters["ordering"] = f"-{mapped_field}"

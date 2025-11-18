@@ -410,7 +410,7 @@ class ContactsService:
         self,
         session: AsyncSession,
         params: AttributeListParams,
-        company: Optional[str],
+        company: Optional[list[str]],
         separated: bool,
         request_url: str,
     ) -> CursorPage[str]:
@@ -422,12 +422,12 @@ class ContactsService:
         Returns paginated response with next and previous URLs.
         """
         self.logger.info(
-            "Service listing industries (simple): limit=%s offset=%d distinct=%s search=%s company=%s separated=%s",
+            "Service listing industries (simple): limit=%s offset=%d distinct=%s search=%s company_count=%s separated=%s",
             params.limit,
             params.offset,
             params.distinct,
             bool(params.search),
-            bool(company),
+            len(company) if company else 0,
             separated,
         )
         values = await self.repository.list_industries_simple(session, params, company, separated)
@@ -447,6 +447,54 @@ class ContactsService:
         
         self.logger.info(
             "Service retrieved %d industry values (simple): next=%s previous=%s",
+            len(values),
+            bool(next_link),
+            bool(previous_link),
+        )
+        return CursorPage(next=next_link, previous=previous_link, results=values)
+
+    async def list_keywords_simple(
+        self,
+        session: AsyncSession,
+        params: AttributeListParams,
+        company: Optional[list[str]],
+        request_url: str,
+    ) -> CursorPage[str]:
+        """List keyword values directly from Company table.
+        
+        This method queries ONLY the Company table and ignores all contact filters.
+        Only uses: distinct, limit, offset, ordering, search, company parameters.
+        
+        Always uses: separated=True, distinct=True (hardcoded for optimal performance)
+        
+        Returns paginated response with next and previous URLs.
+        """
+        self.logger.info(
+            "Service listing keywords (simple): limit=%s offset=%d distinct=%s search=%s company_count=%s separated=true",
+            params.limit,
+            params.offset,
+            params.distinct,
+            bool(params.search),
+            len(company) if company else 0,
+        )
+        # Always use separated=True for optimal performance
+        values = await self.repository.list_keywords_simple(session, params, company, separated=True)
+        
+        # Build pagination links
+        next_link = None
+        if params.limit is not None and len(values) == params.limit:
+            # If we got exactly 'limit' results, there might be more
+            next_offset = params.offset + params.limit
+            next_link = build_pagination_link(request_url, limit=params.limit, offset=next_offset)
+        
+        previous_link = None
+        if params.offset > 0:
+            # If we're not at the start, there's a previous page
+            prev_offset = max(params.offset - (params.limit or 0), 0)
+            previous_link = build_pagination_link(request_url, limit=params.limit or 25, offset=prev_offset)
+        
+        self.logger.info(
+            "Service retrieved %d keyword values (simple): next=%s previous=%s",
             len(values),
             bool(next_link),
             bool(previous_link),
@@ -490,6 +538,131 @@ class ContactsService:
         self.logger.debug("Service received %d attribute values", len(values))
         self.logger.debug("Exiting ContactsService.list_attribute_values")
         return values
+
+    def _has_alphanumeric(self, value: Any) -> bool:
+        """Return True when the value contains at least one alphanumeric character."""
+        if value is None:
+            return False
+        text = str(value).strip()
+        if not text:
+            return False
+        return any(char.isalnum() for char in text)
+
+    async def list_titles_paginated(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        params: AttributeListParams,
+        request_url: str,
+        column_factory: Callable[[Contact, Company, ContactMetadata, CompanyMetadata], Iterable],
+    ) -> CursorPage[str]:
+        """Return paginated contact titles with next/previous URLs.
+        
+        This method applies title-specific filtering (alphanumeric check) and
+        deduplication logic, then builds pagination links.
+        """
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        self.logger.info(
+            "Service listing titles (paginated): limit=%s offset=%d distinct=%s filters=%s",
+            params.limit,
+            params.offset,
+            params.distinct,
+            active_filter_keys,
+        )
+        
+        # Validate parameters
+        if params.limit is not None and params.limit <= 0:
+            self.logger.warning(
+                "Title list rejected due to non-positive limit: limit=%d",
+                params.limit,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="limit must be a positive integer",
+            )
+        if params.offset is not None and params.offset < 0:
+            self.logger.warning(
+                "Title list rejected due to negative offset: offset=%d",
+                params.offset,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="offset must be zero or greater",
+            )
+        
+        # Get values from repository
+        effective_params = params
+        
+        try:
+            values = await self.repository.list_attribute_values(
+                session,
+                filters,
+                effective_params,
+                array_mode=False,
+                column_factory=column_factory,
+                apply_title_alphanumeric_filter=True,  # Apply SQL-level filter for titles
+            )
+        except ValueError as exc:
+            self.logger.warning("Service title list rejected: %s", exc)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        
+        # Track count BEFORE post-processing to determine if there are more results
+        # This is critical for pagination: if SQL returned exactly 'limit' rows,
+        # there might be more results even if post-processing reduces the count
+        raw_count = len(values)
+        has_more_results = params.limit is not None and raw_count == params.limit
+        
+        # Note: Alphanumeric filtering is now applied at SQL level via apply_title_alphanumeric_filter
+        # This ensures LIMIT works correctly. We keep a Python-level check as a safety net,
+        # but it should rarely filter out additional values now.
+        # Apply title-specific filtering (alphanumeric check) as safety net
+        values = [value for value in values if self._has_alphanumeric(value)]
+        after_alphanumeric_count = len(values)
+        
+        # Apply deduplication if needed
+        distinct_requested = effective_params.distinct
+        if distinct_requested:
+            seen = set()
+            unique_values = []
+            for value in values:
+                if value is None:
+                    continue
+                normalized = value.lower() if isinstance(value, str) else str(value)
+                if normalized not in seen:
+                    seen.add(normalized)
+                    unique_values.append(value)
+            self.logger.debug(
+                "Deduplicated title values: before=%d after=%d",
+                len(values),
+                len(unique_values),
+            )
+            values = unique_values
+        
+        # Build pagination links
+        # Use raw_count (before post-processing) to determine if there are more results
+        # This ensures we show next link even if deduplication reduces the final count
+        next_link = None
+        if has_more_results:
+            # If SQL returned exactly 'limit' results, there might be more
+            next_offset = params.offset + params.limit
+            next_link = build_pagination_link(request_url, limit=params.limit, offset=next_offset)
+        
+        previous_link = None
+        if params.offset > 0:
+            # If we're not at the start, there's a previous page
+            prev_offset = max(params.offset - (params.limit or 0), 0)
+            previous_link = build_pagination_link(request_url, limit=params.limit or 25, offset=prev_offset)
+        
+        self.logger.info(
+            "Service retrieved %d titles (paginated): raw_count=%d after_filter=%d after_dedup=%d next=%s previous=%s",
+            len(values),
+            raw_count,
+            after_alphanumeric_count,
+            len(values),
+            bool(next_link),
+            bool(previous_link),
+        )
+        return CursorPage(next=next_link, previous=previous_link, results=values)
 
     def _hydrate_contact(
         self,

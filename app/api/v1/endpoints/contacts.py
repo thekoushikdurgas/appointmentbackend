@@ -95,6 +95,23 @@ async def resolve_industry_attribute_params(request: Request) -> AttributeListPa
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
 
 
+async def resolve_keywords_attribute_params(request: Request) -> AttributeListParams:
+    """Parse attribute list query parameters for keywords endpoint with distinct=True always enforced."""
+    query_params = dict(request.query_params)
+    # Always set distinct=True - remove it from query params so users can't override
+    query_params.pop("distinct", None)
+    query_params["distinct"] = "true"
+    try:
+        params = AttributeListParams.model_validate(query_params)
+        # Force distinct to True regardless of user input
+        params.distinct = True
+        return params
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 def _resolve_pagination(
     filters: ContactFilterParams,
@@ -397,21 +414,41 @@ async def _attribute_endpoint(
     return values
 
 
-@router.get("/title/", response_model=List[str])
+@router.get("/title/", response_model=CursorPage[str])
 async def list_titles(
+    request: Request,
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return contact titles filtered by the supplied parameters."""
-    return await _attribute_endpoint(
+) -> CursorPage[str]:
+    """Return contact titles filtered by the supplied parameters.
+    
+    Response includes next and previous pagination URLs.
+    """
+    logger.info(
+        "Listing titles: distinct=%s limit=%d offset=%d ordering=%s search=%s",
+        params.distinct,
+        params.limit or 0,
+        params.offset,
+        params.ordering,
+        bool(params.search),
+    )
+    request_url = str(request.url)
+    result = await service.list_titles_paginated(
         session,
         filters,
         params,
+        request_url,
         lambda Contact, Company, ContactMetadata, CompanyMetadata: Contact.title,
-        "title",
     )
+    logger.info(
+        "Listed titles: count=%d next=%s previous=%s",
+        len(result.results),
+        bool(result.next),
+        bool(result.previous),
+    )
+    return result
 
 
 @router.get("/company/", response_model=CursorPage[str])
@@ -449,11 +486,46 @@ async def list_companies(
     return result
 
 
+def _normalize_company_list(company_value: Optional[list[str]]) -> Optional[list[str]]:
+    """
+    Normalize company list query parameter by splitting comma-separated values.
+    
+    FastAPI parses comma-separated query parameters like `?company=Acme,Corp` as
+    a single string in a list: `["Acme,Corp"]`. This function splits such values
+    and handles both formats:
+    - Comma-separated: `?company=Acme,Corp` -> `["Acme", "Corp"]`
+    - Multiple params: `?company=Acme&company=Corp` -> `["Acme", "Corp"]`
+    - Mixed: `?company=Acme,Corp&company=Tech` -> `["Acme", "Corp", "Tech"]`
+    
+    Args:
+        company_value: Optional list of strings from FastAPI Query parameter
+        
+    Returns:
+        Normalized list with comma-separated values split, or None if input is None/empty
+    """
+    if not company_value:
+        return None
+    
+    # Split each string by comma and flatten into a single list
+    normalized = []
+    for item in company_value:
+        if item:
+            # Split by comma and add each part
+            parts = item.split(",")
+            for part in parts:
+                # Trim whitespace and add if not empty
+                trimmed = part.strip()
+                if trimmed:
+                    normalized.append(trimmed)
+    
+    return normalized if normalized else None
+
+
 @router.get("/industry/", response_model=CursorPage[str])
 async def list_industries(
     request: Request,
     params: AttributeListParams = Depends(resolve_industry_attribute_params),
-    company: Optional[str] = Query(None, description="Filter by exact company name"),
+    company: Optional[list[str]] = Query(None, description="Filter by exact company name(s). Supports multiple values: ?company=Acme&company=Corp or ?company=Acme,Corp"),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CursorPage[str]:
@@ -467,7 +539,15 @@ async def list_industries(
     Equivalent to: SELECT DISTINCT unnest(industries) FROM companies WHERE industries IS NOT NULL
     
     Response includes next and previous pagination URLs.
+    
+    Company parameter supports multiple values:
+    - Multiple query params: ?company=Acme&company=Corp
+    - Comma-separated: ?company=Acme,Corp
+    - Mixed: ?company=Acme,Corp&company=Tech
     """
+    # Normalize company list to handle comma-separated values
+    normalized_companies = _normalize_company_list(company)
+    
     logger.info(
         "Listing industries (simple): distinct=%s limit=%d offset=%d ordering=%s search=%s company=%s separated=true",
         params.distinct,
@@ -475,11 +555,11 @@ async def list_industries(
         params.offset,
         params.ordering,
         bool(params.search),
-        bool(company),
+        len(normalized_companies) if normalized_companies else 0,
     )
     request_url = str(request.url)
     # Always use separated=True and distinct=True for optimal performance
-    result = await service.list_industries_simple(session, params, company, separated=True, request_url=request_url)
+    result = await service.list_industries_simple(session, params, normalized_companies, separated=True, request_url=request_url)
     logger.info(
         "Listed industries (simple): count=%d next=%s previous=%s",
         len(result.results),
@@ -489,43 +569,52 @@ async def list_industries(
     return result
 
 
-@router.get("/keywords/", response_model=List[str])
+@router.get("/keywords/", response_model=CursorPage[str])
 async def list_keywords(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(resolve_attribute_params),
-    separated: bool = Query(False),
+    request: Request,
+    params: AttributeListParams = Depends(resolve_keywords_attribute_params),
+    company: Optional[list[str]] = Query(None, description="Filter by exact company name(s). Supports multiple values: ?company=Acme&company=Corp or ?company=Acme,Corp"),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return keyword values for companies, optionally split into unique tokens."""
-    column_factory = (
-        (
-            lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.keywords
-        )
-        if separated
-        else (
-            lambda Contact, Company, ContactMetadata, CompanyMetadata: func.array_to_string(
-                Company.keywords, ","
-            )
-        )
+) -> CursorPage[str]:
+    """Return keyword values directly from Company table.
+    
+    This endpoint queries ONLY the Company table and ignores all contact filters.
+    Only uses: limit, offset, ordering, search, company parameters.
+    
+    Always uses: separated=true, distinct=true (hardcoded for optimal performance)
+    
+    Equivalent to: SELECT DISTINCT unnest(keywords) FROM companies WHERE keywords IS NOT NULL
+    
+    Response includes next and previous pagination URLs.
+    
+    Company parameter supports multiple values:
+    - Multiple query params: ?company=Acme&company=Corp
+    - Comma-separated: ?company=Acme,Corp
+    - Mixed: ?company=Acme,Corp&company=Tech
+    """
+    # Normalize company list to handle comma-separated values
+    normalized_companies = _normalize_company_list(company)
+    
+    logger.info(
+        "Listing keywords (simple): distinct=%s limit=%d offset=%d ordering=%s search=%s company=%s separated=true",
+        params.distinct,
+        params.limit or 0,
+        params.offset,
+        params.ordering,
+        bool(params.search),
+        len(normalized_companies) if normalized_companies else 0,
     )
-    values = await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        column_factory,
-        "keywords",
-        array_mode=separated,
+    request_url = str(request.url)
+    # Always use separated=True and distinct=True for optimal performance
+    result = await service.list_keywords_simple(session, params, normalized_companies, request_url)
+    logger.info(
+        "Listed keywords (simple): count=%d next=%s previous=%s",
+        len(result.results),
+        bool(result.next),
+        bool(result.previous),
     )
-    if separated:
-        deduped = _normalize_array_values(values)
-        if params.limit:
-            deduped = deduped[: params.limit]
-        logger.debug("Separated keyword values count=%d", len(deduped))
-        return deduped
-    filtered = [value for value in values if value]
-    logger.debug("Collapsed keyword values count=%d", len(filtered))
-    return filtered
+    return result
 
 
 @router.get("/technologies/", response_model=List[str])

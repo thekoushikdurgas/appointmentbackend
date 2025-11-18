@@ -1776,6 +1776,7 @@ class ContactRepository(AsyncRepository[Contact]):
         *,
         array_mode: bool = False,
         column_factory: Callable[[Contact, Company, ContactMetadata, CompanyMetadata], Any] | None = None,
+        apply_title_alphanumeric_filter: bool = False,
     ) -> list[str]:
         """Return attribute values for autocomplete/dropdown endpoints.
         
@@ -1870,17 +1871,38 @@ class ContactRepository(AsyncRepository[Contact]):
                 dialect_name=dialect_name,
             )
         
-        # Step 4: Apply search terms to the joined result (multi-column search)
-        stmt = self.apply_search_terms(
-            stmt,
-            params.search or filters.search,
-            company_alias if needs_company else None,
-            company_meta_alias if needs_company_meta else None,
-            contact_meta_alias if needs_contact_meta else None,
-            dialect_name=dialect_name,
-        )
+        # Step 4: Apply search terms
+        # For attribute list endpoints, search should only apply to the selected column (column_expression)
+        # NOT across all contact/company columns, to ensure search is scoped to the attribute being listed
+        search_term = params.search or filters.search
+        if search_term:
+            search_stripped = search_term.strip()
+            if search_stripped:
+                # Apply search ONLY to the column_expression (e.g., Contact.title)
+                # This ensures that when searching for titles, we only get titles containing the search term
+                pattern = f"%{search_stripped}%"
+                stmt = stmt.where(column_expression.ilike(pattern))
+                logger.debug(
+                    "Applied attribute search: column=%s search=%s",
+                    getattr(column_expression, "key", "column"),
+                    search_stripped,
+                )
         
         stmt = stmt.where(column_expression.isnot(None))
+        
+        # For title column, add SQL-level alphanumeric filter to ensure LIMIT works correctly
+        # This prevents post-processing filters from reducing results below the requested limit
+        if apply_title_alphanumeric_filter:
+            # PostgreSQL: Use regex to check for at least one alphanumeric character
+            # Pattern [[:alnum:]] matches any alphanumeric character (POSIX character class)
+            if dialect_name == "postgresql":
+                # Use ~ operator for regex matching - checks if column matches pattern
+                # [[:alnum:]] is a POSIX character class that matches any alphanumeric character
+                stmt = stmt.where(column_expression.op('~')(r'[[:alnum:]]'))
+            else:
+                # For other databases, use a simpler check
+                # Check that trimmed value is not empty (already handled) and has length > 0
+                stmt = stmt.where(func.length(func.trim(column_expression)) > 0)
         
         # Apply distinct BEFORE ordering to avoid SQL issues
         if params.distinct:
@@ -1986,7 +2008,7 @@ class ContactRepository(AsyncRepository[Contact]):
         self,
         session: AsyncSession,
         params: AttributeListParams,
-        company: Optional[str] = None,
+        company: Optional[list[str]] = None,
         separated: bool = False,
     ) -> list[str]:
         """Return industry values directly from Company table.
@@ -1997,20 +2019,20 @@ class ContactRepository(AsyncRepository[Contact]):
         Args:
             session: Database session
             params: Attribute list parameters (distinct, limit, offset, ordering, search)
-            company: Optional exact company name to filter by
+            company: Optional list of exact company names to filter by (uses IN clause)
             separated: If True, unnest array into individual values; if False, return comma-separated strings
         
         Returns:
             List of industry values
         """
         logger.debug(
-            "Listing industries (simple): limit=%d offset=%d ordering=%s search=%s distinct=%s company=%s separated=%s",
+            "Listing industries (simple): limit=%d offset=%d ordering=%s search=%s distinct=%s company_count=%s separated=%s",
             params.limit,
             params.offset,
             params.ordering,
             bool(params.search),
             params.distinct,
-            bool(company),
+            len(company) if company else 0,
             separated,
         )
         
@@ -2041,9 +2063,9 @@ class ContactRepository(AsyncRepository[Contact]):
                 .where(source_company.industries.isnot(None))
             )
             
-            # Filter by exact company name if provided (apply early for better performance)
+            # Filter by exact company name(s) if provided (apply early for better performance)
             if company:
-                unnest_stmt = unnest_stmt.where(source_company.name == company)
+                unnest_stmt = unnest_stmt.where(source_company.name.in_(company))
             
             # Convert to subquery for further processing
             unnested = unnest_stmt.subquery()
@@ -2105,9 +2127,9 @@ class ContactRepository(AsyncRepository[Contact]):
             # Remove array_length check - it's slow and unnecessary
             # array_to_string will return empty string for empty arrays, which we filter out below
             
-            # Filter by exact company name if provided
+            # Filter by exact company name(s) if provided
             if company:
-                stmt = stmt.where(Company.name == company)
+                stmt = stmt.where(Company.name.in_(company))
             
             # Filter out empty strings from array_to_string
             stmt = stmt.where(column_expression != "")
@@ -2147,6 +2169,172 @@ class ContactRepository(AsyncRepository[Contact]):
                 values.append(value)
             
             logger.debug("Retrieved %d industry values (simple, not separated)", len(values))
+            return values
+
+    async def list_keywords_simple(
+        self,
+        session: AsyncSession,
+        params: AttributeListParams,
+        company: Optional[list[str]] = None,
+        separated: bool = False,
+    ) -> list[str]:
+        """Return keyword values directly from Company table.
+        
+        This method queries ONLY the Company table and ignores all contact filters.
+        Only uses: distinct, limit, offset, ordering, search, company, separated parameters.
+        
+        Args:
+            session: Database session
+            params: Attribute list parameters (distinct, limit, offset, ordering, search)
+            company: Optional list of exact company names to filter by (uses IN clause)
+            separated: If True, unnest array into individual values; if False, return comma-separated strings
+        
+        Returns:
+            List of keyword values
+        """
+        logger.debug(
+            "Listing keywords (simple): limit=%d offset=%d ordering=%s search=%s distinct=%s company_count=%s separated=%s",
+            params.limit,
+            params.offset,
+            params.ordering,
+            bool(params.search),
+            params.distinct,
+            len(company) if company else 0,
+            separated,
+        )
+        
+        bind = session.bind
+        dialect_name = getattr(bind.dialect, "name", None) if bind is not None else None
+        is_postgresql = dialect_name == "postgresql"
+        
+        # Always use unnest for PostgreSQL - it's much faster than array_to_string with DISTINCT
+        # For non-PostgreSQL, fall back to array_to_string
+        use_array_optimization = (separated or is_postgresql) and is_postgresql
+        
+        if use_array_optimization:
+            # Use unnest with optimized PostgreSQL array processing
+            # CRITICAL: Match the exact pattern from list_industries_simple for consistency
+            # This is the most efficient approach: unnest first, then filter, then distinct, then paginate
+            
+            # Build base query to unnest keywords efficiently
+            source_company = aliased(Company, name="keyword_company")
+            
+            # Start with unnest - this is the most efficient way to handle arrays in PostgreSQL
+            # Use a subquery to unnest all keywords from companies that have them
+            unnest_stmt = (
+                select(
+                    func.unnest(source_company.keywords).label("value")
+                )
+                .select_from(source_company)
+                .where(source_company.keywords.isnot(None))
+            )
+            
+            # Filter by exact company name(s) if provided (apply early for better performance)
+            if company:
+                unnest_stmt = unnest_stmt.where(source_company.name.in_(company))
+            
+            # Convert to subquery for further processing
+            unnested = unnest_stmt.subquery()
+            value_column = unnested.c.value
+            
+            # Build main query from unnested values
+            attr_stmt = select(value_column).select_from(unnested)
+            
+            # Filter out NULL and empty values efficiently
+            trimmed_value = func.nullif(func.trim(value_column), "")
+            attr_stmt = attr_stmt.where(value_column.isnot(None))
+            attr_stmt = attr_stmt.where(trimmed_value.isnot(None))
+            
+            # Apply search on unnested values (early filtering)
+            if params.search:
+                search_term = params.search.strip()
+                if search_term:
+                    attr_stmt = attr_stmt.where(value_column.ilike(f"%{search_term}%"))
+            
+            # Apply distinct - use GROUP BY for better performance with large datasets
+            # GROUP BY can be faster than DISTINCT when combined with ORDER BY
+            if params.distinct:
+                # Use GROUP BY instead of DISTINCT - can be faster and allows better optimization
+                attr_stmt = attr_stmt.group_by(value_column)
+            
+            # Apply ordering - must come after GROUP BY if used
+            ordering_map = {"value": value_column}
+            attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+            if params.ordering is None:
+                attr_stmt = attr_stmt.order_by(value_column.asc())
+            
+            # Apply pagination LAST - this is critical for performance
+            # PostgreSQL can use LIMIT to stop processing early if we have an index
+            attr_stmt = attr_stmt.offset(params.offset)
+            if params.limit is not None:
+                attr_stmt = attr_stmt.limit(params.limit)
+            
+            result = await session.execute(attr_stmt)
+            values = []
+            for (value,) in result.fetchall():
+                if value is None:
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    continue
+                values.append(value)
+            
+            logger.debug("Retrieved %d keyword values (simple, separated)", len(values))
+            return values
+        else:
+            # Fallback for non-PostgreSQL databases: Use array_to_string
+            # For PostgreSQL, we should use unnest (handled above) for better performance
+            # But if explicitly separated=False on non-PostgreSQL, use this path
+            column_expression = func.array_to_string(Company.keywords, ",")
+            
+            stmt = select(column_expression).select_from(Company)
+            
+            # Filter out NULL keywords - use GIN index efficiently
+            stmt = stmt.where(Company.keywords.isnot(None))
+            # Remove array_length check - it's slow and unnecessary
+            # array_to_string will return empty string for empty arrays, which we filter out below
+            
+            # Filter by exact company name(s) if provided
+            if company:
+                stmt = stmt.where(Company.name.in_(company))
+            
+            # Filter out empty strings from array_to_string
+            stmt = stmt.where(column_expression != "")
+            stmt = stmt.where(func.trim(column_expression) != "")
+            
+            # Apply search on comma-separated string
+            if params.search:
+                search_term = params.search.strip()
+                if search_term:
+                    stmt = stmt.where(column_expression.ilike(f"%{search_term}%"))
+            
+            # Apply distinct - but this is still slow on large datasets
+            # Consider using unnest even when separated=False for PostgreSQL
+            if params.distinct:
+                stmt = stmt.distinct()
+            
+            # Apply ordering
+            ordering_map = {"value": column_expression}
+            stmt = apply_ordering(stmt, params.ordering, ordering_map)
+            if params.distinct and not params.ordering:
+                stmt = stmt.order_by(column_expression.asc())
+            elif not params.ordering:
+                stmt = stmt.order_by(column_expression.asc())
+            
+            # Apply pagination
+            stmt = stmt.offset(params.offset)
+            if params.limit is not None:
+                stmt = stmt.limit(params.limit)
+            
+            result = await session.execute(stmt)
+            values = []
+            for (value,) in result.fetchall():
+                if value is None:
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    continue
+                values.append(value)
+            
+            logger.debug("Retrieved %d keyword values (simple, not separated)", len(values))
             return values
 
     async def _list_array_attribute_values(
