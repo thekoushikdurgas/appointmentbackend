@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Callable, Iterable, List, Optional, Union
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -159,8 +160,11 @@ async def list_contacts(
     view: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> CursorPage[Union[ContactListItem, ContactSimpleItem]]:
+    ) -> CursorPage[Union[ContactListItem, ContactSimpleItem]]:
     """Return a paginated list of contacts."""
+    # Record request start time for performance monitoring
+    request_start_time = time.time()
+    
     raw_path = request.scope.get("raw_path")
     if isinstance(raw_path, (bytes, bytearray)):
         raw_path_text = raw_path.decode("latin-1", errors="ignore")
@@ -214,11 +218,16 @@ async def list_contacts(
             use_cursor=use_cursor,
         )
 
+    # Calculate total request duration for performance monitoring
+    request_end_time = time.time()
+    request_duration = request_end_time - request_start_time
+    
     logger.info(
-        "Listed contacts: returned=%d has_next=%s has_previous=%s",
+        "Listed contacts: returned=%d has_next=%s has_previous=%s duration=%.3fs",
         len(page.results),
         bool(page.next),
         bool(page.previous),
+        request_duration,
     )
     return page
 

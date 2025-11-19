@@ -2,11 +2,41 @@
 
 Complete API documentation for user authentication and profile management endpoints.
 
+**Related Documentation:**
+- [Contacts API](./contacts.md) - For contact management endpoints
+- [Companies API](./company.md) - For company management endpoints
+- [Apollo API](./apollo.md) - For Apollo URL analysis endpoints
+
+## Table of Contents
+
+- [Base URL](#base-url)
+- [Authentication](#authentication)
+- [CORS Testing](#cors-testing)
+- [Authentication Endpoints](#authentication-endpoints)
+  - [POST /api/v2/auth/register/](#post-apiv2authregister---user-registration)
+  - [POST /api/v2/auth/login/](#post-apiv2authlogin---user-login)
+  - [POST /api/v2/auth/logout/](#post-apiv2authlogout---user-logout)
+  - [GET /api/v2/auth/session/](#get-apiv2authsession---get-current-session)
+  - [POST /api/v2/auth/refresh/](#post-apiv2authrefresh---refresh-access-token)
+- [User Profile Endpoints](#user-profile-endpoints)
+  - [GET /api/v2/users/profile/](#get-apiv2usersprofile---get-current-user-profile)
+  - [PUT /api/v2/users/profile/](#put-apiv2usersprofile---update-current-user-profile)
+  - [POST /api/v2/users/profile/avatar/](#post-apiv2usersprofileavatar---upload-user-avatar)
+  - [POST /api/v2/users/promote-to-admin/](#post-apiv2userspromote-to-admin---promote-user-to-admin)
+- [Error Responses](#error-responses)
+- [Notes](#notes)
+
+---
+
 ## Base URL
 
 ```txt
 http://54.87.173.234:8000
 ```
+
+**API Version:** 
+- Authentication endpoints: `/api/v2/auth/`
+- User profile endpoints: `/api/v2/users/`
 
 ## Authentication
 

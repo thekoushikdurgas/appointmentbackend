@@ -1344,13 +1344,21 @@
 						{
 							"listen": "test",
 							"script": {
-								"exec": [
-									"if (pm.response.code === 201) {",
-									"    var jsonData = pm.response.json();",
-									"    pm.collectionVariables.set('sampleExportId', jsonData.export_id);",
-									"    pm.collectionVariables.set('sampleExportDownloadUrl', jsonData.download_url);",
-									"}"
-								],
+							"exec": [
+								"if (pm.response.code === 201) {",
+								"    var jsonData = pm.response.json();",
+								"    pm.collectionVariables.set('sampleExportId', jsonData.export_id);",
+								"    pm.collectionVariables.set('sampleExportDownloadUrl', jsonData.download_url);",
+								"    // Extract token from download_url",
+								"    if (jsonData.download_url) {",
+								"        var url = new URL(jsonData.download_url);",
+								"        var token = url.searchParams.get('token');",
+								"        if (token) {",
+								"            pm.collectionVariables.set('sampleExportToken', token);",
+								"        }",
+								"    }",
+								"}"
+							],
 								"type": "text/javascript"
 							}
 						}
@@ -1422,9 +1430,22 @@
 							}
 						],
 						"url": {
-							"raw": "/",
+							"raw": "{{baseUrlV2}}/exports/{{sampleExportId}}/download?token={{sampleExportToken}}",
+							"host": [
+								"{{baseUrlV2}}"
+							],
 							"path": [
-								""
+								"exports",
+								"{{sampleExportId}}",
+								"download"
+							],
+							"query": [
+								{
+									"key": "token",
+									"value": "{{sampleExportToken}}",
+									"description": "Signed URL token for authentication. Extract from download_url returned by Create Contact Export or Create Company Export endpoints.",
+									"disabled": false
+								}
 							]
 						},
 						"description": "Download a CSV export file using a signed URL.\n\nThe token must be valid and the export must belong to the requesting user. The export must not have expired.\n\n**Path Parameters:**\n- export_id (string, UUID): Export ID\n\n**Query Parameters:**\n- token (string, required): Signed URL token for authentication. This token is included in the download_url returned by the Create Contact Export endpoint.\n\n**Response Codes:**\n- 200 OK: CSV file downloaded successfully\n- 401 Unauthorized: Invalid or expired download token\n- 403 Forbidden: Token does not match export or user\n- 404 Not Found: Export not found or access denied, or export file not found\n- 410 Gone: Export has expired\n- 400 Bad Request: Export is not ready (status not completed)\n\n**Notes:**\n- The download URL expires after 24 hours from creation\n- Only the user who created the export can download it\n- The response is a CSV file with Content-Disposition header for file download\n- Use the full download_url from the Create Contact Export response, which includes the token as a query parameter"
@@ -1437,13 +1458,21 @@
 						{
 							"listen": "test",
 							"script": {
-								"exec": [
-									"if (pm.response.code === 201) {",
-									"    var jsonData = pm.response.json();",
-									"    pm.collectionVariables.set('sampleExportId', jsonData.export_id);",
-									"    pm.collectionVariables.set('sampleExportDownloadUrl', jsonData.download_url);",
-									"}"
-								],
+							"exec": [
+								"if (pm.response.code === 201) {",
+								"    var jsonData = pm.response.json();",
+								"    pm.collectionVariables.set('sampleExportId', jsonData.export_id);",
+								"    pm.collectionVariables.set('sampleExportDownloadUrl', jsonData.download_url);",
+								"    // Extract token from download_url",
+								"    if (jsonData.download_url) {",
+								"        var url = new URL(jsonData.download_url);",
+								"        var token = url.searchParams.get('token');",
+								"        if (token) {",
+								"            pm.collectionVariables.set('sampleExportToken', token);",
+								"        }",
+								"    }",
+								"}"
+							],
 								"type": "text/javascript"
 							}
 						}
@@ -5536,6 +5565,14 @@
 			"value": "",
 			"description": {
 				"content": "Signed download URL for export file. Automatically set by the Create Contact Export endpoint test script. Includes the token as a query parameter.",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "sampleExportToken",
+			"value": "",
+			"description": {
+				"content": "Signed URL token extracted from download_url. Automatically set by the Create Contact Export and Create Company Export endpoint test scripts. Used for the Download Export endpoint.",
 				"type": "text/plain"
 			}
 		},

@@ -147,6 +147,26 @@ CREATE INDEX IF NOT EXISTS idx_companies_revenue_created
     WHERE annual_revenue IS NOT NULL;
 
 -- ============================================================================
+-- Phase 2: Performance Optimization Indexes (Added for Contacts Endpoint)
+-- ============================================================================
+
+-- Index for company name ordering (if Company join is needed for explicit ordering)
+CREATE INDEX IF NOT EXISTS idx_companies_name_asc 
+    ON companies (name ASC NULLS LAST) 
+    WHERE name IS NOT NULL;
+
+-- Composite index for default ordering pattern (created_at DESC, id DESC)
+-- This is the optimized default ordering for contacts list endpoint
+CREATE INDEX IF NOT EXISTS idx_contacts_created_at_id_desc 
+    ON public.contacts (created_at DESC NULLS LAST, id DESC);
+
+-- Index for company_id join performance with created_at ordering
+-- Optimizes queries that join Company and order by created_at
+CREATE INDEX IF NOT EXISTS idx_contacts_company_id_created_at 
+    ON public.contacts (company_id, created_at DESC) 
+    WHERE company_id IS NOT NULL;
+
+-- ============================================================================
 -- Index Maintenance Notes
 -- ============================================================================
 -- After creating these indexes:

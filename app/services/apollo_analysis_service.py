@@ -524,12 +524,19 @@ class ApolloAnalysisService:
         
         # Process personTitles[]: dependent on includeSimilarTitles
         # - includeSimilarTitles=false: use exact mapping (normalize)
-        # - includeSimilarTitles=true: use jumble mapping (split into words)
+        # - includeSimilarTitles=true: use jumble mapping (split into words, AND logic)
         if "personTitles[]" in raw_parameters:
             titles = raw_parameters["personTitles[]"]
             if titles:
+                logger.info(
+                    "Processing personTitles[]: titles=%s includeSimilarTitles=%s",
+                    titles,
+                    include_similar,
+                )
                 if include_similar:
                     # Jumble mapping: split each title into individual words
+                    # ALL words from ALL titles must be present (AND logic across titles)
+                    # Within each title, ALL words must be present (AND logic within title)
                     jumbled_words = []
                     for title in titles:
                         words = self._jumble_title(title)
@@ -541,8 +548,13 @@ class ApolloAnalysisService:
                         if word not in seen:
                             unique_words.append(word)
                             seen.add(word)
-                    contact_filters["title"] = ",".join(unique_words)
-                    logger.debug("Using jumble mapping (includeSimilarTitles=true): %s → %s", titles, unique_words)
+                    # Store as jumble_title_words for AND logic filtering
+                    contact_filters["jumble_title_words"] = unique_words
+                    logger.info(
+                        "Using jumble mapping (includeSimilarTitles=true): original_titles=%s jumbled_words=%s (AND logic - all words must be present)",
+                        titles,
+                        unique_words,
+                    )
                 else:
                     # Exact mapping: normalize titles (sort words alphabetically)
                     normalized_titles = [self._normalize_title(t) for t in titles]
@@ -563,10 +575,18 @@ class ApolloAnalysisService:
         if "personNotTitles[]" in raw_parameters:
             exclude_titles = raw_parameters["personNotTitles[]"]
             if exclude_titles:
+                logger.info(
+                    "Processing personNotTitles[]: exclude_titles=%s",
+                    exclude_titles,
+                )
                 # Always normalize exclude titles (exact mapping)
                 normalized_not_titles = [self._normalize_title(t) for t in exclude_titles]
                 contact_filters["exclude_titles"] = normalized_not_titles
-                logger.debug("Using exact mapping for exclude titles (always normalized): %s → %s", exclude_titles[:3], normalized_not_titles[:3])
+                logger.info(
+                    "Using exact mapping for exclude titles (always normalized): original=%s normalized=%s",
+                    exclude_titles,
+                    normalized_not_titles,
+                )
                 mapped_params.add("personNotTitles[]")
 
         if "includeSimilarTitles" in raw_parameters:

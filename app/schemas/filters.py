@@ -28,6 +28,10 @@ class ContactFilterParams(BaseModel):
         default=None,
         description="When True, normalizes the database title column (sorts words alphabetically) before comparison. Used when includeSimilarTitles=false to match normalized titles correctly.",
     )
+    jumble_title_words: Optional[list[str]] = Field(
+        default=None,
+        description="List of words that must ALL be present in the title (AND logic). Used when includeSimilarTitles=true for jumble mapping. Each word is searched independently, but all must match.",
+    )
     seniority: Optional[str] = Field(
         default=None,
         description="Case-insensitive substring match against Contact.seniority.",

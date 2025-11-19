@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Callable, Optional, Sequence
 
-from sqlalchemy import Select, and_, cast, distinct, func, or_, select, true, union_all, literal
+from sqlalchemy import Select, and_, cast, distinct, func, or_, select, text, true, union_all, literal
 from sqlalchemy.types import Text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -343,12 +344,23 @@ class ContactRepository(AsyncRepository[Contact]):
         # Use trigram optimization for title column (has trigram index)
         # If normalize_title_column is True, use normalized title filter
         logger.info(
-            "Checking normalize_title_column flag: title=%s normalize_title_column=%s type=%s",
+            "Checking title filter flags: title=%s jumble_title_words=%s normalize_title_column=%s type=%s",
             filters.title,
+            filters.jumble_title_words,
             filters.normalize_title_column,
-            type(filters.normalize_title_column).__name__,
+            type(filters.normalize_title_column).__name__ if filters.normalize_title_column is not None else "None",
         )
-        if filters.normalize_title_column:
+        # Title filtering: check for jumble_title_words first, then normalize_title_column, then standard filter
+        if filters.jumble_title_words:
+            logger.info(
+                "Applying jumble title filter (AND logic): jumble_title_words=%s",
+                filters.jumble_title_words,
+            )
+            stmt = self._apply_jumble_title_filter(
+                stmt, Contact.title, filters.jumble_title_words,
+                dialect_name=dialect_name
+            )
+        elif filters.normalize_title_column:
             logger.info(
                 "Applying normalized title filter: title=%s normalize_title_column=%s",
                 filters.title,
@@ -358,11 +370,10 @@ class ContactRepository(AsyncRepository[Contact]):
                 stmt, Contact.title, filters.title,
                 dialect_name=dialect_name
             )
-        else:
-            logger.warning(
-                "Using standard title filter (not normalized): title=%s normalize_title_column=%s (this may be incorrect if includeSimilarTitles=false)",
+        elif filters.title:
+            logger.debug(
+                "Using standard title filter: title=%s",
                 filters.title,
-                filters.normalize_title_column,
             )
             stmt = self._apply_multi_value_filter(
                 stmt, Contact.title, filters.title, 
@@ -387,14 +398,16 @@ class ContactRepository(AsyncRepository[Contact]):
         if filters.exclude_seniorities:
             stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
         if filters.exclude_titles:
-            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
-            if lowered_titles:
-                stmt = stmt.where(
-                    or_(
-                        Contact.title.is_(None),
-                        func.lower(Contact.title).notin_(lowered_titles),
-                    )
-                )
+            # Exclude titles are normalized (words sorted alphabetically) in apollo_analysis_service
+            # We need to normalize the database column before comparison
+            logger.info(
+                "_apply_contact_filters: Applying normalized exclude_titles filter: exclude_titles=%s",
+                filters.exclude_titles,
+            )
+            stmt = self._apply_normalized_title_exclusion(
+                stmt, Contact.title, filters.exclude_titles,
+                dialect_name=dialect_name
+            )
         if filters.exclude_company_ids:
             exclusion_values = tuple(filters.exclude_company_ids)
             exclusion_condition = ~Contact.company_id.in_(exclusion_values)
@@ -690,9 +703,17 @@ class ContactRepository(AsyncRepository[Contact]):
         # Contact table filters
         stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
         stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
-        # Use trigram optimization for title column (has trigram index)
-        # If normalize_title_column is True, use normalized title filter
-        if filters.normalize_title_column:
+        # Title filtering: check for jumble_title_words first, then normalize_title_column, then standard filter
+        if filters.jumble_title_words:
+            logger.info(
+                "_apply_contact_filters: Applying jumble title filter (AND logic): jumble_title_words=%s",
+                filters.jumble_title_words,
+            )
+            stmt = self._apply_jumble_title_filter(
+                stmt, Contact.title, filters.jumble_title_words,
+                dialect_name=dialect_name
+            )
+        elif filters.normalize_title_column:
             logger.info(
                 "_apply_contact_filters: Applying normalized title filter: title=%s normalize_title_column=%s",
                 filters.title,
@@ -702,7 +723,7 @@ class ContactRepository(AsyncRepository[Contact]):
                 stmt, Contact.title, filters.title,
                 dialect_name=dialect_name
             )
-        else:
+        elif filters.title:
             stmt = self._apply_multi_value_filter(
                 stmt, Contact.title, filters.title, 
                 dialect_name=dialect_name, 
@@ -719,14 +740,16 @@ class ContactRepository(AsyncRepository[Contact]):
         if filters.exclude_seniorities:
             stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
         if filters.exclude_titles:
-            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
-            if lowered_titles:
-                stmt = stmt.where(
-                    or_(
-                        Contact.title.is_(None),
-                        func.lower(Contact.title).notin_(lowered_titles),
-                    )
-                )
+            # Exclude titles are normalized (words sorted alphabetically) in apollo_analysis_service
+            # We need to normalize the database column before comparison
+            logger.info(
+                "_apply_contact_filters: Applying normalized exclude_titles filter: exclude_titles=%s",
+                filters.exclude_titles,
+            )
+            stmt = self._apply_normalized_title_exclusion(
+                stmt, Contact.title, filters.exclude_titles,
+                dialect_name=dialect_name
+            )
         if filters.exclude_company_ids:
             exclusion_values = tuple(filters.exclude_company_ids)
             exclusion_condition = ~Contact.company_id.in_(exclusion_values)
@@ -1051,11 +1074,11 @@ class ContactRepository(AsyncRepository[Contact]):
         # Check ordering requirements
         order_company, order_contact_meta, order_company_meta = self._needs_joins_for_ordering(filters.ordering)
         
-        # If no explicit ordering, we'll use default ordering by company.name
-        # Ensure company join is available for default ordering
+        # Optimized: Don't force company join for default ordering
+        # Default ordering will use Contact.created_at DESC (indexed field) which doesn't require Company join
+        # Only join Company when explicitly needed for filters or ordering
         if not filters.ordering:
-            order_company = True  # Need company for default ordering by company.name
-            logger.debug("Default ordering will be used - ensuring company join is available")
+            logger.debug("Default ordering will use Contact.created_at DESC (no Company join required)")
         
         needs_company = needs_company or order_company
         needs_contact_meta = needs_contact_meta or order_contact_meta
@@ -1071,8 +1094,9 @@ class ContactRepository(AsyncRepository[Contact]):
             if filters.include_domain_list or filters.exclude_domain_list:
                 needs_company_meta = True
         
-        # Always need company for response hydration (ContactListItem includes company data)
-        # But we can optimize by not joining metadata tables when they're not needed
+        # Optimized: Only join Company when filters/ordering require it
+        # ContactListItem can handle None company (service layer handles this gracefully)
+        # This avoids unnecessary joins and significantly improves query performance
         if needs_company_meta or needs_contact_meta:
             # Need all joins
             stmt, company_alias, contact_meta_alias, company_meta_alias = self.base_query_with_metadata()
@@ -1207,17 +1231,12 @@ class ContactRepository(AsyncRepository[Contact]):
         
         # Ensure deterministic ordering for pagination - add default ordering if none specified
         # This is critical for consistent pagination results, especially with OFFSET
-        # When Apollo URL has sortByField=[none], order by company name
+        # Optimized: Use Contact.created_at DESC (indexed field) as default instead of company.name
+        # This avoids unnecessary Company join and improves performance significantly
         if not filters.ordering:
-            if company_alias is not None:
-                # Order by company name (ascending), then contact id for tie-breaking
-                # This ensures consistent ordering when no explicit ordering is provided
-                stmt = stmt.order_by(company_alias.name.asc().nulls_last(), Contact.id.asc())
-                logger.debug("Applied default ordering: company.name ASC NULLS LAST, id ASC")
-            else:
-                # Fallback to created_at if company join is not available
-                stmt = stmt.order_by(Contact.created_at.desc().nulls_last(), Contact.id.desc())
-                logger.debug("Applied default ordering (no company join): created_at DESC NULLS LAST, id DESC")
+            # Always use created_at DESC for default ordering (fast, indexed, no join required)
+            stmt = stmt.order_by(Contact.created_at.desc().nulls_last(), Contact.id.desc())
+            logger.debug("Applied optimized default ordering: created_at DESC NULLS LAST, id DESC")
         
         stmt = stmt.offset(offset)
         if limit is not None:
@@ -1236,6 +1255,9 @@ class ContactRepository(AsyncRepository[Contact]):
         except Exception as e:
             logger.debug("Could not compile SQL for logging: %s", e)
         
+        # Record query execution start time for performance monitoring
+        query_start_time = time.time()
+        
         # Use streaming for large result sets to reduce memory usage
         if limit and limit > 10000:
             logger.debug("Using batched query for large result set limit=%d", limit)
@@ -1244,6 +1266,44 @@ class ContactRepository(AsyncRepository[Contact]):
         else:
             result = await session.execute(stmt)
             rows = result.fetchall()
+        
+        # Calculate query execution time
+        query_execution_time = time.time() - query_start_time
+        
+        # Log query execution time
+        logger.info(
+            "List contacts query executed: duration=%.3fs limit=%s offset=%d rows_returned=%d",
+            query_execution_time,
+            limit,
+            offset,
+            len(rows),
+        )
+        
+        # Log EXPLAIN ANALYZE for slow queries (>1 second) to help identify performance issues
+        if query_execution_time > 1.0:
+            try:
+                # Get the dialect to check if it's PostgreSQL
+                dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+                if dialect_name == "postgresql":
+                    # Compile the statement to get the SQL
+                    compiled = stmt.compile(compile_kwargs={"literal_binds": False})
+                    sql_str = str(compiled)
+                    
+                    # Execute EXPLAIN ANALYZE directly
+                    explain_sql = f"EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) {sql_str}"
+                    explain_result = await session.execute(text(explain_sql))
+                    explain_rows = explain_result.fetchall()
+                    explain_text = "\n".join([str(row[0]) for row in explain_rows])
+                    
+                    logger.warning(
+                        "Slow query detected (%.3fs): limit=%s offset=%d\nEXPLAIN ANALYZE:\n%s",
+                        query_execution_time,
+                        limit,
+                        offset,
+                        explain_text,
+                    )
+            except Exception as e:
+                logger.debug("Could not execute EXPLAIN ANALYZE for slow query: %s", e)
         
         # Normalize results to always return 4-tuple format for compatibility
         normalized_rows = []
@@ -1301,9 +1361,17 @@ class ContactRepository(AsyncRepository[Contact]):
         # Contact-only filters (no EXISTS needed)
         stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
         stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
-        # Use trigram optimization for title column (has trigram index)
-        # If normalize_title_column is True, use normalized title filter
-        if filters.normalize_title_column:
+        # Title filtering: check for jumble_title_words first, then normalize_title_column, then standard filter
+        if filters.jumble_title_words:
+            logger.info(
+                "_apply_filters_with_exists: Applying jumble title filter (AND logic): jumble_title_words=%s",
+                filters.jumble_title_words,
+            )
+            stmt = self._apply_jumble_title_filter(
+                stmt, Contact.title, filters.jumble_title_words,
+                dialect_name=dialect_name
+            )
+        elif filters.normalize_title_column:
             logger.info(
                 "_apply_filters_with_exists: Applying normalized title filter: title=%s normalize_title_column=%s",
                 filters.title,
@@ -1313,7 +1381,7 @@ class ContactRepository(AsyncRepository[Contact]):
                 stmt, Contact.title, filters.title,
                 dialect_name=dialect_name
             )
-        else:
+        elif filters.title:
             stmt = self._apply_multi_value_filter(
                 stmt, Contact.title, filters.title, 
                 dialect_name=dialect_name, 
@@ -1330,14 +1398,16 @@ class ContactRepository(AsyncRepository[Contact]):
         if filters.exclude_seniorities:
             stmt = self._apply_multi_value_exclusion(stmt, Contact.seniority, filters.exclude_seniorities)
         if filters.exclude_titles:
-            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
-            if lowered_titles:
-                stmt = stmt.where(
-                    or_(
-                        Contact.title.is_(None),
-                        func.lower(Contact.title).notin_(lowered_titles),
-                    )
-                )
+            # Exclude titles are normalized (words sorted alphabetically) in apollo_analysis_service
+            # We need to normalize the database column before comparison
+            logger.info(
+                "_apply_contact_filters: Applying normalized exclude_titles filter: exclude_titles=%s",
+                filters.exclude_titles,
+            )
+            stmt = self._apply_normalized_title_exclusion(
+                stmt, Contact.title, filters.exclude_titles,
+                dialect_name=dialect_name
+            )
         if filters.exclude_company_ids:
             exclusion_values = tuple(filters.exclude_company_ids)
             exclusion_condition = ~Contact.company_id.in_(exclusion_values)
@@ -2631,9 +2701,17 @@ class ContactRepository(AsyncRepository[Contact]):
         
         stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name)
         stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name)
-        # Use trigram optimization for title column (has trigram index)
-        # If normalize_title_column is True, use normalized title filter
-        if filters.normalize_title_column:
+        # Title filtering: check for jumble_title_words first, then normalize_title_column, then standard filter
+        if filters.jumble_title_words:
+            logger.info(
+                "Applying jumble title filter in EXISTS query (AND logic): jumble_title_words=%s",
+                filters.jumble_title_words,
+            )
+            stmt = self._apply_jumble_title_filter(
+                stmt, Contact.title, filters.jumble_title_words,
+                dialect_name=dialect_name
+            )
+        elif filters.normalize_title_column:
             logger.info(
                 "Applying normalized title filter in EXISTS query: title=%s normalize_title_column=%s",
                 filters.title,
@@ -2643,7 +2721,7 @@ class ContactRepository(AsyncRepository[Contact]):
                 stmt, Contact.title, filters.title,
                 dialect_name=dialect_name
             )
-        else:
+        elif filters.title:
             stmt = self._apply_multi_value_filter(stmt, Contact.title, filters.title)
         stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority)
         stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
@@ -2666,14 +2744,16 @@ class ContactRepository(AsyncRepository[Contact]):
                 dialect=dialect,
             )
         if filters.exclude_titles:
-            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
-            if lowered_titles:
-                stmt = stmt.where(
-                    or_(
-                        Contact.title.is_(None),
-                        func.lower(Contact.title).notin_(lowered_titles),
-                    )
-                )
+            # Exclude titles are normalized (words sorted alphabetically) in apollo_analysis_service
+            # We need to normalize the database column before comparison
+            logger.info(
+                "_apply_contact_filters: Applying normalized exclude_titles filter: exclude_titles=%s",
+                filters.exclude_titles,
+            )
+            stmt = self._apply_normalized_title_exclusion(
+                stmt, Contact.title, filters.exclude_titles,
+                dialect_name=dialect_name
+            )
         if filters.exclude_contact_locations:
             stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
         if filters.exclude_seniorities:
@@ -2964,6 +3044,240 @@ class ContactRepository(AsyncRepository[Contact]):
                     return stmt.where(or_(*batch_conditions))
                 logger.debug("No batch conditions to apply")
                 return stmt
+
+    def _apply_normalized_title_exclusion(
+        self,
+        stmt: Select,
+        column,
+        exclude_values: list[str],
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """
+        Apply title exclusion filter with column normalization.
+        
+        Normalizes both the exclusion values (already normalized in Python) and the database
+        column before comparison. This ensures correct exclusion when personNotTitles[] is used.
+        
+        Args:
+            stmt: SQLAlchemy select statement
+            column: Title column to filter (e.g., Contact.title)
+            exclude_values: List of normalized title values to exclude
+            dialect_name: Database dialect name (e.g., 'postgresql')
+            
+        Returns:
+            Modified select statement with normalized title exclusion filter applied
+        """
+        logger.info(
+            "Entering _apply_normalized_title_exclusion: exclude_values=%s dialect=%s",
+            exclude_values,
+            dialect_name,
+        )
+        
+        if not exclude_values:
+            logger.debug("Exiting _apply_normalized_title_exclusion: no exclude values")
+            return stmt
+        
+        dialect = (dialect_name or "").lower()
+        logger.debug("Using dialect: %s", dialect)
+        
+        # Normalize the database column using SQL and use VALUES clause for exact matching
+        # For PostgreSQL, use array functions to normalize and VALUES clause for efficient comparison
+        if dialect == "postgresql":
+            from sqlalchemy import text
+            
+            # Get table and column names for proper SQL reference
+            table_name = column.table.name if hasattr(column, 'table') and hasattr(column.table, 'name') else 'contacts'
+            column_name = column.name if hasattr(column, 'name') else 'title'
+            
+            logger.info(
+                "Building normalized title exclusion filter: table=%s column=%s exclude_values=%s",
+                table_name,
+                column_name,
+                exclude_values,
+            )
+            
+            # Build VALUES clause with escaped normalized values
+            # Escape single quotes by doubling them (PostgreSQL escaping)
+            escaped_values = []
+            for value in exclude_values:
+                if not value:
+                    continue
+                # Escape single quotes and backslashes for SQL safety
+                escaped = str(value).replace("\\", "\\\\").replace("'", "''")
+                escaped_values.append(f"('{escaped}')")
+                logger.debug("Escaped exclude value: original=%s escaped=%s", value, escaped)
+            
+            if not escaped_values:
+                logger.debug("Exiting _apply_normalized_title_exclusion: no valid exclude values after escaping")
+                return stmt
+            
+            values_clause = ", ".join(escaped_values)
+            logger.debug("VALUES clause: %s", values_clause)
+            
+            # Create NOT EXISTS subquery with VALUES clause for exact exclusion
+            # This ensures proper column correlation because the column reference
+            # in the text() will be part of the outer query context
+            # Use exact equality (=) instead of similarity (%) for normalized titles
+            sql_template = (
+                f"NOT EXISTS ("
+                f"  SELECT 1 FROM (VALUES {values_clause}) AS titles(val) "
+                f"  WHERE array_to_string(ARRAY(SELECT unnest(string_to_array(lower({table_name}.{column_name}), ' ')) ORDER BY 1), ' ') = titles.val::text"
+                f")"
+            )
+            
+            logger.info(
+                "Generated SQL for normalized title exclusion filter: table=%s column=%s sql=%s",
+                table_name,
+                column_name,
+                sql_template,
+            )
+            
+            exists_sql = text(sql_template)
+            
+            logger.info(
+                "Applied normalized title exclusion filter with VALUES clause: table=%s column=%s num_values=%d exclude_values=%s",
+                table_name,
+                column_name,
+                len(exclude_values),
+                exclude_values,
+            )
+            
+            # Apply the condition to the statement (also handle NULL titles)
+            result = stmt.where(
+                or_(
+                    column.is_(None),
+                    exists_sql
+                )
+            )
+            logger.debug("Exiting _apply_normalized_title_exclusion: filter applied successfully")
+            return result
+        else:
+            # For non-PostgreSQL, fallback to simple lowercase comparison
+            logger.warning(
+                "Using non-PostgreSQL fallback for normalized title exclusion filter: dialect=%s exclude_values=%s",
+                dialect,
+                exclude_values,
+            )
+            normalized_column = func.lower(column)
+            lowered_exclude = tuple(v.lower() for v in exclude_values if v)
+            if lowered_exclude:
+                return stmt.where(
+                    or_(
+                        column.is_(None),
+                        normalized_column.notin_(lowered_exclude),
+                    )
+                )
+            return stmt
+
+    def _apply_jumble_title_filter(
+        self,
+        stmt: Select,
+        column,
+        words: list[str],
+        *,
+        dialect_name: str | None = None,
+    ) -> Select:
+        """
+        Apply jumble title filter requiring ALL words to be present (AND logic).
+        
+        When includeSimilarTitles=true, titles are split into words and ALL words
+        must be present in the title for a match. This is different from OR logic
+        where ANY word would match.
+        
+        Args:
+            stmt: SQLAlchemy select statement
+            column: Title column to filter (e.g., Contact.title)
+            words: List of words that must ALL be present in the title
+            dialect_name: Database dialect name (e.g., 'postgresql')
+            
+        Returns:
+            Modified select statement with jumble title filter applied (AND logic)
+        """
+        logger.info(
+            "Entering _apply_jumble_title_filter: words=%s dialect=%s (AND logic - all words must be present)",
+            words,
+            dialect_name,
+        )
+        
+        if not words:
+            logger.debug("Exiting _apply_jumble_title_filter: no words")
+            return stmt
+        
+        # Filter out empty words
+        words = [w for w in words if w and w.strip()]
+        if not words:
+            logger.debug("Exiting _apply_jumble_title_filter: no valid words after filtering")
+            return stmt
+        
+        dialect = (dialect_name or "").lower()
+        logger.debug("Using dialect: %s", dialect)
+        
+        # For PostgreSQL, use ILIKE with AND logic (all words must be present)
+        if dialect == "postgresql":
+            from sqlalchemy import text
+            
+            # Get table and column names for proper SQL reference
+            table_name = column.table.name if hasattr(column, 'table') and hasattr(column.table, 'name') else 'contacts'
+            column_name = column.name if hasattr(column, 'name') else 'title'
+            
+            logger.info(
+                "Building jumble title filter (AND logic): table=%s column=%s words=%s",
+                table_name,
+                column_name,
+                words,
+            )
+            
+            # Build conditions that require ALL words to be present
+            # Each word must be found in the title (case-insensitive)
+            conditions = []
+            for word in words:
+                # Escape single quotes and backslashes for SQL safety
+                escaped_word = str(word).replace("\\", "\\\\").replace("'", "''")
+                # Use ILIKE for case-insensitive substring matching
+                # The word can appear anywhere in the title
+                condition = f"lower({table_name}.{column_name}) LIKE lower('%{escaped_word}%')"
+                conditions.append(condition)
+                logger.debug("Added condition for word: word=%s condition=%s", word, condition)
+            
+            # Combine all conditions with AND
+            if conditions:
+                combined_condition = " AND ".join(conditions)
+                sql_template = f"({combined_condition})"
+                
+                logger.info(
+                    "Generated SQL for jumble title filter (AND logic): table=%s column=%s sql=%s",
+                    table_name,
+                    column_name,
+                    sql_template,
+                )
+                
+                jumble_sql = text(sql_template)
+                
+                logger.info(
+                    "Applied jumble title filter with AND logic: table=%s column=%s num_words=%d words=%s",
+                    table_name,
+                    column_name,
+                    len(words),
+                    words,
+                )
+                
+                # Apply the condition to the statement
+                result = stmt.where(jumble_sql)
+                logger.debug("Exiting _apply_jumble_title_filter: filter applied successfully")
+                return result
+        
+        # For non-PostgreSQL, use standard SQLAlchemy ILIKE with AND logic
+        logger.warning(
+            "Using non-PostgreSQL fallback for jumble title filter: dialect=%s words=%s",
+            dialect,
+            words,
+        )
+        from sqlalchemy import and_
+        conditions = [column.ilike(f"%{word}%") for word in words]
+        if conditions:
+            return stmt.where(and_(*conditions))
+        return stmt
 
     @staticmethod
     def _apply_multi_value_filter(
@@ -3763,14 +4077,16 @@ class ContactRepository(AsyncRepository[Contact]):
                 dialect=dialect,
             )
         if filters.exclude_titles:
-            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
-            if lowered_titles:
-                stmt = stmt.where(
-                    or_(
-                        Contact.title.is_(None),
-                        func.lower(Contact.title).notin_(lowered_titles),
-                    )
-                )
+            # Exclude titles are normalized (words sorted alphabetically) in apollo_analysis_service
+            # We need to normalize the database column before comparison
+            logger.info(
+                "_apply_contact_filters: Applying normalized exclude_titles filter: exclude_titles=%s",
+                filters.exclude_titles,
+            )
+            stmt = self._apply_normalized_title_exclusion(
+                stmt, Contact.title, filters.exclude_titles,
+                dialect_name=dialect_name
+            )
         if filters.exclude_contact_locations:
             stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)
         if filters.exclude_seniorities:
@@ -4103,14 +4419,16 @@ class ContactRepository(AsyncRepository[Contact]):
         
         # Exclusion filters
         if filters.exclude_titles:
-            lowered_titles = tuple(title.lower() for title in filters.exclude_titles if title)
-            if lowered_titles:
-                stmt = stmt.where(
-                    or_(
-                        Contact.title.is_(None),
-                        func.lower(Contact.title).notin_(lowered_titles),
-                    )
-                )
+            # Exclude titles are normalized (words sorted alphabetically) in apollo_analysis_service
+            # We need to normalize the database column before comparison
+            logger.info(
+                "_apply_contact_filters: Applying normalized exclude_titles filter: exclude_titles=%s",
+                filters.exclude_titles,
+            )
+            stmt = self._apply_normalized_title_exclusion(
+                stmt, Contact.title, filters.exclude_titles,
+                dialect_name=dialect_name
+            )
         
         if filters.exclude_contact_locations:
             stmt = self._apply_multi_value_exclusion(stmt, Contact.text_search, filters.exclude_contact_locations)

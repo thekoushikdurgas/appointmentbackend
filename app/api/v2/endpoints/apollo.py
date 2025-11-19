@@ -825,9 +825,34 @@ async def search_contacts_from_apollo_url(
         )
 
         # Step 2: Map Apollo parameters to contact filter parameters (with unmapped tracking)
+        logger.info(
+            "Mapping Apollo parameters to contact filters: raw_parameters=%s",
+            {k: v[:3] if isinstance(v, list) and len(v) > 3 else v for k, v in analysis.raw_parameters.items()},
+        )
         filter_dict, unmapped_dict = service.map_to_contact_filters(analysis.raw_parameters, include_unmapped=True)
-        logger.debug("Mapped filter dictionary: %s", filter_dict)
-        logger.debug("Unmapped parameters: %d", len(unmapped_dict))
+        logger.info(
+            "Mapped filter dictionary: keys=%s jumble_title_words=%s title=%s exclude_titles=%s normalize_title_column=%s",
+            list(filter_dict.keys()),
+            filter_dict.get("jumble_title_words"),
+            filter_dict.get("title"),
+            filter_dict.get("exclude_titles"),
+            filter_dict.get("normalize_title_column"),
+        )
+        logger.info("Unmapped parameters: count=%d details=%s", len(unmapped_dict), list(unmapped_dict.keys()) if unmapped_dict else [])
+        
+        # Check for conflicting parameters
+        if "personTitles[]" in analysis.raw_parameters and "personNotTitles[]" in analysis.raw_parameters:
+            person_titles = analysis.raw_parameters["personTitles[]"]
+            person_not_titles = analysis.raw_parameters["personNotTitles[]"]
+            # Check if any titles appear in both lists
+            normalized_person_titles = {service._normalize_title(t) for t in person_titles}
+            normalized_person_not_titles = {service._normalize_title(t) for t in person_not_titles}
+            conflicting = normalized_person_titles & normalized_person_not_titles
+            if conflicting:
+                logger.warning(
+                    "Conflicting title parameters detected: personTitles[] and personNotTitles[] both contain (after normalization): %s",
+                    conflicting,
+                )
 
         # Step 2.5: Apply company name and domain filters from query parameters
         if include_company_name is not None:
@@ -951,6 +976,15 @@ async def search_contacts_from_apollo_url(
 
         # Step 5: Query contacts based on view parameter
         # Pass None directly for unlimited queries (service handles it properly)
+        logger.info(
+            "Executing contact query: view=%s limit=%s offset=%d jumble_title_words=%s title=%s exclude_titles=%s",
+            view,
+            page_limit if page_limit is not None else "unlimited",
+            resolved_offset,
+            filters.jumble_title_words,
+            filters.title,
+            filters.exclude_titles,
+        )
         if (view or "").strip().lower() == "simple":
             page = await contacts_service.list_contacts_simple(
                 session,
@@ -970,14 +1004,40 @@ async def search_contacts_from_apollo_url(
                 use_cursor=use_cursor,
             )
 
-        logger.info(
-            "Apollo contacts search completed: user_id=%s returned=%d has_next=%s offset_used=%d limit_used=%s",
-            current_user.id,
-            len(page.results),
-            bool(page.next),
-            resolved_offset,
-            page_limit if page_limit is not None else "unlimited",
-        )
+        # Log sample titles from results for verification
+        sample_titles = []
+        if page.results:
+            sample_titles = [getattr(result, 'title', None) for result in page.results[:10] if hasattr(result, 'title')]
+            logger.info(
+                "Apollo contacts search completed: user_id=%s returned=%d has_next=%s offset_used=%d limit_used=%s",
+                current_user.id,
+                len(page.results),
+                bool(page.next),
+                resolved_offset,
+                page_limit if page_limit is not None else "unlimited",
+            )
+            logger.info(
+                "Sample titles from results (first 10): %s",
+                sample_titles,
+            )
+            # Warn if results seem unexpected for title filters
+            if filters.jumble_title_words or filters.title or filters.exclude_titles:
+                if len(page.results) > 100:
+                    logger.warning(
+                        "Large result set for title-filtered query: count=%d jumble_title_words=%s title=%s exclude_titles=%s. Verify filter logic is correct.",
+                        len(page.results),
+                        filters.jumble_title_words,
+                        filters.title,
+                        filters.exclude_titles,
+                    )
+        else:
+            logger.info(
+                "Apollo contacts search completed: user_id=%s returned=0 has_next=%s offset_used=%d limit_used=%s",
+                current_user.id,
+                bool(page.next),
+                resolved_offset,
+                page_limit if page_limit is not None else "unlimited",
+            )
         logger.debug(
             "Query result details: results_count=%d filters.page=%s resolved_offset=%d page_limit=%s ordering=%s",
             len(page.results),

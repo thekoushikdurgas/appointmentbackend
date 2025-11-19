@@ -2,6 +2,28 @@
 
 Complete API documentation for AI chat conversation endpoints, including listing, creating, retrieving, updating, and deleting chat conversations.
 
+**Related Documentation:**
+- [User API](./user.md) - For authentication endpoints
+- [Contacts API](./contacts.md) - For contact search functionality used in chat responses
+
+## Table of Contents
+
+- [Base URL](#base-url)
+- [Authentication](#authentication)
+- [CORS Testing](#cors-testing)
+- [AI Chat Endpoints](#ai-chat-endpoints)
+  - [GET /api/v2/ai-chats/](#get-apiv2ai-chats---list-users-chat-history)
+  - [POST /api/v2/ai-chats/](#post-apiv2ai-chats---create-new-chat)
+  - [GET /api/v2/ai-chats/{id}/](#get-apiv2ai-chatsid---get-specific-chat)
+  - [PUT /api/v2/ai-chats/{id}/](#put-apiv2ai-chatsid---update-chat)
+  - [DELETE /api/v2/ai-chats/{id}/](#delete-apiv2ai-chatsid---delete-chat)
+- [Message Format](#message-format)
+- [Error Responses](#error-responses)
+- [Notes](#notes)
+- [Example Workflow](#example-workflow)
+
+---
+
 ## Base URL
 
 For production, use:
@@ -9,6 +31,8 @@ For production, use:
 ```txt
 http://54.87.173.234:8000
 ```
+
+**API Version:** All AI chat endpoints are under `/api/v2/ai-chats/`
 
 ## Authentication
 
