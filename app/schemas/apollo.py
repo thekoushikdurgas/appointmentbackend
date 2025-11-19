@@ -124,3 +124,43 @@ class ApolloWebSocketResponse(BaseModel):
     status: str = Field(..., description="Response status: success or error")
     data: Optional[dict[str, Any]] = Field(None, description="Response payload (present when status=success)")
     error: Optional[dict[str, Any]] = Field(None, description="Error details (present when status=error)")
+
+
+class ParameterValueWithCount(BaseModel):
+    """Schema for a parameter value with its contact count."""
+
+    value: str = Field(..., description="Parameter value")
+    count: int = Field(..., description="Number of contacts matching this specific value")
+
+
+class ParameterDetailWithCount(BaseModel):
+    """Schema for individual parameter details with contact counts."""
+
+    name: str = Field(..., description="Parameter name")
+    values: List[ParameterValueWithCount] = Field(..., description="List of parameter values with their counts")
+    description: str = Field(..., description="Human-readable description of the parameter")
+    category: str = Field(..., description="Category this parameter belongs to")
+    count: int = Field(..., description="Total number of contacts matching this parameter (all values combined)")
+
+
+class ParameterCategoryWithCount(BaseModel):
+    """Schema for a category of parameters with contact counts."""
+
+    name: str = Field(..., description="Category name")
+    parameters: List[ParameterDetailWithCount] = Field(..., description="Parameters in this category with counts")
+    total_parameters: int = Field(..., description="Total number of parameters in this category")
+    count: int = Field(..., description="Total number of contacts matching any parameter in this category")
+
+
+class ApolloUrlAnalysisWithCountResponse(BaseModel):
+    """Schema for Apollo URL analysis response with contact counts."""
+
+    url: str = Field(..., description="Original URL that was analyzed")
+    url_structure: UrlStructure = Field(..., description="URL structure breakdown")
+    categories: List[ParameterCategoryWithCount] = Field(..., description="Categorized parameters with counts")
+    statistics: AnalysisStatistics = Field(..., description="Analysis statistics")
+    raw_parameters: dict[str, List[str]] = Field(
+        ..., description="Raw parameter dictionary (parameter name -> list of values)"
+    )
+
+    model_config = ConfigDict(from_attributes=True)

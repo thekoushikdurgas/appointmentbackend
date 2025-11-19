@@ -1,11 +1,11 @@
 {
 	"info": {
-		"_postman_id": "6bbfa682-d588-439f-9265-c009ee0f0484",
+		"_postman_id": "e4c35fee-c4d8-48c6-93a4-914699e2d14f",
 		"name": "Appointment360 API",
 		"description": "Postman collection for the Appointment360 FastAPI backend. Includes v1 endpoints (Contacts, Imports) and v2 endpoints (Authentication, Users, AI Chat, Apollo). All endpoints require Bearer token authentication. Sample parameters align with docs/apis.md, docs/api/user.md, docs/api/ai_chat.md, and docs/api/apollo.md.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "20572666",
-		"_collection_link": "https://prbal5-1003.postman.co/workspace/priama~c1c1d143-bd8f-4768-b551-66234b878d2b/collection/20572666-6bbfa682-d588-439f-9265-c009ee0f0484?action=share&source=collection_link&creator=20572666"
+		"_collection_link": "https://prbal5-1003.postman.co/workspace/priama~c1c1d143-bd8f-4768-b551-66234b878d2b/collection/20572666-e4c35fee-c4d8-48c6-93a4-914699e2d14f?action=share&source=collection_link&creator=20572666"
 	},
 	"item": [
 		{
@@ -827,6 +827,52 @@
 					"response": []
 				},
 				{
+					"name": "Analyze Apollo URL with Counts",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"description": "Expected response content type."
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+							},
+							{
+								"key": "Origin",
+								"value": "http://localhost:3000",
+								"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?contactEmailStatusV2[]=verified&personLocations[]=california&personTitles[]=CEO&organizationNumEmployeesRanges[]=11,50&page=1&sortByField=recommendations_score&sortAscending=false\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrlV2}}/apollo/analyze/count",
+							"host": [
+								"{{baseUrlV2}}"
+							],
+							"path": [
+								"apollo",
+								"analyze",
+								"count"
+							]
+						},
+						"description": "Analyze an Apollo.io URL and return structured parameter breakdown with contact counts. This endpoint extends `/apollo/analyze` by adding contact counts for each parameter and each value within parameters.\n\n**Response Format:**\nThe response structure is identical to `/apollo/analyze`, but with the following additions:\n- `categories[].count`: Total number of contacts matching any parameter in this category\n- `categories[].parameters[].count`: Total number of contacts matching this parameter (all values combined)\n- `categories[].parameters[].values[]`: Array of objects with `value` and `count` fields instead of just strings\n\n**Example Response Structure:**\n```json\n{\n  \"categories\": [\n    {\n      \"name\": \"Person Filters\",\n      \"count\": 850,\n      \"parameters\": [\n        {\n          \"name\": \"personTitles[]\",\n          \"count\": 500,\n          \"values\": [\n            {\n              \"value\": \"CEO\",\n              \"count\": 500\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n```\n\n**Notes:**\n- Pagination and sorting parameters (page, sortByField, sortAscending) always return count 0 as they don't filter contacts\n- Unmapped parameters return count 0 (expected behavior)\n- Counts are calculated independently for each parameter and value\n- Category counts use the maximum parameter count to avoid overcounting when parameters overlap\n- This endpoint performs multiple database queries (one per parameter and one per value), so response time may be longer than `/apollo/analyze`\n\n**Field Requirements:**\n- url (string, required): Apollo.io URL to analyze (must be from apollo.io domain)\n\n**Response Codes:**\n- 200 OK: URL analyzed successfully with counts\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or missing URL field\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while analyzing the URL with counts\n\n**Use Cases:**\n1. Filter Impact Analysis: Understand how many contacts match each filter criterion before applying them\n2. Search Optimization: Identify which filters narrow down results most effectively\n3. Data Exploration: Explore your contact database by seeing counts for different parameter combinations\n4. Filter Validation: Verify that your Apollo URL filters are working as expected with actual counts"
+					},
+					"response": []
+				},
+				{
 					"name": "Search Contacts from Apollo URL",
 					"request": {
 						"method": "POST",
@@ -855,10 +901,10 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?page=1&contactEmailStatusV2[]=verified&contactEmailExcludeCatchAll=true&personTitles[]=Travel%20Manager&personTitles[]=Global%20Travel%20Manager&personTitles[]=Corporate%20Travel%20Manager&personTitles[]=Senior%20Travel%20Manager&personTitles[]=Travel%20Program%20Manager&personTitles[]=Global%20Travel%20Program%20Manager&personTitles[]=Travel%20Operations%20Manager&personTitles[]=Travel%20Services%20Manager&personTitles[]=Travel%20%26%20Expense%20Manager&personTitles[]=T%26E%20Manager&personTitles[]=Travel%20Procurement%20Manager&personTitles[]=Head%20of%20Travel&personTitles[]=Head%20of%20Corporate%20Travel&personTitles[]=Director%20of%20Travel&personTitles[]=Director%20of%20Global%20Travel&personTitles[]=Director%20of%20Travel%20%26%20Expense&personTitles[]=Director%20of%20Travel%20Operations&personTitles[]=Travel%20Procurement%20Director&personTitles[]=Travel%20Category%20Manager&personTitles[]=Senior%20Category%20Manager%20%E2%80%93%20Travel&personTitles[]=Global%20Category%20Manager%20%E2%80%93%20Travel&personTitles[]=Sourcing%20Manager%20%E2%80%93%20Travel&personTitles[]=Strategic%20Sourcing%20Manager%20%28Travel%29&personTitles[]=Finance%20Operations%20Manager&personTitles[]=Expense%20Management%20Manager&personTitles[]=Shared%20Services%20Manager%20%28T%26E%29&personTitles[]=Accounts%20Payable%20Manager&personTitles[]=Controller%20%28T%26E%29&personTitles[]=Expense%20Compliance%20Manager&personTitles[]=Mobility%20Manager&personTitles[]=Global%20Mobility%20Manager&personTitles[]=Employee%20Mobility%20Lead&personTitles[]=Office%20%26%20Travel%20Manager&personTitles[]=VP%20of%20Procurement&personTitles[]=VP%20of%20Operations&personTitles[]=VP%20Finance&personTitles[]=Chief%20Procurement%20Officer&personTitles[]=Chief%20Operating%20Officer&personTitles[]=Travel&personTitles[]=Expense&personTitles[]=Procurement%20Manager&personTitles[]=Senior%20Procurement%20Manager&personTitles[]=Global%20Procurement%20Manager&personTitles[]=Strategic%20Procurement%20Manager&personTitles[]=Procurement%20Operations%20Manager&personTitles[]=Procurement%20Lead&personTitles[]=Procurement%20Specialist&personTitles[]=Procurement%20Analyst&personTitles[]=Purchasing%20Manager&personTitles[]=Senior%20Purchasing%20Manager&personTitles[]=Category%20Manager&personTitles[]=Senior%20Category%20Manager&personTitles[]=Global%20Category%20Manager&personTitles[]=Sourcing%20Manager&personTitles[]=Senior%20Sourcing%20Manager&personTitles[]=Strategic%20Sourcing%20Manager&personTitles[]=Global%20Sourcing%20Manager&personTitles[]=Indirect%20Procurement%20Manager&personTitles[]=Indirect%20Sourcing%20Manager&personTitles[]=Direct%20Procurement%20Manager&personTitles[]=Direct%20Sourcing%20Manager&personTitles[]=Procurement%20%26%20Supply%20Chain%20Manager&personTitles[]=Supplier%20Management%20Manager&personTitles[]=Vendor%20Manager&personTitles[]=Vendor%20Relations%20Manager&personTitles[]=Head%20of%20Procurement&personTitles[]=Head%20of%20Purchasing&personTitles[]=Director%20of%20Procurement&personTitles[]=Director%20of%20Strategic%20Sourcing&personTitles[]=Director%20of%20Purchasing&personTitles[]=T%26E&personSeniorities[]=manager&personSeniorities[]=director&personSeniorities[]=head&personSeniorities[]=vp&personSeniorities[]=partner&personSeniorities[]=c_suite&personSeniorities[]=founder&personSeniorities[]=owner&personSeniorities[]=senior&organizationLocations[]=France&organizationLocations[]=Spain&organizationNumEmployeesRanges[]=501%2C1000&organizationNumEmployeesRanges[]=1001%2C2000&organizationNumEmployeesRanges[]=2001%2C5000&organizationNumEmployeesRanges[]=201%2C500&organizationNumEmployeesRanges[]=101%2C200&organizationNumEmployeesRanges[]=5001%2C10000&organizationNumEmployeesRanges[]=10001&sortByField=%5Bnone%5D&sortAscending=false\"\n}"
+							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?qPersonPersonaIds[]=68b0a4b9f391920015c9c840&contactEmailStatusV2[]=verified&personSeniorities[]=director&personSeniorities[]=owner&personSeniorities[]=founder&personSeniorities[]=c_suite&personSeniorities[]=vp&personSeniorities[]=head&personSeniorities[]=partner&personNotLocations[]=Afghanistan&personNotLocations[]=Belarus&personNotLocations[]=Central%20African%20Republic&personNotLocations[]=Cuba&personNotLocations[]=Equatorial%20Guinea&personNotLocations[]=Gabon&personNotLocations[]=Haiti&personNotLocations[]=Iraq&personNotLocations[]=Iran&personNotLocations[]=Lebanon&personNotLocations[]=Liberia&personNotLocations[]=Libya&personNotLocations[]=Myanmar%20%28Burma%29&personNotLocations[]=Pakistan&personNotLocations[]=Saint%20Kitts%20and%20Nevis&personNotLocations[]=South%20Sudan&personNotLocations[]=Sudan&personNotLocations[]=Syria&personNotLocations[]=Timor-Leste&personNotLocations[]=Zimbabwe%20&personNotLocations[]=India&personNotLocations[]=Bangladesh&organizationNumEmployeesRanges[]=1001%2C2000&organizationNumEmployeesRanges[]=501%2C1000&organizationNumEmployeesRanges[]=201%2C500&organizationNumEmployeesRanges[]=101%2C200&organizationNumEmployeesRanges[]=51%2C100&organizationNumEmployeesRanges[]=21%2C50&organizationNumEmployeesRanges[]=2001%2C5000&organizationNumEmployeesRanges[]=5001%2C10000&organizationNumEmployeesRanges[]=10001&organizationNotIndustryTagIds[]=5567cd527369643981050000&organizationNotIndustryTagIds[]=5567e29b736964256c370100&organizationNotIndustryTagIds[]=5567ce9e736964540d540000&organizationNotIndustryTagIds[]=5567cd4c73696453e1300000&organizationNotIndustryTagIds[]=5567e1387369641ec75d0200&organizationNotIndustryTagIds[]=5567cdd973696453d93f0000&organizationNotIndustryTagIds[]=5567cdd47369643dbf260000&organizationNotIndustryTagIds[]=5567cd4773696454303a0000&organizationNotIndustryTagIds[]=5567e09973696410db020800&organizationNotIndustryTagIds[]=5567ced173696450cb580000&organizationNotIndustryTagIds[]=5567ce1f7369644d391c0000&organizationNotIndustryTagIds[]=5567e0e073696408da441e00&organizationNotIndustryTagIds[]=5567ce237369644ee5490000&organizationNotIndustryTagIds[]=5567e09f736964160ebb0100&organizationNotIndustryTagIds[]=5567cd477369645401010000&organizationNotIndustryTagIds[]=5567ce9c7369643bc9980000&organizationNotIndustryTagIds[]=5567cd4773696439b10b0000&finderTableLayoutId=65ae4708bdd48c01c6bf8c76&pendo=t6mU4Y6iEdhxX5MQid4c4G8N1hc&sortByField=sanitized_organization_name_unanalyzed&sortAscending=true&prospectedByCurrentTeam[]=no&personTitles[]=Hydrogen&personTitles[]=Hydrogens&page=1\"\n}"
 						},
 						"url": {
-							"raw": "{{baseUrlV2}}/apollo/contacts?limit=50",
+							"raw": "{{baseUrlV2}}/apollo/contacts?limit=50&offset=0",
 							"host": [
 								"{{baseUrlV2}}"
 							],
@@ -908,8 +954,7 @@
 								},
 								{
 									"key": "offset",
-									"value": "0",
-									"disabled": true
+									"value": "0"
 								}
 							]
 						},
@@ -946,7 +991,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?page=1&contactEmailStatusV2[]=verified&contactEmailExcludeCatchAll=true&personTitles[]=Travel%20Manager&personTitles[]=Global%20Travel%20Manager&personTitles[]=Corporate%20Travel%20Manager&personTitles[]=Senior%20Travel%20Manager&personTitles[]=Travel%20Program%20Manager&personTitles[]=Global%20Travel%20Program%20Manager&personTitles[]=Travel%20Operations%20Manager&personTitles[]=Travel%20Services%20Manager&personTitles[]=Travel%20%26%20Expense%20Manager&personTitles[]=T%26E%20Manager&personTitles[]=Travel%20Procurement%20Manager&personTitles[]=Head%20of%20Travel&personTitles[]=Head%20of%20Corporate%20Travel&personTitles[]=Director%20of%20Travel&personTitles[]=Director%20of%20Global%20Travel&personTitles[]=Director%20of%20Travel%20%26%20Expense&personTitles[]=Director%20of%20Travel%20Operations&personTitles[]=Travel%20Procurement%20Director&personTitles[]=Travel%20Category%20Manager&personTitles[]=Senior%20Category%20Manager%20%E2%80%93%20Travel&personTitles[]=Global%20Category%20Manager%20%E2%80%93%20Travel&personTitles[]=Sourcing%20Manager%20%E2%80%93%20Travel&personTitles[]=Strategic%20Sourcing%20Manager%20%28Travel%29&personTitles[]=Finance%20Operations%20Manager&personTitles[]=Expense%20Management%20Manager&personTitles[]=Shared%20Services%20Manager%20%28T%26E%29&personTitles[]=Accounts%20Payable%20Manager&personTitles[]=Controller%20%28T%26E%29&personTitles[]=Expense%20Compliance%20Manager&personTitles[]=Mobility%20Manager&personTitles[]=Global%20Mobility%20Manager&personTitles[]=Employee%20Mobility%20Lead&personTitles[]=Office%20%26%20Travel%20Manager&personTitles[]=VP%20of%20Procurement&personTitles[]=VP%20of%20Operations&personTitles[]=VP%20Finance&personTitles[]=Chief%20Procurement%20Officer&personTitles[]=Chief%20Operating%20Officer&personTitles[]=Travel&personTitles[]=Expense&personTitles[]=Procurement%20Manager&personTitles[]=Senior%20Procurement%20Manager&personTitles[]=Global%20Procurement%20Manager&personTitles[]=Strategic%20Procurement%20Manager&personTitles[]=Procurement%20Operations%20Manager&personTitles[]=Procurement%20Lead&personTitles[]=Procurement%20Specialist&personTitles[]=Procurement%20Analyst&personTitles[]=Purchasing%20Manager&personTitles[]=Senior%20Purchasing%20Manager&personTitles[]=Category%20Manager&personTitles[]=Senior%20Category%20Manager&personTitles[]=Global%20Category%20Manager&personTitles[]=Sourcing%20Manager&personTitles[]=Senior%20Sourcing%20Manager&personTitles[]=Strategic%20Sourcing%20Manager&personTitles[]=Global%20Sourcing%20Manager&personTitles[]=Indirect%20Procurement%20Manager&personTitles[]=Indirect%20Sourcing%20Manager&personTitles[]=Direct%20Procurement%20Manager&personTitles[]=Direct%20Sourcing%20Manager&personTitles[]=Procurement%20%26%20Supply%20Chain%20Manager&personTitles[]=Supplier%20Management%20Manager&personTitles[]=Vendor%20Manager&personTitles[]=Vendor%20Relations%20Manager&personTitles[]=Head%20of%20Procurement&personTitles[]=Head%20of%20Purchasing&personTitles[]=Director%20of%20Procurement&personTitles[]=Director%20of%20Strategic%20Sourcing&personTitles[]=Director%20of%20Purchasing&personTitles[]=T%26E&personSeniorities[]=manager&personSeniorities[]=director&personSeniorities[]=head&personSeniorities[]=vp&personSeniorities[]=partner&personSeniorities[]=c_suite&personSeniorities[]=founder&personSeniorities[]=owner&personSeniorities[]=senior&organizationLocations[]=France&organizationLocations[]=Spain&organizationNumEmployeesRanges[]=501%2C1000&organizationNumEmployeesRanges[]=1001%2C2000&organizationNumEmployeesRanges[]=2001%2C5000&organizationNumEmployeesRanges[]=201%2C500&organizationNumEmployeesRanges[]=101%2C200&organizationNumEmployeesRanges[]=5001%2C10000&organizationNumEmployeesRanges[]=10001&sortByField=%5Bnone%5D&sortAscending=false\"\n}"
+							"raw": "{\n    \"url\": \"https://app.apollo.io/#/people?page=1&contactEmailStatusV2[]=verified&contactEmailExcludeCatchAll=true&personTitles[]=Travel%20Manager&personTitles[]=Global%20Travel%20Manager&personTitles[]=Corporate%20Travel%20Manager&personTitles[]=Senior%20Travel%20Manager&personTitles[]=Travel%20Program%20Manager&personTitles[]=Global%20Travel%20Program%20Manager&personTitles[]=Travel%20Operations%20Manager&personTitles[]=Travel%20Services%20Manager&personTitles[]=Travel%20%26%20Expense%20Manager&personTitles[]=T%26E%20Manager&personTitles[]=Travel%20Procurement%20Manager&personTitles[]=Head%20of%20Travel&personTitles[]=Head%20of%20Corporate%20Travel&personTitles[]=Director%20of%20Travel&personTitles[]=Director%20of%20Global%20Travel&personTitles[]=Director%20of%20Travel%20%26%20Expense&personTitles[]=Director%20of%20Travel%20Operations&personTitles[]=Travel%20Procurement%20Director&personTitles[]=Travel%20Category%20Manager&personTitles[]=Senior%20Category%20Manager%20%E2%80%93%20Travel&personTitles[]=Global%20Category%20Manager%20%E2%80%93%20Travel&personTitles[]=Sourcing%20Manager%20%E2%80%93%20Travel&personTitles[]=Strategic%20Sourcing%20Manager%20%28Travel%29&personTitles[]=Finance%20Operations%20Manager&personTitles[]=Expense%20Management%20Manager&personTitles[]=Shared%20Services%20Manager%20%28T%26E%29&personTitles[]=Accounts%20Payable%20Manager&personTitles[]=Controller%20%28T%26E%29&personTitles[]=Expense%20Compliance%20Manager&personTitles[]=Mobility%20Manager&personTitles[]=Global%20Mobility%20Manager&personTitles[]=Employee%20Mobility%20Lead&personTitles[]=Office%20%26%20Travel%20Manager&personTitles[]=VP%20of%20Procurement&personTitles[]=VP%20of%20Operations&personTitles[]=VP%20Finance&personTitles[]=Chief%20Procurement%20Officer&personTitles[]=Chief%20Operating%20Officer&personTitles[]=Travel&personTitles[]=Expense&personTitles[]=Procurement%20Manager&personTitles[]=Senior%20Procurement%20Manager&personTitles[]=Global%20Procurement%20Manager&personTitles[]=Strategic%20Procurement%20Manager&personTitles[]=Procurement%20Operations%20Manager&personTitles[]=Procurement%20Lead&personTitles[]=Procurement%20Specialist&personTitles[]=Procurement%20Analyst&personTitles[]=Purchasing%20Manager&personTitles[]=Senior%20Purchasing%20Manager&personTitles[]=Category%20Manager&personTitles[]=Senior%20Category%20Manager&personTitles[]=Global%20Category%20Manager&personTitles[]=Sourcing%20Manager&personTitles[]=Senior%20Sourcing%20Manager&personTitles[]=Strategic%20Sourcing%20Manager&personTitles[]=Global%20Sourcing%20Manager&personTitles[]=Indirect%20Procurement%20Manager&personTitles[]=Indirect%20Sourcing%20Manager&personTitles[]=Direct%20Procurement%20Manager&personTitles[]=Direct%20Sourcing%20Manager&personTitles[]=Procurement%20%26%20Supply%20Chain%20Manager&personTitles[]=Supplier%20Management%20Manager&personTitles[]=Vendor%20Manager&personTitles[]=Vendor%20Relations%20Manager&personTitles[]=Head%20of%20Procurement&personTitles[]=Head%20of%20Purchasing&personTitles[]=Director%20of%20Procurement&personTitles[]=Director%20of%20Strategic%20Sourcing&personTitles[]=Director%20of%20Purchasing&personTitles[]=T%26E&personSeniorities[]=manager&personSeniorities[]=director&personSeniorities[]=head&personSeniorities[]=vp&personSeniorities[]=partner&personSeniorities[]=c_suite&personSeniorities[]=founder&personSeniorities[]=owner&personSeniorities[]=senior&organizationLocations[]=France&organizationLocations[]=Spain&organizationNumEmployeesRanges[]=501%2C1000&organizationNumEmployeesRanges[]=1001%2C2000&organizationNumEmployeesRanges[]=2001%2C5000&organizationNumEmployeesRanges[]=201%2C500&organizationNumEmployeesRanges[]=101%2C200&organizationNumEmployeesRanges[]=5001%2C10000&organizationNumEmployeesRanges[]=10001&sortByField=%5Bnone%5D&sortAscending=false\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrlV2}}/apollo/contacts/count",
@@ -987,7 +1032,105 @@
 						},
 						"description": "Count contacts matching Apollo.io URL parameters. This endpoint converts an Apollo.io People Search URL into contact filter parameters and returns the total count of matching contacts from your database.\n\n**Response Format:**\nReturns a simple count response:\n```json\n{\n  \"count\": 1234\n}\n```\n\n**Parameter Mappings:**\nSame as `/api/v2/apollo/contacts` endpoint - all Apollo URL parameters are mapped to contact filters using the same logic.\n\n**Request Body:**\n- url (string, required): Apollo.io URL to convert and count\n\n**Query Parameters:**\n- include_company_name (string, optional): Include contacts whose company name matches (case-insensitive substring). Supports comma-separated values for OR logic.\n- exclude_company_name (array of strings, optional): Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times.\n- include_domain_list (array of strings, optional): Include contacts whose company website domain matches any provided domain (case-insensitive). Domains are extracted from CompanyMetadata.website. Can be provided multiple times.\n- exclude_domain_list (array of strings, optional): Exclude contacts whose company website domain matches any provided domain (case-insensitive). Domains are extracted from CompanyMetadata.website. Can be provided multiple times.\n\n**Response Codes:**\n- 200 OK: Count retrieved successfully\n- 400 Bad Request: Invalid URL, not from Apollo.io domain, or invalid filter parameters\n- 401 Unauthorized: Authentication required\n- 500 Internal Server Error: Error occurred while counting contacts\n\n**Use Cases:**\n1. Quick Count Check: Get the total number of contacts matching an Apollo search before fetching results\n2. Progress Tracking: Monitor how many contacts match specific criteria\n3. Filter Validation: Verify that your Apollo URL filters are working as expected\n4. Resource Planning: Estimate data volume before processing large result sets"
 					},
-					"response": []
+					"response": [
+						{
+							"name": "Count Contacts from Apollo URL",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json",
+										"description": "Expected response content type."
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"description": "Request body content type. Required for POST/PUT requests with JSON bodies."
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"description": "JWT Bearer token for authentication. Obtained from login or register endpoints."
+									},
+									{
+										"key": "Origin",
+										"value": "http://localhost:3000",
+										"description": "Optional: Origin header for CORS testing. Enable this header to verify CORS response headers (Access-Control-Allow-Origin, etc.). Disabled by default since Postman doesn't enforce CORS.",
+										"disabled": true
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?prospectedByCurrentTeam%5B%5D=no&sortByField=%5Bnone%5D&sortAscending=false&personTitles%5B%5D=Warehouse%20Manager&personTitles%5B%5D=Logistics%20Manager&personTitles%5B%5D=Head%20of%20Fulfillment&personTitles%5B%5D=Director%20of%20Fulfillment&personTitles%5B%5D=Director%20of%20Operations&personTitles%5B%5D=VP%20of%20Operations&personTitles%5B%5D=Supply%20Chain%20Manager&personTitles%5B%5D=Director%20of%20Supply%20Chain&personTitles%5B%5D=Inventory%20Manager&personTitles%5B%5D=Distribution%20Manager&personTitles%5B%5D=Shipping%20Manager&personTitles%5B%5D=Transportation%20Manager&personTitles%5B%5D=Logistics%20Operations%20Manager&personTitles%5B%5D=Operations%20Manager&personTitles%5B%5D=Procurement%20Manager&personTitles%5B%5D=ceo&personTitles%5B%5D=vp&personTitles%5B%5D=partner&personTitles%5B%5D=founder&personLocations%5B%5D=Canada&qOrganizationKeywordTags%5B%5D=industrial%20company&qOrganizationKeywordTags%5B%5D=industrial%20manufacturer&qOrganizationKeywordTags%5B%5D=machinery%20manufacturer&qOrganizationKeywordTags%5B%5D=heavy%20equipment%20manufacturer&qOrganizationKeywordTags%5B%5D=equipment%20supplier&qOrganizationKeywordTags%5B%5D=fabrication%20plant&qOrganizationKeywordTags%5B%5D=food%20and%20beverage%20manufacturer&qOrganizationKeywordTags%5B%5D=food%20processing&qOrganizationKeywordTags%5B%5D=beverage%20bottling&qOrganizationKeywordTags%5B%5D=food%20packaging&qOrganizationKeywordTags%5B%5D=cold%20chain%20logistics&qOrganizationKeywordTags%5B%5D=refrigerated%20warehouse&qOrganizationKeywordTags%5B%5D=CPG%20manufacturer&qOrganizationKeywordTags%5B%5D=consumer%20goods%20producer&qOrganizationKeywordTags%5B%5D=packaging%20manufacturer&qOrganizationKeywordTags%5B%5D=packaging%20supplier&qOrganizationKeywordTags%5B%5D=labeling%20company&qOrganizationKeywordTags%5B%5D=mid-size%20manufacturing&qOrganizationKeywordTags%5B%5D=component%20manufacturer&qOrganizationKeywordTags%5B%5D=OEM%20supplier&qOrganizationKeywordTags%5B%5D=contract%20manufacturer&qOrganizationKeywordTags%5B%5D=industrial%20parts%20supplier&qOrganizationKeywordTags%5B%5D=wholesale%20distributor&qOrganizationKeywordTags%5B%5D=B2B%20distributor&qOrganizationKeywordTags%5B%5D=product%20distributor&qOrganizationKeywordTags%5B%5D=industrial%20distributor&qOrganizationKeywordTags%5B%5D=regional%20distributor&qOrganizationKeywordTags%5B%5D=warehouse%20distributor&qOrganizationKeywordTags%5B%5D=inventory%20wholesaler&qOrganizationKeywordTags%5B%5D=product%20wholesaler&qOrganizationKeywordTags%5B%5D=industrial%20supply%20distributor&qOrganizationKeywordTags%5B%5D=MRO%20distributor.&qOrganizationKeywordTags%5B%5D=food%20production&qOrganizationKeywordTags%5B%5D=beverage%20manufacturing&qOrganizationKeywordTags%5B%5D=bottled%20water&qOrganizationKeywordTags%5B%5D=refrigerated%20goods&qOrganizationKeywordTags%5B%5D=frozen%20foods&qOrganizationKeywordTags%5B%5D=produce%20distribution&qOrganizationKeywordTags%5B%5D=dairy%20processing&qOrganizationKeywordTags%5B%5D=meat%20processing&qOrganizationKeywordTags%5B%5D=seafood%20logistics&qOrganizationKeywordTags%5B%5D=grocery%20wholesaler&qOrganizationKeywordTags%5B%5D=food%20ingredient%20supplier&qOrganizationKeywordTags%5B%5D=food-grade%20warehouse&qOrganizationKeywordTags%5B%5D=F%26B%20distribution&qOrganizationKeywordTags%5B%5D=perishables%20logistics&qOrganizationKeywordTags%5B%5D=component%20distributor&qOrganizationKeywordTags%5B%5D=electronics%20distributor&qOrganizationKeywordTags%5B%5D=plumbing%20distributor&qOrganizationKeywordTags%5B%5D=HVAC%20distributor&qOrganizationKeywordTags%5B%5D=building%20materials%20distributor&qOrganizationKeywordTags%5B%5D=jan-san%20supplier&qOrganizationKeywordTags%5B%5D=office%20supply%20distributor&qOrganizationKeywordTags%5B%5D=electrical%20supply%20distributor&qOrganizationKeywordTags%5B%5D=general%20line%20wholesaler&qOrganizationKeywordTags%5B%5D=import%2Fexport%20distributor&qOrganizationKeywordTags%5B%5D=automotive%20parts%20manufacturer&qOrganizationKeywordTags%5B%5D=auto%20parts%20distributor&qOrganizationKeywordTags%5B%5D=car%20accessories&qOrganizationKeywordTags%5B%5D=aftermarket%20parts&qOrganizationKeywordTags%5B%5D=tire%20distributor&qOrganizationKeywordTags%5B%5D=lubricant%20supplier&qOrganizationKeywordTags%5B%5D=automotive%20components&qOrganizationKeywordTags%5B%5D=vehicle%20parts%20warehouse&qOrganizationKeywordTags%5B%5D=heavy%20truck%20parts&qOrganizationKeywordTags%5B%5D=auto%20chemicals&qOrganizationKeywordTags%5B%5D=performance%20parts&qOrganizationKeywordTags%5B%5D=battery%20distributor&qOrganizationKeywordTags%5B%5D=fleet%20parts%20supplier&qOrganizationKeywordTags%5B%5D=pharma%20manufacturer&qOrganizationKeywordTags%5B%5D=drug%20distributor&qOrganizationKeywordTags%5B%5D=medical%20device%20manufacturer&qOrganizationKeywordTags%5B%5D=medical%20supplies%20distributor&qOrganizationKeywordTags%5B%5D=healthcare%20logistics&qOrganizationKeywordTags%5B%5D=life%20sciences%20logistics&qOrganizationKeywordTags%5B%5D=clinical%20supplies&qOrganizationKeywordTags%5B%5D=diagnostic%20equipment%20distributor&qOrganizationKeywordTags%5B%5D=cold%20chain%20pharma&qOrganizationKeywordTags%5B%5D=hospital%20supply%20chain&qOrganizationKeywordTags%5B%5D=pharmaceutical%20wholesaler&qOrganizationKeywordTags%5B%5D=laboratory%20equipment%20supplier&qOrganizationKeywordTags%5B%5D=building%20materials%20manufacturer&qOrganizationKeywordTags%5B%5D=construction%20materials%20supplier&qOrganizationKeywordTags%5B%5D=lumber%20distribution&qOrganizationKeywordTags%5B%5D=plumbing%20supply&qOrganizationKeywordTags%5B%5D=electrical%20supply&qOrganizationKeywordTags%5B%5D=roofing%20materials&qOrganizationKeywordTags%5B%5D=flooring%20materials&qOrganizationKeywordTags%5B%5D=concrete%20products&qOrganizationKeywordTags%5B%5D=drywall%20distributor&qOrganizationKeywordTags%5B%5D=home%20improvement%20distribution&qOrganizationKeywordTags%5B%5D=hardware%20supplier&qOrganizationKeywordTags%5B%5D=fasteners%20distributor&qOrganizationKeywordTags%5B%5D=furniture%20manufacturer&qOrganizationKeywordTags%5B%5D=furniture%20importer&qOrganizationKeywordTags%5B%5D=home%20goods%20supplier&qOrganizationKeywordTags%5B%5D=bedding&qOrganizationKeywordTags%5B%5D=lighting&qOrganizationKeywordTags%5B%5D=d%C3%A9cor&qOrganizationKeywordTags%5B%5D=cabinetry&qOrganizationKeywordTags%5B%5D=flooring&qOrganizationKeywordTags%5B%5D=kitchen%20equipment&qOrganizationKeywordTags%5B%5D=appliance%20distribution&qOrganizationKeywordTags%5B%5D=furnishings%20distributor&qOrganizationKeywordTags%5B%5D=home%20improvement%20wholesaler&includedOrganizationKeywordFields%5B%5D=tags&includedOrganizationKeywordFields%5B%5D=name&qNotOrganizationKeywordTags%5B%5D=3PL%20provider&qNotOrganizationKeywordTags%5B%5D=carrier&qNotOrganizationKeywordTags%5B%5D=trucking%20company&qNotOrganizationKeywordTags%5B%5D=freight%20broker&qNotOrganizationKeywordTags%5B%5D=freight%20forwarder&qNotOrganizationKeywordTags%5B%5D=shipping%20carrier&qNotOrganizationKeywordTags%5B%5D=parcel%20carrier&qNotOrganizationKeywordTags%5B%5D=delivery%20company&qNotOrganizationKeywordTags%5B%5D=courier&qNotOrganizationKeywordTags%5B%5D=LTL%20carrier&qNotOrganizationKeywordTags%5B%5D=TL%20carrier&qNotOrganizationKeywordTags%5B%5D=transport%20service%20provider&qNotOrganizationKeywordTags%5B%5D=logistics%20SaaS&qNotOrganizationKeywordTags%5B%5D=transportation%20SaaS&qNotOrganizationKeywordTags%5B%5D=software%20vendor&qNotOrganizationKeywordTags%5B%5D=consultant&qNotOrganizationKeywordTags%5B%5D=staffing%20agency&qNotOrganizationKeywordTags%5B%5D=marketing%20agency&qNotOrganizationKeywordTags%5B%5D=government&qNotOrganizationKeywordTags%5B%5D=education&qNotOrganizationKeywordTags%5B%5D=healthcare%20provider&qNotOrganizationKeywordTags%5B%5D=hospital&qNotOrganizationKeywordTags%5B%5D=finance&qNotOrganizationKeywordTags%5B%5D=insurance&qNotOrganizationKeywordTags%5B%5D=real%20estate&qNotOrganizationKeywordTags%5B%5D=energy&qNotOrganizationKeywordTags%5B%5D=telecom&qNotOrganizationKeywordTags%5B%5D=IT%20services.&excludedOrganizationKeywordFields%5B%5D=tags&excludedOrganizationKeywordFields%5B%5D=name&excludedOrganizationKeywordFields%5B%5D=social_media_description&page=4\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrlV2}}/apollo/contacts/count",
+									"host": [
+										"{{baseUrlV2}}"
+									],
+									"path": [
+										"apollo",
+										"contacts",
+										"count"
+									],
+									"query": [
+										{
+											"key": "include_company_name",
+											"value": "Emirates Steel Arkantimes",
+											"description": "Include contacts whose company name matches (case-insensitive substring). Supports comma-separated values for OR logic.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_company_name",
+											"value": "",
+											"description": "Exclude contacts whose company name matches any provided value (case-insensitive). Can be provided multiple times.",
+											"disabled": true
+										},
+										{
+											"key": "include_domain_list",
+											"value": "https://faysalbank.com",
+											"description": "Include contacts whose company website domain matches any provided domain (case-insensitive). Domains are extracted from CompanyMetadata.website. Can be provided multiple times.",
+											"disabled": true
+										},
+										{
+											"key": "exclude_domain_list",
+											"value": "",
+											"description": "Exclude contacts whose company website domain matches any provided domain (case-insensitive). Domains are extracted from CompanyMetadata.website. Can be provided multiple times.",
+											"disabled": true
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": [
+								{
+									"key": "date",
+									"value": "Mon, 17 Nov 2025 18:28:06 GMT"
+								},
+								{
+									"key": "server",
+									"value": "uvicorn"
+								},
+								{
+									"key": "content-length",
+									"value": "15"
+								},
+								{
+									"key": "content-type",
+									"value": "application/json"
+								},
+								{
+									"key": "x-process-time",
+									"value": "180.258420"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"count\": 14974\n}"
+						}
+					]
 				},
 				{
 					"name": "Get Contact UUIDs from Apollo URL",
@@ -1018,10 +1161,10 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?page=1&sortAscending=false&sortByField=%5Bnone%5D&organizationIndustryTagIds[]=5567cd4773696439dd350000&personLocations[]=India\"\n}"
+							"raw": "{\n  \"url\": \"https://app.apollo.io/#/people?page=1&contactEmailStatusV2[]=verified&contactEmailExcludeCatchAll=true&personTitles[]=Travel%20Manager&personTitles[]=Global%20Travel%20Manager&personTitles[]=Corporate%20Travel%20Manager&personTitles[]=Senior%20Travel%20Manager&personTitles[]=Travel%20Program%20Manager&personTitles[]=Global%20Travel%20Program%20Manager&personTitles[]=Travel%20Operations%20Manager&personTitles[]=Travel%20Services%20Manager&personTitles[]=Travel%20%26%20Expense%20Manager&personTitles[]=T%26E%20Manager&personTitles[]=Travel%20Procurement%20Manager&personTitles[]=Head%20of%20Travel&personTitles[]=Head%20of%20Corporate%20Travel&personTitles[]=Director%20of%20Travel&personTitles[]=Director%20of%20Global%20Travel&personTitles[]=Director%20of%20Travel%20%26%20Expense&personTitles[]=Director%20of%20Travel%20Operations&personTitles[]=Travel%20Procurement%20Director&personTitles[]=Travel%20Category%20Manager&personTitles[]=Senior%20Category%20Manager%20%E2%80%93%20Travel&personTitles[]=Global%20Category%20Manager%20%E2%80%93%20Travel&personTitles[]=Sourcing%20Manager%20%E2%80%93%20Travel&personTitles[]=Strategic%20Sourcing%20Manager%20%28Travel%29&personTitles[]=Finance%20Operations%20Manager&personTitles[]=Expense%20Management%20Manager&personTitles[]=Shared%20Services%20Manager%20%28T%26E%29&personTitles[]=Accounts%20Payable%20Manager&personTitles[]=Controller%20%28T%26E%29&personTitles[]=Expense%20Compliance%20Manager&personTitles[]=Mobility%20Manager&personTitles[]=Global%20Mobility%20Manager&personTitles[]=Employee%20Mobility%20Lead&personTitles[]=Office%20%26%20Travel%20Manager&personTitles[]=VP%20of%20Procurement&personTitles[]=VP%20of%20Operations&personTitles[]=VP%20Finance&personTitles[]=Chief%20Procurement%20Officer&personTitles[]=Chief%20Operating%20Officer&personTitles[]=Travel&personTitles[]=Expense&personTitles[]=Procurement%20Manager&personTitles[]=Senior%20Procurement%20Manager&personTitles[]=Global%20Procurement%20Manager&personTitles[]=Strategic%20Procurement%20Manager&personTitles[]=Procurement%20Operations%20Manager&personTitles[]=Procurement%20Lead&personTitles[]=Procurement%20Specialist&personTitles[]=Procurement%20Analyst&personTitles[]=Purchasing%20Manager&personTitles[]=Senior%20Purchasing%20Manager&personTitles[]=Category%20Manager&personTitles[]=Senior%20Category%20Manager&personTitles[]=Global%20Category%20Manager&personTitles[]=Sourcing%20Manager&personTitles[]=Senior%20Sourcing%20Manager&personTitles[]=Strategic%20Sourcing%20Manager&personTitles[]=Global%20Sourcing%20Manager&personTitles[]=Indirect%20Procurement%20Manager&personTitles[]=Indirect%20Sourcing%20Manager&personTitles[]=Direct%20Procurement%20Manager&personTitles[]=Direct%20Sourcing%20Manager&personTitles[]=Procurement%20%26%20Supply%20Chain%20Manager&personTitles[]=Supplier%20Management%20Manager&personTitles[]=Vendor%20Manager&personTitles[]=Vendor%20Relations%20Manager&personTitles[]=Head%20of%20Procurement&personTitles[]=Head%20of%20Purchasing&personTitles[]=Director%20of%20Procurement&personTitles[]=Director%20of%20Strategic%20Sourcing&personTitles[]=Director%20of%20Purchasing&personTitles[]=T%26E&personSeniorities[]=manager&personSeniorities[]=director&personSeniorities[]=head&personSeniorities[]=vp&personSeniorities[]=partner&personSeniorities[]=c_suite&personSeniorities[]=founder&personSeniorities[]=owner&personSeniorities[]=senior&organizationLocations[]=France&organizationLocations[]=Spain&organizationNumEmployeesRanges[]=501%2C1000&organizationNumEmployeesRanges[]=1001%2C2000&organizationNumEmployeesRanges[]=2001%2C5000&organizationNumEmployeesRanges[]=201%2C500&organizationNumEmployeesRanges[]=101%2C200&organizationNumEmployeesRanges[]=10001&orgnizationNumEmployeesRanges[]=5001%2C10000&sortByField=%5Bnone%5D&sortAscending=false\"\n}"
 						},
 						"url": {
-							"raw": "{{baseUrlV2}}/apollo/contacts/count/uuids?include_domain_list=https://acwapower.com&limit=50",
+							"raw": "{{baseUrlV2}}/apollo/contacts/count/uuids?limit=50",
 							"host": [
 								"{{baseUrlV2}}"
 							],
@@ -1047,7 +1190,8 @@
 								{
 									"key": "include_domain_list",
 									"value": "https://acwapower.com",
-									"description": "Include contacts whose company website domain matches any provided domain (case-insensitive). Domains are extracted from CompanyMetadata.website. Can be provided multiple times."
+									"description": "Include contacts whose company website domain matches any provided domain (case-insensitive). Domains are extracted from CompanyMetadata.website. Can be provided multiple times.",
+									"disabled": true
 								},
 								{
 									"key": "exclude_domain_list",
@@ -1506,7 +1650,7 @@
 									}
 								],
 								"url": {
-									"raw": "{{baseUrl}}/contacts/?ordering=-employees&limit=5&fields=company,employees",
+									"raw": "{{baseUrl}}/contacts/?limit=50&offset=0",
 									"host": [
 										"{{baseUrl}}"
 									],
@@ -1519,12 +1663,6 @@
 											"key": "view",
 											"value": "simple",
 											"description": "View mode: 'simple' returns ContactSimpleItem (id, uuid, name, title, location, company_name, person_linkedin_url, company_domain). Omit for full ContactListItem.",
-											"disabled": true
-										},
-										{
-											"key": "offset",
-											"value": "0",
-											"description": "Zero-based offset into the result set (>=0).",
 											"disabled": true
 										},
 										{
@@ -1937,15 +2075,21 @@
 										},
 										{
 											"key": "ordering",
-											"value": "-employees"
-										},
-										{
-											"key": "limit",
-											"value": "5"
+											"value": "employees",
+											"disabled": true
 										},
 										{
 											"key": "fields",
-											"value": "company,employees"
+											"value": "company,employees",
+											"disabled": true
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										},
+										{
+											"key": "offset",
+											"value": "0"
 										}
 									]
 								},
@@ -2430,7 +2574,7 @@
 									}
 								],
 								"url": {
-									"raw": "{{baseUrl}}/contacts/title/?limit=25&offset=0",
+									"raw": "{{baseUrl}}/contacts/title/?company=Amazon,Google&limit=100&distinct=true&offset=0",
 									"host": [
 										"{{baseUrl}}"
 									],
@@ -2442,37 +2586,33 @@
 									"query": [
 										{
 											"key": "company",
-											"value": "{{sampleCompany}}",
-											"description": "Restrict results to a single company.",
-											"disabled": true
-										},
-										{
-											"key": "distinct",
-											"value": "true",
-											"description": "Return unique values.",
-											"disabled": true
+											"value": "Amazon,Google",
+											"description": "Restrict results to a single company."
 										},
 										{
 											"key": "limit",
-											"value": "25",
+											"value": "100",
 											"description": "Maximum number of results."
 										},
 										{
-											"key": "offset",
-											"value": "0",
-											"description": "Offset applied before fetching values."
-										},
-										{
 											"key": "ordering",
-											"value": "value",
+											"value": "-value",
 											"description": "Sort alphabetically.",
 											"disabled": true
 										},
 										{
 											"key": "search",
-											"value": "Bandura",
+											"value": "computer",
 											"description": "Optional case-insensitive search term.",
 											"disabled": true
+										},
+										{
+											"key": "distinct",
+											"value": "true"
+										},
+										{
+											"key": "offset",
+											"value": "0"
 										}
 									]
 								},
@@ -2501,7 +2641,7 @@
 									}
 								],
 								"url": {
-									"raw": "{{baseUrl}}/contacts/company/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura",
+									"raw": "{{baseUrl}}/contacts/company/?distinct=true&limit=1000&offset=0&ordering=-value",
 									"host": [
 										"{{baseUrl}}"
 									],
@@ -2512,18 +2652,13 @@
 									],
 									"query": [
 										{
-											"key": "company",
-											"value": "{{sampleCompany}}",
-											"description": "Restrict results to a single company."
-										},
-										{
 											"key": "distinct",
 											"value": "true",
 											"description": "Return unique values."
 										},
 										{
 											"key": "limit",
-											"value": "25",
+											"value": "1000",
 											"description": "Maximum number of results."
 										},
 										{
@@ -2533,13 +2668,14 @@
 										},
 										{
 											"key": "ordering",
-											"value": "value",
+											"value": "-value",
 											"description": "Sort alphabetically."
 										},
 										{
 											"key": "search",
 											"value": "Bandura",
-											"description": "Optional case-insensitive search term."
+											"description": "Optional case-insensitive search term.",
+											"disabled": true
 										}
 									]
 								},
@@ -2568,7 +2704,7 @@
 									}
 								],
 								"url": {
-									"raw": "{{baseUrl}}/contacts/industry/?limit=25&offset=0",
+									"raw": "{{baseUrl}}/contacts/industry/",
 									"host": [
 										"{{baseUrl}}"
 									],
@@ -2579,43 +2715,33 @@
 									],
 									"query": [
 										{
-											"key": "company",
-											"value": "{{sampleCompany}}",
-											"description": "Restrict results to a single company.",
-											"disabled": true
-										},
-										{
-											"key": "distinct",
-											"value": "true",
-											"description": "Return unique values.",
-											"disabled": true
-										},
-										{
 											"key": "limit",
-											"value": "25",
-											"description": "Maximum number of results."
+											"value": "100",
+											"description": "Maximum number of results.",
+											"disabled": true
 										},
 										{
 											"key": "offset",
 											"value": "0",
-											"description": "Offset applied before fetching values."
+											"description": "Offset applied before fetching values.",
+											"disabled": true
 										},
 										{
 											"key": "ordering",
-											"value": "value",
+											"value": "-value",
 											"description": "Sort alphabetically.",
 											"disabled": true
 										},
 										{
 											"key": "search",
-											"value": "Bandura",
+											"value": "tech",
 											"description": "Optional case-insensitive search term.",
 											"disabled": true
 										},
 										{
-											"key": "separated",
-											"value": "true",
-											"description": "Split array columns into unique tokens.",
+											"key": "company",
+											"value": "Acme Corp",
+											"description": "Restrict results to a single company.",
 											"disabled": true
 										}
 									]
@@ -2645,7 +2771,7 @@
 									}
 								],
 								"url": {
-									"raw": "{{baseUrl}}/contacts/keywords/?company={{sampleCompany}}&distinct=true&limit=25&offset=0&ordering=value&search=Bandura&separated=true",
+									"raw": "{{baseUrl}}/contacts/keywords/?company=Amazon,Google&limit=100&offset=0",
 									"host": [
 										"{{baseUrl}}"
 									],
@@ -2657,17 +2783,12 @@
 									"query": [
 										{
 											"key": "company",
-											"value": "{{sampleCompany}}",
+											"value": "Amazon,Google",
 											"description": "Restrict results to a single company."
 										},
 										{
-											"key": "distinct",
-											"value": "true",
-											"description": "Return unique values."
-										},
-										{
 											"key": "limit",
-											"value": "25",
+											"value": "100",
 											"description": "Maximum number of results."
 										},
 										{
@@ -2678,17 +2799,14 @@
 										{
 											"key": "ordering",
 											"value": "value",
-											"description": "Sort alphabetically."
+											"description": "Sort alphabetically.",
+											"disabled": true
 										},
 										{
 											"key": "search",
 											"value": "Bandura",
-											"description": "Optional case-insensitive search term."
-										},
-										{
-											"key": "separated",
-											"value": "true",
-											"description": "Split array columns into unique tokens."
+											"description": "Optional case-insensitive search term.",
+											"disabled": true
 										}
 									]
 								},
@@ -5385,7 +5503,7 @@
 			"key": "sampleCompanyUuid",
 			"value": "abc-123-company-uuid",
 			"description": {
-				"content": "Example company UUID for company contacts routes.",
+				"content": "Placeholder company UUID used for exclusion filters.",
 				"type": "text/plain"
 			}
 		},
@@ -5401,7 +5519,7 @@
 			"key": "sampleCompanyUuid",
 			"value": "398cce44-233d-5f7c-aea1-e4a6a79df10c",
 			"description": {
-				"content": "Sample company UUID for filtering and exclusions.",
+				"content": "Placeholder company UUID used for exclusion filters.",
 				"type": "text/plain"
 			}
 		},

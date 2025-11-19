@@ -418,6 +418,25 @@ class ApolloAnalysisService:
         
         return normalized
 
+    def _jumble_title(self, title: str) -> list[str]:
+        """
+        Split a job title into individual words for jumble mapping.
+        
+        When includeSimilarTitles=true, personTitles[] uses jumble mapping:
+        - "Project Manager" → ["project", "manager"]
+        - This allows searching for each word separately
+        
+        Args:
+            title: Original job title
+            
+        Returns:
+            List of individual words (lowercase, stripped)
+        """
+        # Convert to lowercase, strip, and split into words
+        words = title.lower().strip().split()
+        # Filter out empty strings and return
+        return [word for word in words if word]
+
     def map_to_contact_filters(
         self, raw_parameters: dict[str, list[str]], include_unmapped: bool = False
     ) -> tuple[dict[str, any], dict[str, tuple[list[str], str]]] | dict[str, any]:
@@ -503,29 +522,43 @@ class ApolloAnalysisService:
         # Batch process: Person Filters (titles, locations, seniorities, departments)
         include_similar = raw_parameters.get("includeSimilarTitles", ["false"])[0].lower() == "true"
         
-        # Process titles (both include and exclude) together
+        # Process personTitles[]: dependent on includeSimilarTitles
+        # - includeSimilarTitles=false: use exact mapping (normalize)
+        # - includeSimilarTitles=true: use jumble mapping (split into words)
         if "personTitles[]" in raw_parameters:
             titles = raw_parameters["personTitles[]"]
             if titles:
                 if include_similar:
-                    contact_filters["title"] = ",".join(titles)
-                    logger.debug("Using exact titles (includeSimilarTitles=true): %s", titles)
+                    # Jumble mapping: split each title into individual words
+                    jumbled_words = []
+                    for title in titles:
+                        words = self._jumble_title(title)
+                        jumbled_words.extend(words)
+                    # Remove duplicates while preserving order
+                    unique_words = []
+                    seen = set()
+                    for word in jumbled_words:
+                        if word not in seen:
+                            unique_words.append(word)
+                            seen.add(word)
+                    contact_filters["title"] = ",".join(unique_words)
+                    logger.debug("Using jumble mapping (includeSimilarTitles=true): %s → %s", titles, unique_words)
                 else:
-                    # Batch normalize all titles at once
+                    # Exact mapping: normalize titles (sort words alphabetically)
                     normalized_titles = [self._normalize_title(t) for t in titles]
                     contact_filters["title"] = ",".join(normalized_titles)
-                    logger.debug("Normalized titles: %s → %s", titles[:3], normalized_titles[:3])
+                    logger.debug("Using exact mapping (includeSimilarTitles=false): %s → %s", titles[:3], normalized_titles[:3])
                 mapped_params.add("personTitles[]")
 
+        # Process personNotTitles[]: NOT dependent on includeSimilarTitles
+        # Always use exact mapping (normalize), regardless of includeSimilarTitles flag
         if "personNotTitles[]" in raw_parameters:
             exclude_titles = raw_parameters["personNotTitles[]"]
             if exclude_titles:
-                if include_similar:
-                    contact_filters["exclude_titles"] = exclude_titles
-                else:
-                    # Batch normalize all exclude titles at once
-                    normalized_not_titles = [self._normalize_title(t) for t in exclude_titles]
-                    contact_filters["exclude_titles"] = normalized_not_titles
+                # Always normalize exclude titles (exact mapping)
+                normalized_not_titles = [self._normalize_title(t) for t in exclude_titles]
+                contact_filters["exclude_titles"] = normalized_not_titles
+                logger.debug("Using exact mapping for exclude titles (always normalized): %s → %s", exclude_titles[:3], normalized_not_titles[:3])
                 mapped_params.add("personNotTitles[]")
 
         if "includeSimilarTitles" in raw_parameters:

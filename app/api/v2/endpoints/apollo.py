@@ -15,9 +15,13 @@ from app.schemas.apollo import (
     ApolloContactsSearchResponse,
     ApolloUrlAnalysisRequest,
     ApolloUrlAnalysisResponse,
+    ApolloUrlAnalysisWithCountResponse,
     MappingSummary,
     ParameterCategory,
+    ParameterCategoryWithCount,
     ParameterDetail,
+    ParameterDetailWithCount,
+    ParameterValueWithCount,
     UnmappedCategory,
     UnmappedParameter,
 )
@@ -68,6 +72,217 @@ def _convert_industry_tagids_to_names(param_name: str, tag_ids: list[str]) -> li
                 tag_ids[:5],
             )
     return tag_ids
+
+
+async def _count_contacts_for_parameter(
+    session: AsyncSession,
+    param_name: str,
+    param_values: list[str],
+    all_apollo_params: dict[str, list[str]],
+    apollo_service: ApolloAnalysisService,
+) -> int:
+    """
+    Count contacts matching a specific Apollo parameter with all its values,
+    within the context of all other filters from the Apollo URL.
+    
+    Args:
+        session: Database session
+        param_name: Apollo parameter name (e.g., "personTitles[]")
+        param_values: List of parameter values
+        all_apollo_params: All parameters from the Apollo URL (for contextual filtering)
+        apollo_service: Apollo analysis service for mapping
+        
+    Returns:
+        Count of contacts matching this parameter within the context of all other filters, or 0 if parameter cannot be mapped
+    """
+    # Skip pagination and sorting parameters
+    if param_name in ("page", "sortByField", "sortAscending"):
+        return 0
+    
+    try:
+        # Create a filter dict with ALL parameters from the URL (contextual counting)
+        # This ensures we count within the filtered result set, not the entire database
+        # Exclude pagination and sorting parameters from filter context (they don't filter contacts)
+        raw_params = {
+            k: v for k, v in all_apollo_params.items()
+            if k not in ("page", "sortByField", "sortAscending")
+        }
+        
+        # Map Apollo parameters to contact filters (with unmapped tracking)
+        filter_dict, unmapped_dict = apollo_service.map_to_contact_filters(
+            raw_params, include_unmapped=True
+        )
+        
+        # If the current parameter is unmapped, return 0
+        if param_name in unmapped_dict:
+            logger.debug("Parameter %s is unmapped, returning count 0", param_name)
+            return 0
+        
+        # Remove unmapped parameters from filter_dict (they can't be used in filtering)
+        # But keep the current parameter even if others are unmapped
+        # Filter out any keys that correspond to unmapped parameters
+        # Note: unmapped_dict contains the unmapped parameter names, not filter keys
+        # So we need to check if any mapped filters correspond to unmapped params
+        
+        # If no filters were created, return 0
+        if not filter_dict:
+            logger.debug("No filters created for parameter %s, returning count 0", param_name)
+            return 0
+        
+        # Validate and construct ContactFilterParams
+        try:
+            filters = ContactFilterParams.model_validate(filter_dict)
+        except ValidationError as exc:
+            logger.warning("Invalid filter parameters for %s: %s", param_name, exc)
+            return 0
+        
+        # Count contacts matching ALL filters (contextual count)
+        count_response = await contacts_service.count_contacts(session, filters)
+        return count_response.count
+        
+    except Exception as exc:
+        logger.warning("Error counting contacts for parameter %s: %s", param_name, exc)
+        return 0
+
+
+async def _count_contacts_for_value(
+    session: AsyncSession,
+    param_name: str,
+    single_value: str,
+    all_apollo_params: dict[str, list[str]],
+    apollo_service: ApolloAnalysisService,
+) -> int:
+    """
+    Count contacts matching a specific Apollo parameter with a single value,
+    within the context of all other filters from the Apollo URL.
+    
+    For exclusion filters (personNotLocations[], organizationNotIndustryTagIds[], etc.),
+    this counts contacts that match all other filters (including other exclusions) 
+    and are excluded by this specific value.
+    
+    Handles special cases like employee ranges, revenue ranges, etc.
+    
+    Args:
+        session: Database session
+        param_name: Apollo parameter name (e.g., "personTitles[]")
+        single_value: Single parameter value
+        all_apollo_params: All parameters from the Apollo URL (for contextual filtering)
+        apollo_service: Apollo analysis service for mapping
+        
+    Returns:
+        Count of contacts matching this parameter value within the context of all other filters, or 0 if cannot be mapped
+    """
+    # Skip pagination and sorting parameters
+    if param_name in ("page", "sortByField", "sortAscending"):
+        return 0
+    
+    # Identify exclusion parameters
+    exclusion_params = {
+        "personNotLocations[]",
+        "organizationNotLocations[]",
+        "organizationNotIndustryTagIds[]",
+        "personNotTitles[]",
+        "qNotOrganizationKeywordTags[]",
+    }
+    
+    try:
+        # For exclusion filters, we need special handling
+        # Since all contacts in the filtered set are already excluded by all exclusion values,
+        # the count for each exclusion value should be the same as the parameter count
+        # (all contacts in the filtered set are excluded by each value)
+        if param_name in exclusion_params:
+            # For exclusion filters, use ALL filters (including all exclusion values)
+            # This gives us the count within the filtered set, which is the same for all exclusion values
+            raw_params = {}
+            
+            # Copy all parameters (including all exclusion values) except pagination/sorting parameters
+            for key, values in all_apollo_params.items():
+                if key not in ("page", "sortByField", "sortAscending"):
+                    raw_params[key] = values
+        else:
+            # For inclusion filters, use standard logic: all other filters + current parameter with specific value
+            raw_params = {}
+            
+            # Copy all parameters except the current one and pagination/sorting parameters
+            for key, values in all_apollo_params.items():
+                if key != param_name and key not in ("page", "sortByField", "sortAscending"):
+                    raw_params[key] = values
+            
+            # Add the current parameter with only the specific value
+            raw_params[param_name] = [single_value]
+        
+        # Handle special cases for range parameters that need direct filter creation
+        if param_name == "organizationNumEmployeesRanges[]":
+            # Value format: "11,50" (min,max)
+            parts = single_value.split(",")
+            if len(parts) == 2:
+                try:
+                    min_val = int(parts[0].strip())
+                    max_val = int(parts[1].strip())
+                    # Map all other parameters first
+                    other_filter_dict, other_unmapped_dict = apollo_service.map_to_contact_filters(
+                        {k: v for k, v in raw_params.items() if k != param_name},
+                        include_unmapped=True
+                    )
+                    # Add the employee range filters
+                    other_filter_dict["employees_min"] = min_val
+                    other_filter_dict["employees_max"] = max_val
+                    filters = ContactFilterParams.model_validate(other_filter_dict)
+                    count_response = await contacts_service.count_contacts(session, filters)
+                    return count_response.count
+                except (ValueError, ValidationError) as exc:
+                    logger.warning("Invalid employee range format %s: %s", single_value, exc)
+                    return 0
+            return 0
+        
+        # For revenue ranges, they come as separate parameters
+        if param_name in ("revenueRange[min]", "revenueRange[max]"):
+            try:
+                value_int = int(single_value)
+                # Map all other parameters first
+                other_filter_dict, other_unmapped_dict = apollo_service.map_to_contact_filters(
+                    {k: v for k, v in raw_params.items() if k != param_name},
+                    include_unmapped=True
+                )
+                # Add the revenue filter
+                if param_name == "revenueRange[min]":
+                    other_filter_dict["annual_revenue_min"] = value_int
+                else:  # revenueRange[max]
+                    other_filter_dict["annual_revenue_max"] = value_int
+                filters = ContactFilterParams.model_validate(other_filter_dict)
+                count_response = await contacts_service.count_contacts(session, filters)
+                return count_response.count
+            except (ValueError, ValidationError) as exc:
+                logger.warning("Invalid revenue range value %s: %s", single_value, exc)
+                return 0
+        
+        # Map Apollo parameters to contact filters (with unmapped tracking)
+        filter_dict, unmapped_dict = apollo_service.map_to_contact_filters(
+            raw_params, include_unmapped=True
+        )
+        
+        # If the current parameter is unmapped, return 0
+        if param_name in unmapped_dict:
+            return 0
+        
+        # If no filters were created, return 0
+        if not filter_dict:
+            return 0
+        
+        # Validate and construct ContactFilterParams
+        try:
+            filters = ContactFilterParams.model_validate(filter_dict)
+        except ValidationError as exc:
+            logger.warning("Invalid filter parameters for %s=%s: %s", param_name, single_value, exc)
+            return 0
+        
+        # Count contacts matching ALL filters (contextual count)
+        count_response = await contacts_service.count_contacts(session, filters)
+        return count_response.count
+        
+    except Exception as exc:
+        logger.warning("Error counting contacts for parameter %s=%s: %s", param_name, single_value, exc)
+        return 0
 
 
 def _normalize_list_query_param(param_value: Optional[list[str]]) -> Optional[list[str]]:
@@ -244,6 +459,175 @@ async def analyze_apollo_url(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while analyzing the URL",
+        ) from exc
+
+
+@router.post("/analyze/count", response_model=ApolloUrlAnalysisWithCountResponse)
+@log_function_call(logger=logger, log_arguments=True, log_result=True)
+async def analyze_apollo_url_with_counts(
+    request_data: ApolloUrlAnalysisRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> ApolloUrlAnalysisWithCountResponse:
+    """
+    Analyze an Apollo.io URL and return structured parameter breakdown with contact counts.
+    
+    This endpoint extends `/apollo/analyze` by adding contact counts for each parameter
+    and each value within parameters. This helps users understand the impact of each
+    filter on their contact database.
+    
+    The response includes:
+    - URL structure breakdown (base URL, hash path, query string)
+    - Categorized parameters with descriptions
+    - Parameter values (URL-decoded)
+    - Statistics about the search criteria
+    - Contact counts for each parameter (all values combined)
+    - Contact counts for each individual value
+    
+    Args:
+        request_data: Request containing the Apollo.io URL to analyze
+        current_user: Authenticated user (from dependency)
+        session: Database session (from dependency)
+    
+    Returns:
+        ApolloUrlAnalysisWithCountResponse with complete URL analysis and counts
+    
+    Raises:
+        HTTPException: If URL is invalid, not from Apollo.io, or analysis fails
+    """
+    logger.info(
+        "Apollo URL analysis with counts request: user_id=%s url_length=%d",
+        current_user.id,
+        len(request_data.url),
+    )
+    
+    try:
+        # Step 1: Analyze the Apollo URL to extract parameters (same as /analyze)
+        result = await service.analyze_url(request_data.url)
+        logger.info(
+            "Apollo URL analyzed successfully: user_id=%s total_params=%d categories=%d",
+            current_user.id,
+            result.statistics.total_parameters,
+            result.statistics.categories_used,
+        )
+        
+        # Step 2: Prepare all Apollo parameters for contextual counting
+        # Exclude pagination and sorting parameters from filter context (they don't filter contacts)
+        all_apollo_params = dict(result.raw_parameters)
+        
+        # Step 3: Convert Tag IDs to industry names and build categories with counts
+        converted_categories = []
+        
+        for category in result.categories:
+            converted_params = []
+            category_count = 0
+            
+            for param in category.parameters:
+                # Skip counting for pagination and sorting parameters
+                if param.name in ("page", "sortByField", "sortAscending"):
+                    # Still include them in the response but with count 0
+                    converted_values = _convert_industry_tagids_to_names(param.name, param.values)
+                    value_counts = [
+                        ParameterValueWithCount(value=val, count=0)
+                        for val in converted_values
+                    ]
+                    converted_params.append(
+                        ParameterDetailWithCount(
+                            name=param.name,
+                            values=value_counts,
+                            description=param.description,
+                            category=param.category,
+                            count=0,
+                        )
+                    )
+                    continue
+                
+                # Convert Tag IDs to industry names if applicable
+                converted_values = _convert_industry_tagids_to_names(param.name, param.values)
+                
+                # Count contacts for this parameter (all values combined)
+                # Pass all_apollo_params for contextual counting (within filtered result set)
+                param_count = await _count_contacts_for_parameter(
+                    session, param.name, param.values, all_apollo_params, service
+                )
+                
+                # Count contacts for each individual value
+                # Iterate through original values and convert each one to match with converted_values
+                value_counts = []
+                for i, original_value in enumerate(param.values):
+                    # Convert this single value to get the display value
+                    converted_single = _convert_industry_tagids_to_names(param.name, [original_value])
+                    display_value = converted_single[0] if converted_single else original_value
+                    
+                    # Count using the original value (before conversion)
+                    # Pass all_apollo_params for contextual counting (within filtered result set)
+                    value_count = await _count_contacts_for_value(
+                        session, param.name, original_value, all_apollo_params, service
+                    )
+                    value_counts.append(
+                        ParameterValueWithCount(value=display_value, count=value_count)
+                    )
+                
+                converted_params.append(
+                    ParameterDetailWithCount(
+                        name=param.name,
+                        values=value_counts,
+                        description=param.description,
+                        category=param.category,
+                        count=param_count,
+                    )
+                )
+                
+                # Add to category count (use max to avoid double-counting overlapping filters)
+                # For now, we'll sum them, but note that this may overcount if parameters overlap
+                category_count += param_count
+            
+            # For category count, we'll use the maximum parameter count to avoid overcounting
+            # This is a simplification - ideally we'd count the union, but that's complex
+            category_max_count = max(
+                [p.count for p in converted_params] + [0]
+            ) if converted_params else 0
+            
+            converted_categories.append(
+                ParameterCategoryWithCount(
+                    name=category.name,
+                    parameters=converted_params,
+                    total_parameters=category.total_parameters,
+                    count=category_max_count,
+                )
+            )
+        
+        # Also convert in raw_parameters
+        converted_raw_parameters = {}
+        for param_name, param_values in result.raw_parameters.items():
+            converted_raw_parameters[param_name] = _convert_industry_tagids_to_names(
+                param_name, param_values
+            )
+        
+        # Build response with converted values and counts
+        converted_result = ApolloUrlAnalysisWithCountResponse(
+            url=result.url,
+            url_structure=result.url_structure,
+            categories=converted_categories,
+            statistics=result.statistics,
+            raw_parameters=converted_raw_parameters,
+        )
+        
+        logger.info(
+            "Apollo URL analyzed with counts: user_id=%s total_params=%d categories=%d",
+            current_user.id,
+            result.statistics.total_parameters,
+            result.statistics.categories_used,
+        )
+        return converted_result
+        
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Apollo URL analysis with counts failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while analyzing the URL with counts",
         ) from exc
 
 

@@ -345,6 +345,265 @@ https://app.apollo.io/#/people?organizationIndustryTagIds[]=5567cd4773696439b10b
 
 ---
 
+### POST /api/v2/apollo/analyze/count - Analyze Apollo URL with Contact Counts
+
+Analyze an Apollo.io URL and return structured parameter breakdown with contact counts. This endpoint extends `/apollo/analyze` by adding contact counts for each parameter and each value within parameters, helping users understand the impact of each filter on their contact database.
+
+**Note:** Industry Tag IDs (`organizationIndustryTagIds[]`, `organizationNotIndustryTagIds[]`) are automatically converted to readable industry names in the API response for better usability.
+
+**Headers:**
+
+- `Authorization: Bearer <access_token>` (required)
+- `Content-Type: application/json`
+
+**Request Body:**
+
+```json
+{
+  "url": "https://app.apollo.io/#/people?contactEmailStatusV2[]=verified&personLocations[]=california&personTitles[]=CEO&organizationNumEmployeesRanges[]=11,50&page=1&sortByField=recommendations_score&sortAscending=false"
+}
+```
+
+**Request Body Fields:**
+
+- `url` (string, required): Apollo.io URL to analyze. Must be from the `apollo.io` domain.
+
+**Response:**
+
+**Success (200 OK):**
+
+```json
+{
+  "url": "https://app.apollo.io/#/people?contactEmailStatusV2[]=verified&personLocations[]=california&personTitles[]=CEO&organizationNumEmployeesRanges[]=11,50&page=1&sortByField=recommendations_score&sortAscending=false",
+  "url_structure": {
+    "base_url": "https://app.apollo.io",
+    "hash_path": "/people",
+    "query_string": "contactEmailStatusV2[]=verified&personLocations[]=california&personTitles[]=CEO&organizationNumEmployeesRanges[]=11,50&page=1&sortByField=recommendations_score&sortAscending=false",
+    "has_query_params": true
+  },
+  "categories": [
+    {
+      "name": "Pagination",
+      "count": 0,
+      "parameters": [
+        {
+          "name": "page",
+          "count": 0,
+          "values": [
+            {
+              "value": "1",
+              "count": 0
+            }
+          ],
+          "description": "Page number for pagination",
+          "category": "Pagination"
+        }
+      ],
+      "total_parameters": 1
+    },
+    {
+      "name": "Sorting",
+      "count": 0,
+      "parameters": [
+        {
+          "name": "sortByField",
+          "count": 0,
+          "values": [
+            {
+              "value": "recommendations_score",
+              "count": 0
+            }
+          ],
+          "description": "Field to sort results by",
+          "category": "Sorting"
+        },
+        {
+          "name": "sortAscending",
+          "count": 0,
+          "values": [
+            {
+              "value": "false",
+              "count": 0
+            }
+          ],
+          "description": "Sort direction (true/false)",
+          "category": "Sorting"
+        }
+      ],
+      "total_parameters": 2
+    },
+    {
+      "name": "Person Filters",
+      "count": 850,
+      "parameters": [
+        {
+          "name": "personTitles[]",
+          "count": 500,
+          "values": [
+            {
+              "value": "CEO",
+              "count": 500
+            }
+          ],
+          "description": "Job titles to include",
+          "category": "Person Filters"
+        },
+        {
+          "name": "personLocations[]",
+          "count": 350,
+          "values": [
+            {
+              "value": "california",
+              "count": 350
+            }
+          ],
+          "description": "Person locations to include",
+          "category": "Person Filters"
+        }
+      ],
+      "total_parameters": 2
+    },
+    {
+      "name": "Email Filters",
+      "count": 1200,
+      "parameters": [
+        {
+          "name": "contactEmailStatusV2[]",
+          "count": 1200,
+          "values": [
+            {
+              "value": "verified",
+              "count": 1200
+            }
+          ],
+          "description": "Email verification status",
+          "category": "Email Filters"
+        }
+      ],
+      "total_parameters": 1
+    },
+    {
+      "name": "Organization Filters",
+      "count": 600,
+      "parameters": [
+        {
+          "name": "organizationNumEmployeesRanges[]",
+          "count": 600,
+          "values": [
+            {
+              "value": "11,50",
+              "count": 600
+            }
+          ],
+          "description": "Company size ranges",
+          "category": "Organization Filters"
+        }
+      ],
+      "total_parameters": 1
+    }
+  ],
+  "statistics": {
+    "total_parameters": 7,
+    "total_parameter_values": 7,
+    "categories_used": 5,
+    "categories": ["Pagination", "Sorting", "Person Filters", "Email Filters", "Organization Filters"]
+  },
+  "raw_parameters": {
+    "contactEmailStatusV2[]": ["verified"],
+    "personLocations[]": ["california"],
+    "personTitles[]": ["CEO"],
+    "organizationNumEmployeesRanges[]": ["11,50"],
+    "page": ["1"],
+    "sortByField": ["recommendations_score"],
+    "sortAscending": ["false"]
+  }
+}
+```
+
+**Response Fields:**
+
+The response structure is identical to `/apollo/analyze`, but with the following additions:
+
+- **`categories[].count`** (integer): Total number of contacts matching any parameter in this category (uses maximum parameter count to avoid overcounting)
+- **`categories[].parameters[].count`** (integer): Total number of contacts matching this parameter (all values combined)
+- **`categories[].parameters[].values[]`**: Array of objects instead of strings, where each object contains:
+  - **`value`** (string): Parameter value (same as before)
+  - **`count`** (integer): Number of contacts matching this specific value
+
+**Notes:**
+
+- Pagination and sorting parameters (`page`, `sortByField`, `sortAscending`) always return count 0 as they don't filter contacts
+- Unmapped parameters return count 0 (expected behavior)
+- Counts are calculated independently for each parameter and value
+- Category counts use the maximum parameter count to avoid overcounting when parameters overlap
+- The counts reflect how many contacts in your database match each filter criterion
+
+**Error (400 Bad Request) - Invalid URL:**
+
+```json
+{
+  "detail": "URL is required and must be a string"
+}
+```
+
+**Error (400 Bad Request) - Not Apollo.io Domain:**
+
+```json
+{
+  "detail": "URL must be from apollo.io domain"
+}
+```
+
+**Error (401 Unauthorized):**
+
+```json
+{
+  "detail": "Authentication credentials were not provided."
+}
+```
+
+**Error (500 Internal Server Error):**
+
+```json
+{
+  "detail": "An error occurred while analyzing the URL with counts"
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: URL analyzed successfully with counts
+- `400 Bad Request`: Invalid URL, not from Apollo.io domain, or missing URL field
+- `401 Unauthorized`: Authentication required
+- `500 Internal Server Error`: Error occurred while analyzing the URL with counts
+
+**Example Requests:**
+
+```txt
+POST /api/v2/apollo/analyze/count
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "url": "https://app.apollo.io/#/people?personTitles[]=CEO&personLocations[]=United States&page=1"
+}
+```
+
+**Use Cases:**
+
+1. **Filter Impact Analysis**: Understand how many contacts match each filter criterion before applying them
+2. **Search Optimization**: Identify which filters narrow down results most effectively
+3. **Data Exploration**: Explore your contact database by seeing counts for different parameter combinations
+4. **Filter Validation**: Verify that your Apollo URL filters are working as expected with actual counts
+
+**Performance Notes:**
+
+- This endpoint performs multiple database queries (one per parameter and one per value)
+- Response time may be longer than `/apollo/analyze` for URLs with many parameters
+- Counts are calculated in real-time from your current database state
+
+---
+
 ### POST /api/v2/apollo/contacts - Search Contacts from Apollo URL
 
 Search contacts using Apollo.io URL parameters. This endpoint converts an Apollo.io People Search URL into contact filter parameters and returns matching contacts from your database. It provides a seamless way to replicate Apollo.io searches in your own contact database.
@@ -505,9 +764,9 @@ The endpoint maps Apollo.io parameters to contact filter parameters as follows:
 |-----------------|----------------|---------------|
 | `page` | `page` | Direct mapping |
 | `sortByField` + `sortAscending` | `ordering` | Combined; prepend `-` for descending |
-| `personTitles[]` | `title` | Multiple values joined with comma (OR logic). **Title Normalization**: When `includeSimilarTitles=false` (or absent), titles are normalized by sorting words alphabetically (e.g., "Project Manager" and "Manager Project" both match). When `includeSimilarTitles=true`, exact title text is used (case-insensitive). |
-| `personNotTitles[]` | `exclude_titles` | List of titles to exclude. **Title Normalization**: Same normalization logic as `personTitles[]` based on `includeSimilarTitles` flag. |
-| `includeSimilarTitles` | (influences `title`/`exclude_titles`) | When `true`, uses exact title matching. When `false` or absent, normalizes titles by sorting words alphabetically for flexible matching. |
+| `personTitles[]` | `title` | Multiple values joined with comma (OR logic). **Title Mapping**: When `includeSimilarTitles=false` (or absent), titles are normalized by sorting words alphabetically (e.g., "Project Manager" → "manager project"). When `includeSimilarTitles=true`, uses **jumble mapping**: splits titles into individual words (e.g., "Project Manager" → "project,manager"), allowing each word to be searched separately. |
+| `personNotTitles[]` | `exclude_titles` | List of titles to exclude. **Title Mapping**: Always uses exact mapping (normalize by sorting words alphabetically), regardless of `includeSimilarTitles` flag. This parameter is NOT dependent on `includeSimilarTitles`. |
+| `includeSimilarTitles` | (influences `personTitles[]` only) | When `true`, `personTitles[]` uses jumble mapping (splits into words). When `false` or absent, `personTitles[]` uses exact mapping (normalize). **Note**: This flag does NOT affect `personNotTitles[]`, which always uses exact mapping. |
 | `personSeniorities[]` | `seniority` | Multiple values joined with comma |
 | `personDepartmentOrSubdepartments[]` | `department` | Multiple values joined with comma |
 | `personLocations[]` | `contact_location` | Multiple values joined with comma |
@@ -537,24 +796,31 @@ The following Apollo parameters are not mapped (no equivalent in contacts databa
 - **Unmapped filters**: `organizationJobLocations[]`, `organizationNumJobsRange[min]`, `organizationJobPostedAtRange[min]`, `organizationTradingStatus[]`, `contactEmailExcludeCatchAll`
 - **UI flags**: `uniqueUrlId`, `tour`, `existFields[]`, `notOrganizationIds[]`, `organizationIds[]`
 
-**Note:** `includeSimilarTitles` is now mapped and influences how `personTitles[]` and `personNotTitles[]` are processed (see Title Normalization above).
+**Note:** `includeSimilarTitles` is now mapped and influences how `personTitles[]` is processed (see Title Mapping above). **Important**: `personNotTitles[]` is NOT affected by `includeSimilarTitles` and always uses exact mapping (normalize).
 
 **Note:** Industry tag IDs (`organizationIndustryTagIds[]`, `organizationNotIndustryTagIds[]`) ARE now successfully mapped to industry names using a CSV-based lookup table with 147 industry mappings.
 
-**Title Normalization Examples:**
+**Title Mapping Examples:**
 
-When `includeSimilarTitles=false` (or absent):
+**personTitles[] with includeSimilarTitles=false** (exact mapping - normalize):
 ```
 Apollo URL: personTitles[]=Project Manager&personTitles[]=Senior Developer
 Normalized: "manager project", "developer senior"
 Result: Matches contacts with "Project Manager", "Manager Project", "Senior Developer", "Developer Senior"
 ```
 
-When `includeSimilarTitles=true`:
+**personTitles[] with includeSimilarTitles=true** (jumble mapping - split into words):
 ```
 Apollo URL: personTitles[]=Project Manager&includeSimilarTitles=true
-Normalized: "Project Manager" (exact match)
-Result: Matches only "Project Manager" (case-insensitive), not "Manager Project"
+Jumbled: "project,manager" (split into individual words)
+Result: Matches contacts with titles containing "project" OR "manager" (e.g., "Project Manager", "Project Lead", "Product Manager", "Manager of Engineering")
+```
+
+**personNotTitles[]** (always exact mapping - normalize, ignores includeSimilarTitles):
+```
+Apollo URL: personNotTitles[]=Project Manager&includeSimilarTitles=true
+Normalized: "manager project" (always normalized, regardless of includeSimilarTitles)
+Result: Excludes contacts with "Project Manager" or "Manager Project" (case-insensitive)
 ```
 
 **Example Requests:**
