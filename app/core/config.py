@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     ENABLE_QUERY_MONITORING: bool = True  # Enable query performance monitoring
     SLOW_QUERY_THRESHOLD: float = 1.0  # Threshold in seconds for logging slow queries
     USE_APPROXIMATE_COUNTS: bool = False  # Use approximate counts for very large unfiltered queries
+    APOLLO_COUNT_MAX_CONCURRENT: int = 50  # Maximum concurrent count queries for Apollo analyze/count endpoint
     @field_validator("DEBUG", mode="before")
     @classmethod
     def normalize_debug(cls, value):

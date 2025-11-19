@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.security import decode_token
-from app.db.session import get_db
+from app.db.session import AsyncSessionLocal, get_db
 from app.models.user import User
 from app.repositories.user import UserProfileRepository, UserRepository
 
@@ -163,7 +163,6 @@ async def get_current_user_websocket(
         raise WebSocketDisconnect(code=WS_1008_POLICY_VIOLATION)
     
     # Get user from database - create session manually for WebSocket
-    from app.db.session import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         try:
             user_repo = UserRepository()

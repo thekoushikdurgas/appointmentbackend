@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
+from app.repositories.companies import CompanyRepository
 from app.repositories.contacts import ContactRepository
 from app.schemas.common import CountResponse, CursorPage
 from app.schemas.companies import CompanySummary
@@ -314,9 +315,6 @@ class ContactsService:
         limit: Optional[int] = None,
     ) -> list[str]:
         """Return contact UUIDs for a specific company that match the supplied filters."""
-        from app.schemas.filters import CompanyContactFilterParams
-        from app.repositories.companies import CompanyRepository
-        
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         self.logger.info(
             "Service getting contact UUIDs for company %s: limit=%s filters=%s",
@@ -883,10 +881,6 @@ class ContactsService:
         use_cursor: bool = False,
     ) -> CursorPage[ContactListItem]:
         """List contacts for a specific company with pagination."""
-        from app.schemas.filters import CompanyContactFilterParams
-        from app.repositories.companies import CompanyRepository
-        from app.utils.pagination import build_cursor_link, build_pagination_link
-        
         self.logger.info(
             "Listing contacts for company %s: limit=%s offset=%d use_cursor=%s",
             company_uuid,
@@ -965,9 +959,6 @@ class ContactsService:
         filters: CompanyContactFilterParams,
     ) -> CountResponse:
         """Count contacts for a specific company matching filters."""
-        from app.schemas.filters import CompanyContactFilterParams
-        from app.repositories.companies import CompanyRepository
-        
         # self.logger.info("Counting contacts for company %s", company_uuid)
         
         # Verify company exists
@@ -996,9 +987,6 @@ class ContactsService:
         params: AttributeListParams,
     ) -> List[str]:
         """List distinct attribute values for contacts within a specific company."""
-        from app.schemas.filters import CompanyContactFilterParams
-        from app.repositories.companies import CompanyRepository
-        
         self.logger.info(
             "Listing attribute %s values for company %s",
             attribute,

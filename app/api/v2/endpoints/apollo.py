@@ -1,6 +1,9 @@
 """Apollo.io URL Analysis API endpoints."""
 
 import asyncio
+import hashlib
+import json
+import time
 from typing import Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -31,6 +34,7 @@ from app.schemas.contacts import ContactListItem, ContactSimpleItem
 from app.schemas.filters import ContactFilterParams
 from app.services.apollo_analysis_service import ApolloAnalysisService
 from app.services.contacts_service import ContactsService
+from app.utils.cursor import decode_offset_cursor
 from app.utils.industry_mapping import get_industry_names_from_ids
 from app.utils.query_cache import get_query_cache
 
@@ -113,12 +117,177 @@ async def _batch_execute_tasks(
     return results
 
 
+def _get_filter_signature(filters: ContactFilterParams) -> str:
+    """
+    Generate a deterministic signature for filter parameters for deduplication.
+    
+    Args:
+        filters: ContactFilterParams instance
+        
+    Returns:
+        MD5 hash string representing the filter combination
+    """
+    # Convert filters to dict, excluding None and unset values
+    filter_dict = filters.model_dump(exclude_none=True, exclude_unset=True)
+    
+    # Sort keys and values for deterministic hashing
+    # Handle nested structures (lists, dicts) by converting to sorted tuples
+    def normalize_value(v):
+        if isinstance(v, list):
+            return tuple(sorted(str(item) for item in v))
+        if isinstance(v, dict):
+            return tuple(sorted((str(k), normalize_value(v)) for k, v in v.items()))
+        return str(v)
+    
+    normalized_dict = {
+        str(k): normalize_value(v) for k, v in sorted(filter_dict.items())
+    }
+    
+    # Create deterministic JSON string
+    key_string = json.dumps(normalized_dict, sort_keys=True, default=str)
+    
+    # Hash with MD5
+    key_hash = hashlib.md5(key_string.encode()).hexdigest()
+    return key_hash
+
+
+def _generate_count_cache_key(filters: ContactFilterParams) -> str:
+    """
+    Generate a cache key for contact count queries.
+    
+    Uses the same logic as _get_filter_signature for consistency.
+    
+    Args:
+        filters: ContactFilterParams instance
+        
+    Returns:
+        Cache key string for use with query_cache
+    """
+    return _get_filter_signature(filters)
+
+
+def _build_filter_from_base(
+    base_filter_dict: dict,
+    base_unmapped_dict: dict,
+    param_name: str,
+    param_value: Optional[str] = None,
+    param_values: Optional[list[str]] = None,
+    all_apollo_params: Optional[dict[str, list[str]]] = None,
+    apollo_service: Optional[ApolloAnalysisService] = None,
+) -> tuple[dict, dict]:
+    """
+    Build filter dictionary from base filters by modifying for specific parameter/value.
+    
+    This function reuses pre-computed base filters and only modifies the specific
+    parameter being counted, avoiding redundant filter mapping operations.
+    
+    Args:
+        base_filter_dict: Pre-computed base filter dictionary (all parameters)
+        base_unmapped_dict: Pre-computed unmapped parameters dictionary
+        param_name: Apollo parameter name to modify
+        param_value: Single parameter value (for value counts)
+        param_values: List of parameter values (for parameter counts, uses all values)
+        all_apollo_params: All Apollo parameters (for special cases)
+        apollo_service: Apollo service (for special cases that need remapping)
+        
+    Returns:
+        Tuple of (filter_dict, unmapped_dict) ready for ContactFilterParams validation
+    """
+    # If parameter is unmapped, return empty filters
+    if param_name in base_unmapped_dict:
+        return {}, base_unmapped_dict
+    
+    # Start with a copy of base filters
+    filter_dict = dict(base_filter_dict)
+    
+    # Identify exclusion parameters
+    exclusion_params = {
+        "personNotLocations[]",
+        "organizationNotLocations[]",
+        "organizationNotIndustryTagIds[]",
+        "personNotTitles[]",
+        "qNotOrganizationKeywordTags[]",
+    }
+    
+    # Handle special cases for range parameters
+    if param_name == "organizationNumEmployeesRanges[]" and param_value:
+        # Value format: "11,50" (min,max)
+        parts = param_value.split(",")
+        if len(parts) == 2:
+            try:
+                min_val = int(parts[0].strip())
+                max_val = int(parts[1].strip())
+                # Remove any existing employee range filters
+                filter_dict.pop("employees_min", None)
+                filter_dict.pop("employees_max", None)
+                # Add the specific range
+                filter_dict["employees_min"] = min_val
+                filter_dict["employees_max"] = max_val
+                return filter_dict, base_unmapped_dict
+            except ValueError:
+                logger.warning("Invalid employee range format: %s", param_value)
+                return {}, base_unmapped_dict
+        return {}, base_unmapped_dict
+    
+    if param_name in ("revenueRange[min]", "revenueRange[max]") and param_value:
+        try:
+            value_int = int(param_value)
+            # Remove existing revenue filters
+            filter_dict.pop("annual_revenue_min", None)
+            filter_dict.pop("annual_revenue_max", None)
+            # Add the specific revenue filter
+            if param_name == "revenueRange[min]":
+                filter_dict["annual_revenue_min"] = value_int
+            else:  # revenueRange[max]
+                filter_dict["annual_revenue_max"] = value_int
+            return filter_dict, base_unmapped_dict
+        except ValueError:
+            logger.warning("Invalid revenue range value: %s", param_value)
+            return {}, base_unmapped_dict
+    
+    # For exclusion parameters, use base filters as-is (all exclusion values are already included)
+    if param_name in exclusion_params:
+        # For exclusion params, the base filters already include all exclusion values
+        # So we can use them directly
+        return filter_dict, base_unmapped_dict
+    
+    # For inclusion parameters with value counts, we need to modify the filter
+    # to only include the specific value
+    if param_value is not None:
+        # This is a value count - need to modify filter to use only this value
+        # For most parameters, we need to remap with the single value
+        # This is complex, so we'll fall back to remapping for now
+        # TODO: Optimize this further by directly modifying filter_dict
+        
+        if all_apollo_params and apollo_service:
+            # Build raw params with only this value
+            raw_params = {}
+            for key, values in all_apollo_params.items():
+                if key not in ("page", "sortByField", "sortAscending"):
+                    if key == param_name:
+                        raw_params[key] = [param_value]
+                    else:
+                        raw_params[key] = values
+            
+            # Remap with single value
+            value_filter_dict, value_unmapped_dict = apollo_service.map_to_contact_filters(
+                raw_params, include_unmapped=True
+            )
+            return value_filter_dict, value_unmapped_dict
+    
+    # For parameter counts (all values), use base filters as-is
+    # The base filters already include all values for this parameter
+    return filter_dict, base_unmapped_dict
+
+
 async def _count_contacts_for_parameter(
     session: AsyncSession,
     param_name: str,
     param_values: list[str],
     all_apollo_params: dict[str, list[str]],
     apollo_service: ApolloAnalysisService,
+    base_filter_dict: Optional[dict] = None,
+    base_unmapped_dict: Optional[dict] = None,
 ) -> int:
     """
     Count contacts matching a specific Apollo parameter with all its values,
@@ -130,6 +299,8 @@ async def _count_contacts_for_parameter(
         param_values: List of parameter values
         all_apollo_params: All parameters from the Apollo URL (for contextual filtering)
         apollo_service: Apollo analysis service for mapping
+        base_filter_dict: Optional pre-computed base filter dictionary (for optimization)
+        base_unmapped_dict: Optional pre-computed unmapped parameters dictionary
         
     Returns:
         Count of contacts matching this parameter within the context of all other filters, or 0 if parameter cannot be mapped
@@ -139,29 +310,31 @@ async def _count_contacts_for_parameter(
         return 0
     
     try:
-        # Create a filter dict with ALL parameters from the URL (contextual counting)
-        # This ensures we count within the filtered result set, not the entire database
-        # Exclude pagination and sorting parameters from filter context (they don't filter contacts)
-        raw_params = {
-            k: v for k, v in all_apollo_params.items()
-            if k not in ("page", "sortByField", "sortAscending")
-        }
-        
-        # Map Apollo parameters to contact filters (with unmapped tracking)
-        filter_dict, unmapped_dict = apollo_service.map_to_contact_filters(
-            raw_params, include_unmapped=True
-        )
+        # Use pre-computed base filters if available, otherwise compute them
+        if base_filter_dict is not None and base_unmapped_dict is not None:
+            # Reuse pre-computed filters
+            filter_dict, unmapped_dict = _build_filter_from_base(
+                base_filter_dict,
+                base_unmapped_dict,
+                param_name,
+                param_values=param_values,
+                all_apollo_params=all_apollo_params,
+                apollo_service=apollo_service,
+            )
+        else:
+            # Fallback to original logic if base filters not provided
+            raw_params = {
+                k: v for k, v in all_apollo_params.items()
+                if k not in ("page", "sortByField", "sortAscending")
+            }
+            filter_dict, unmapped_dict = apollo_service.map_to_contact_filters(
+                raw_params, include_unmapped=True
+            )
         
         # If the current parameter is unmapped, return 0
         if param_name in unmapped_dict:
             logger.debug("Parameter %s is unmapped, returning count 0", param_name)
             return 0
-        
-        # Remove unmapped parameters from filter_dict (they can't be used in filtering)
-        # But keep the current parameter even if others are unmapped
-        # Filter out any keys that correspond to unmapped parameters
-        # Note: unmapped_dict contains the unmapped parameter names, not filter keys
-        # So we need to check if any mapped filters correspond to unmapped params
         
         # If no filters were created, return 0
         if not filter_dict:
@@ -175,9 +348,29 @@ async def _count_contacts_for_parameter(
             logger.warning("Invalid filter parameters for %s: %s", param_name, exc)
             return 0
         
+        # Check cache before querying
+        cache_key = _generate_count_cache_key(filters)
+        cached_count = await query_cache.get("apollo_count", cache_key)
+        if cached_count is not None:
+            logger.debug("Cache hit for parameter %s: count=%d", param_name, cached_count)
+            # Return cache hit indicator in a way that can be tracked
+            # We'll use a special return value or track separately
+            return int(cached_count)
+        
         # Count contacts matching ALL filters (contextual count)
         count_response = await contacts_service.count_contacts(session, filters)
-        return count_response.count
+        count = count_response.count
+        
+        # Cache the result (cache all results, including 0, to avoid re-querying)
+        await query_cache.set(
+            "apollo_count",
+            count,
+            ttl=APOLLO_QUERY_CACHE_TTL,
+            cache_key=cache_key,
+        )
+        logger.debug("Cached count for parameter %s: count=%d", param_name, count)
+        
+        return count
         
     except Exception as exc:
         logger.warning("Error counting contacts for parameter %s: %s", param_name, exc)
@@ -190,6 +383,8 @@ async def _count_contacts_for_value(
     single_value: str,
     all_apollo_params: dict[str, list[str]],
     apollo_service: ApolloAnalysisService,
+    base_filter_dict: Optional[dict] = None,
+    base_unmapped_dict: Optional[dict] = None,
 ) -> int:
     """
     Count contacts matching a specific Apollo parameter with a single value,
@@ -207,6 +402,8 @@ async def _count_contacts_for_value(
         single_value: Single parameter value
         all_apollo_params: All parameters from the Apollo URL (for contextual filtering)
         apollo_service: Apollo analysis service for mapping
+        base_filter_dict: Optional pre-computed base filter dictionary (for optimization)
+        base_unmapped_dict: Optional pre-computed unmapped parameters dictionary
         
     Returns:
         Count of contacts matching this parameter value within the context of all other filters, or 0 if cannot be mapped
@@ -215,90 +412,87 @@ async def _count_contacts_for_value(
     if param_name in ("page", "sortByField", "sortAscending"):
         return 0
     
-    # Identify exclusion parameters
-    exclusion_params = {
-        "personNotLocations[]",
-        "organizationNotLocations[]",
-        "organizationNotIndustryTagIds[]",
-        "personNotTitles[]",
-        "qNotOrganizationKeywordTags[]",
-    }
-    
     try:
-        # For exclusion filters, we need special handling
-        # Since all contacts in the filtered set are already excluded by all exclusion values,
-        # the count for each exclusion value should be the same as the parameter count
-        # (all contacts in the filtered set are excluded by each value)
-        if param_name in exclusion_params:
-            # For exclusion filters, use ALL filters (including all exclusion values)
-            # This gives us the count within the filtered set, which is the same for all exclusion values
-            raw_params = {}
-            
-            # Copy all parameters (including all exclusion values) except pagination/sorting parameters
-            for key, values in all_apollo_params.items():
-                if key not in ("page", "sortByField", "sortAscending"):
-                    raw_params[key] = values
+        # Use pre-computed base filters if available, otherwise compute them
+        if base_filter_dict is not None and base_unmapped_dict is not None:
+            # Reuse pre-computed filters
+            filter_dict, unmapped_dict = _build_filter_from_base(
+                base_filter_dict,
+                base_unmapped_dict,
+                param_name,
+                param_value=single_value,
+                all_apollo_params=all_apollo_params,
+                apollo_service=apollo_service,
+            )
         else:
-            # For inclusion filters, use standard logic: all other filters + current parameter with specific value
-            raw_params = {}
+            # Fallback to original logic if base filters not provided
+            # Identify exclusion parameters
+            exclusion_params = {
+                "personNotLocations[]",
+                "organizationNotLocations[]",
+                "organizationNotIndustryTagIds[]",
+                "personNotTitles[]",
+                "qNotOrganizationKeywordTags[]",
+            }
             
-            # Copy all parameters except the current one and pagination/sorting parameters
-            for key, values in all_apollo_params.items():
-                if key != param_name and key not in ("page", "sortByField", "sortAscending"):
-                    raw_params[key] = values
+            # For exclusion filters, we need special handling
+            if param_name in exclusion_params:
+                # For exclusion filters, use ALL filters (including all exclusion values)
+                raw_params = {}
+                for key, values in all_apollo_params.items():
+                    if key not in ("page", "sortByField", "sortAscending"):
+                        raw_params[key] = values
+            else:
+                # For inclusion filters, use standard logic: all other filters + current parameter with specific value
+                raw_params = {}
+                for key, values in all_apollo_params.items():
+                    if key != param_name and key not in ("page", "sortByField", "sortAscending"):
+                        raw_params[key] = values
+                raw_params[param_name] = [single_value]
             
-            # Add the current parameter with only the specific value
-            raw_params[param_name] = [single_value]
-        
-        # Handle special cases for range parameters that need direct filter creation
-        if param_name == "organizationNumEmployeesRanges[]":
-            # Value format: "11,50" (min,max)
-            parts = single_value.split(",")
-            if len(parts) == 2:
+            # Handle special cases for range parameters
+            if param_name == "organizationNumEmployeesRanges[]":
+                parts = single_value.split(",")
+                if len(parts) == 2:
+                    try:
+                        min_val = int(parts[0].strip())
+                        max_val = int(parts[1].strip())
+                        other_filter_dict, other_unmapped_dict = apollo_service.map_to_contact_filters(
+                            {k: v for k, v in raw_params.items() if k != param_name},
+                            include_unmapped=True
+                        )
+                        other_filter_dict["employees_min"] = min_val
+                        other_filter_dict["employees_max"] = max_val
+                        filters = ContactFilterParams.model_validate(other_filter_dict)
+                        count_response = await contacts_service.count_contacts(session, filters)
+                        return count_response.count
+                    except (ValueError, ValidationError) as exc:
+                        logger.warning("Invalid employee range format %s: %s", single_value, exc)
+                        return 0
+                return 0
+            
+            if param_name in ("revenueRange[min]", "revenueRange[max]"):
                 try:
-                    min_val = int(parts[0].strip())
-                    max_val = int(parts[1].strip())
-                    # Map all other parameters first
+                    value_int = int(single_value)
                     other_filter_dict, other_unmapped_dict = apollo_service.map_to_contact_filters(
                         {k: v for k, v in raw_params.items() if k != param_name},
                         include_unmapped=True
                     )
-                    # Add the employee range filters
-                    other_filter_dict["employees_min"] = min_val
-                    other_filter_dict["employees_max"] = max_val
+                    if param_name == "revenueRange[min]":
+                        other_filter_dict["annual_revenue_min"] = value_int
+                    else:
+                        other_filter_dict["annual_revenue_max"] = value_int
                     filters = ContactFilterParams.model_validate(other_filter_dict)
                     count_response = await contacts_service.count_contacts(session, filters)
                     return count_response.count
                 except (ValueError, ValidationError) as exc:
-                    logger.warning("Invalid employee range format %s: %s", single_value, exc)
+                    logger.warning("Invalid revenue range value %s: %s", single_value, exc)
                     return 0
-            return 0
-        
-        # For revenue ranges, they come as separate parameters
-        if param_name in ("revenueRange[min]", "revenueRange[max]"):
-            try:
-                value_int = int(single_value)
-                # Map all other parameters first
-                other_filter_dict, other_unmapped_dict = apollo_service.map_to_contact_filters(
-                    {k: v for k, v in raw_params.items() if k != param_name},
-                    include_unmapped=True
-                )
-                # Add the revenue filter
-                if param_name == "revenueRange[min]":
-                    other_filter_dict["annual_revenue_min"] = value_int
-                else:  # revenueRange[max]
-                    other_filter_dict["annual_revenue_max"] = value_int
-                filters = ContactFilterParams.model_validate(other_filter_dict)
-                count_response = await contacts_service.count_contacts(session, filters)
-                return count_response.count
-            except (ValueError, ValidationError) as exc:
-                logger.warning("Invalid revenue range value %s: %s", single_value, exc)
-                return 0
-        
-        # Map Apollo parameters to contact filters (with unmapped tracking)
-        filter_dict, unmapped_dict = apollo_service.map_to_contact_filters(
-            raw_params, include_unmapped=True
-        )
+            
+            # Map Apollo parameters to contact filters
+            filter_dict, unmapped_dict = apollo_service.map_to_contact_filters(
+                raw_params, include_unmapped=True
+            )
         
         # If the current parameter is unmapped, return 0
         if param_name in unmapped_dict:
@@ -315,9 +509,27 @@ async def _count_contacts_for_value(
             logger.warning("Invalid filter parameters for %s=%s: %s", param_name, single_value, exc)
             return 0
         
+        # Check cache before querying
+        cache_key = _generate_count_cache_key(filters)
+        cached_count = await query_cache.get("apollo_count", cache_key)
+        if cached_count is not None:
+            logger.debug("Cache hit for parameter %s=%s: count=%d", param_name, single_value, cached_count)
+            return int(cached_count)
+        
         # Count contacts matching ALL filters (contextual count)
         count_response = await contacts_service.count_contacts(session, filters)
-        return count_response.count
+        count = count_response.count
+        
+        # Cache the result (cache all results, including 0, to avoid re-querying)
+        await query_cache.set(
+            "apollo_count",
+            count,
+            ttl=APOLLO_QUERY_CACHE_TTL,
+            cache_key=cache_key,
+        )
+        logger.debug("Cached count for parameter %s=%s: count=%d", param_name, single_value, count)
+        
+        return count
         
     except Exception as exc:
         logger.warning("Error counting contacts for parameter %s=%s: %s", param_name, single_value, exc)
@@ -570,10 +782,28 @@ async def analyze_apollo_url_with_counts(
         )
         
         # Step 3: Collect all count tasks first, then execute in parallel
-        # This converts sequential execution (100+ queries) to parallel execution (batches of 20)
-        param_count_tasks = []
-        value_count_tasks = []
+        # Combined approach: single task list with metadata for better parallelization
+        # Optimizations: skip redundant queries for single-value params and exclusion params
+        all_count_tasks = []  # Combined list of all count tasks
+        task_metadata = []  # Metadata for each task: {"type": "param"|"value", "param_index": int, "value_index": int}
         param_info_list = []  # Store parameter metadata for result assembly
+        
+        # Track query reduction metrics
+        original_query_count = 0
+        skipped_param_queries = 0
+        skipped_exclusion_value_queries = 0
+        
+        # Identify exclusion parameters
+        exclusion_params = {
+            "personNotLocations[]",
+            "organizationNotLocations[]",
+            "organizationNotIndustryTagIds[]",
+            "personNotTitles[]",
+            "qNotOrganizationKeywordTags[]",
+        }
+        
+        param_task_index = 0
+        value_task_index = 0
         
         for category in result.categories:
             for param in category.parameters:
@@ -584,13 +814,45 @@ async def analyze_apollo_url_with_counts(
                 # Convert Tag IDs to industry names if applicable
                 converted_values = _convert_industry_tagids_to_names(param.name, param.values)
                 
-                # Create task for parameter count
-                param_task = _count_contacts_for_parameter(
-                    session, param.name, param.values, all_apollo_params, service
-                )
-                param_count_tasks.append(param_task)
+                is_single_value = len(param.values) == 1
+                is_exclusion_param = param.name in exclusion_params
                 
-                # Create tasks for each value count
+                # Optimization: Skip parameter-level query for single-value parameters
+                # The value count will be the same as parameter count
+                skip_param_query = is_single_value
+                param_task_index_for_info = None
+                
+                if not skip_param_query:
+                    # Create task for parameter count (with pre-computed base filters)
+                    param_task = _count_contacts_for_parameter(
+                        session, param.name, param.values, all_apollo_params, service,
+                        base_filter_dict=base_filter_dict,
+                        base_unmapped_dict=base_unmapped_dict,
+                    )
+                    all_count_tasks.append(param_task)
+                    task_metadata.append({
+                        "type": "param",
+                        "param_index": param_task_index,
+                        "value_index": None,
+                    })
+                    param_task_index_for_info = param_task_index
+                    param_task_index += 1
+                    original_query_count += 1
+                else:
+                    skipped_param_queries += 1
+                    original_query_count += 1  # Count as if we would have queried
+                
+                # Optimization: For exclusion params, all values have same count
+                # Execute parameter count once, reuse for all values
+                if is_exclusion_param and not skip_param_query:
+                    # We'll reuse the parameter count for all values
+                    skip_value_queries = True
+                    skipped_exclusion_value_queries += len(param.values)
+                    original_query_count += len(param.values)  # Count as if we would have queried
+                else:
+                    skip_value_queries = False
+                
+                # Create tasks for each value count (with pre-computed base filters)
                 value_tasks_for_param = []
                 value_metadata = []  # Store metadata for each value
                 for original_value in param.values:
@@ -598,14 +860,27 @@ async def analyze_apollo_url_with_counts(
                     converted_single = _convert_industry_tagids_to_names(param.name, [original_value])
                     display_value = converted_single[0] if converted_single else original_value
                     
-                    # Create task for value count
+                    if skip_value_queries:
+                        # Skip value query - will reuse parameter count
+                        value_metadata.append(display_value)
+                        continue
+                    
+                    # Create task for value count (with pre-computed base filters)
                     value_task = _count_contacts_for_value(
-                        session, param.name, original_value, all_apollo_params, service
+                        session, param.name, original_value, all_apollo_params, service,
+                        base_filter_dict=base_filter_dict,
+                        base_unmapped_dict=base_unmapped_dict,
                     )
+                    all_count_tasks.append(value_task)
+                    task_metadata.append({
+                        "type": "value",
+                        "param_index": param_task_index_for_info if param_task_index_for_info is not None else (param_task_index - 1),
+                        "value_index": value_task_index,
+                    })
                     value_tasks_for_param.append(value_task)
                     value_metadata.append(display_value)
-                
-                value_count_tasks.extend(value_tasks_for_param)
+                    value_task_index += 1
+                    original_query_count += 1
                 
                 # Store metadata for result assembly
                 param_info_list.append({
@@ -614,20 +889,55 @@ async def analyze_apollo_url_with_counts(
                     "converted_values": converted_values,
                     "value_metadata": value_metadata,
                     "value_task_count": len(value_tasks_for_param),
+                    "param_task_index": param_task_index_for_info,
+                    "value_task_start_index": value_task_index - len(value_tasks_for_param) if value_tasks_for_param else None,
+                    "skip_param_query": skip_param_query,
+                    "skip_value_queries": skip_value_queries,
+                    "is_exclusion_param": is_exclusion_param,
                 })
         
-        # Execute all count tasks in parallel batches
+        # Execute all count tasks in parallel batches with higher concurrency
+        max_concurrent = settings.APOLLO_COUNT_MAX_CONCURRENT
         logger.info(
-            "Executing %d parameter counts and %d value counts in parallel batches (max 20 concurrent)",
-            len(param_count_tasks),
-            len(value_count_tasks),
+            "Executing %d total count tasks in parallel batches (max %d concurrent)",
+            len(all_count_tasks),
+            max_concurrent,
         )
         
-        # Execute parameter counts in parallel
-        param_counts = await _batch_execute_tasks(param_count_tasks, max_concurrent=20)
+        start_time = time.time()
         
-        # Execute value counts in parallel
-        value_counts = await _batch_execute_tasks(value_count_tasks, max_concurrent=20)
+        # Execute all tasks in single batch
+        all_results = await _batch_execute_tasks(all_count_tasks, max_concurrent=max_concurrent)
+        
+        execution_time = time.time() - start_time
+        actual_query_count = len(all_count_tasks)
+        reduced_query_count = original_query_count - actual_query_count
+        reduction_percentage = (reduced_query_count / original_query_count * 100) if original_query_count > 0 else 0
+        
+        logger.info(
+            "Completed %d count tasks in %.2f seconds (avg %.2f ms per task)",
+            actual_query_count,
+            execution_time,
+            (execution_time * 1000) / actual_query_count if actual_query_count > 0 else 0,
+        )
+        logger.info(
+            "Query reduction: original=%d actual=%d reduced=%d (%.1f%%) skipped_param=%d skipped_exclusion_values=%d",
+            original_query_count,
+            actual_query_count,
+            reduced_query_count,
+            reduction_percentage,
+            skipped_param_queries,
+            skipped_exclusion_value_queries,
+        )
+        
+        # Separate results into parameter and value counts using metadata
+        param_counts = []
+        value_counts = []
+        for i, metadata in enumerate(task_metadata):
+            if metadata["type"] == "param":
+                param_counts.append(all_results[i])
+            else:
+                value_counts.append(all_results[i])
         
         # Step 4: Assemble results using the collected metadata
         converted_categories = []
@@ -671,19 +981,64 @@ async def analyze_apollo_url_with_counts(
             if category.name in category_params:
                 for param_info in category_params[category.name]["params"]:
                     param = param_info["param"]
+                    skip_param_query = param_info.get("skip_param_query", False)
+                    skip_value_queries = param_info.get("skip_value_queries", False)
                     
                     # Get parameter count
-                    param_count = param_counts[param_count_index]
-                    param_count_index += 1
+                    if skip_param_query:
+                        # For single-value params, parameter count = value count (get from value results)
+                        # We need to get the first (and only) value count
+                        if param_info.get("value_task_start_index") is not None:
+                            param_count = value_counts[param_info["value_task_start_index"]]
+                        else:
+                            # Fallback: use first value count if available
+                            param_count = value_counts[value_count_index] if value_count_index < len(value_counts) else 0
+                    else:
+                        # Normal case: get parameter count from param_counts
+                        if param_info.get("param_task_index") is not None and param_info["param_task_index"] < len(param_counts):
+                            param_count = param_counts[param_info["param_task_index"]]
+                        else:
+                            param_count = param_counts[param_count_index] if param_count_index < len(param_counts) else 0
+                            param_count_index += 1
                     
                     # Get value counts for this parameter
                     value_counts_for_param = []
-                    for display_value in param_info["value_metadata"]:
-                        value_count = value_counts[value_count_index]
-                        value_count_index += 1
-                        value_counts_for_param.append(
-                            ParameterValueWithCount(value=display_value, count=value_count)
-                        )
+                    if skip_value_queries:
+                        # For exclusion params, all values have same count as parameter count
+                        for display_value in param_info["value_metadata"]:
+                            value_counts_for_param.append(
+                                ParameterValueWithCount(value=display_value, count=param_count)
+                            )
+                    elif skip_param_query:
+                        # For single-value params, value count = parameter count (already set above)
+                        for display_value in param_info["value_metadata"]:
+                            value_counts_for_param.append(
+                                ParameterValueWithCount(value=display_value, count=param_count)
+                            )
+                        # Skip the value count we already used
+                        if param_info.get("value_task_start_index") is not None:
+                            value_count_index = param_info["value_task_start_index"] + 1
+                    else:
+                        # Normal case: get value counts from value_counts
+                        start_idx = param_info.get("value_task_start_index")
+                        if start_idx is not None:
+                            for i, display_value in enumerate(param_info["value_metadata"]):
+                                if start_idx + i < len(value_counts):
+                                    value_count = value_counts[start_idx + i]
+                                else:
+                                    value_count = value_counts[value_count_index] if value_count_index < len(value_counts) else 0
+                                    value_count_index += 1
+                                value_counts_for_param.append(
+                                    ParameterValueWithCount(value=display_value, count=value_count)
+                                )
+                        else:
+                            # Fallback: use sequential indexing
+                            for display_value in param_info["value_metadata"]:
+                                value_count = value_counts[value_count_index] if value_count_index < len(value_counts) else 0
+                                value_count_index += 1
+                                value_counts_for_param.append(
+                                    ParameterValueWithCount(value=display_value, count=value_count)
+                                )
                     
                     converted_params.append(
                         ParameterDetailWithCount(
@@ -914,7 +1269,6 @@ async def search_contacts_from_apollo_url(
         
         if cursor_token:
             try:
-                from app.utils.cursor import decode_offset_cursor
                 resolved_offset = decode_offset_cursor(cursor_token)
                 logger.debug("Decoded cursor token: cursor=%s decoded_offset=%d", cursor_token, resolved_offset)
             except ValueError as exc:

@@ -1,15 +1,18 @@
 """Endpoints supporting contact and company export workflows."""
 
+import io
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_admin, get_current_user
 from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models.exports import ExportStatus, ExportType
+from app.models.exports import ExportStatus, ExportType, UserExport
 from app.models.user import User
 from app.schemas.exports import (
     CompanyExportRequest,
@@ -99,8 +102,6 @@ async def create_contact_export(
             logger.exception("Failed to generate CSV: export_id=%s", export.export_id)
             # Update export status to failed
             try:
-                from sqlalchemy import select
-                from app.models.exports import UserExport
                 stmt = select(UserExport).where(UserExport.export_id == export.export_id)
                 result = await session.execute(stmt)
                 failed_export = result.scalar_one_or_none()
@@ -205,7 +206,6 @@ async def download_export(
         )
     
     # Check if export has expired
-    from datetime import datetime, timezone
     if export.expires_at and export.expires_at < datetime.now(timezone.utc):
         logger.warning("Export expired: export_id=%s expires_at=%s", export_id, export.expires_at)
         raise HTTPException(
@@ -236,9 +236,6 @@ async def download_export(
     if s3_service.is_s3_key(export.file_path):
         # Download from S3 and stream to user
         try:
-            from fastapi.responses import StreamingResponse
-            import io
-            
             s3_key = export.file_path
             # Extract key from full S3 URL if needed
             if s3_key.startswith("https://"):
@@ -360,8 +357,6 @@ async def create_company_export(
             logger.exception("Failed to generate CSV: export_id=%s", export.export_id)
             # Update export status to failed
             try:
-                from sqlalchemy import select
-                from app.models.exports import UserExport
                 stmt = select(UserExport).where(UserExport.export_id == export.export_id)
                 result = await session.execute(stmt)
                 failed_export = result.scalar_one_or_none()

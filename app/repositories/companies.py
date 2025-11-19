@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Sequence
 
-from sqlalchemy import Select, and_, cast, distinct, func, or_, select, true
+from sqlalchemy import Select, and_, cast, distinct, func, or_, select, text, true
 from sqlalchemy.types import Text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -623,7 +623,6 @@ class CompanyRepository(AsyncRepository[Company]):
             dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
             if dialect_name == "postgresql":
                 try:
-                    from sqlalchemy import text
                     result = await session.execute(
                         text("SELECT COALESCE(reltuples::bigint, 0) FROM pg_class WHERE relname = 'companies'")
                     )

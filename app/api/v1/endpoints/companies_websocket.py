@@ -12,7 +12,9 @@ from app.api.deps import get_current_user_websocket
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import AsyncSessionLocal
+from app.models.companies import Company, CompanyMetadata
 from app.models.user import User
+from app.repositories.user import UserProfileRepository
 from app.schemas.companies import (
     CompanyCreate,
     CompanyDetail,
@@ -239,12 +241,9 @@ def _normalize_array_values(values: list[Any]) -> list[str]:
 
 async def _check_write_permission(websocket: WebSocket, request: CompanyWebSocketRequest, user: User) -> bool:
     """Check if user has permission to perform write operations."""
-    from app.repositories.user import UserProfileRepository
-    
     try:
         # Check if user is admin
         async with AsyncSessionLocal() as session:
-            from app.repositories.user import UserProfileRepository
             profile_repo = UserProfileRepository()
             profile = await profile_repo.get_by_user_id(session, user.id)
             user_role = profile.role if profile and profile.role else "Member"
@@ -658,7 +657,6 @@ async def _handle_list_company_names(websocket: WebSocket, request: CompanyWebSo
             filters = CompanyFilterParams.model_validate(filter_data)
             params = AttributeListParams.model_validate(request.data)
             
-            from app.models.companies import Company, CompanyMetadata
             values = await companies_service.list_attribute_values(
                 session,
                 filters,
@@ -710,7 +708,6 @@ async def _handle_list_industries(websocket: WebSocket, request: CompanyWebSocke
             params = AttributeListParams.model_validate(request.data)
             separated = request.data.get("separated", False)
             
-            from app.models.companies import Company, CompanyMetadata
             column_factory = (
                 (lambda Company, CompanyMetadata: Company.industries)
                 if separated
@@ -776,7 +773,6 @@ async def _handle_list_keywords(websocket: WebSocket, request: CompanyWebSocketR
             params = AttributeListParams.model_validate(request.data)
             separated = request.data.get("separated", False)
             
-            from app.models.companies import Company, CompanyMetadata
             column_factory = (
                 (lambda Company, CompanyMetadata: Company.keywords)
                 if separated
@@ -842,7 +838,6 @@ async def _handle_list_technologies(websocket: WebSocket, request: CompanyWebSoc
             params = AttributeListParams.model_validate(request.data)
             separated = request.data.get("separated", False)
             
-            from app.models.companies import Company, CompanyMetadata
             column_factory = (
                 (lambda Company, CompanyMetadata: Company.technologies)
                 if separated
@@ -907,7 +902,6 @@ async def _handle_list_company_cities(websocket: WebSocket, request: CompanyWebS
             filters = CompanyFilterParams.model_validate(filter_data)
             params = AttributeListParams.model_validate(request.data)
             
-            from app.models.companies import Company, CompanyMetadata
             values = await companies_service.list_attribute_values(
                 session,
                 filters,
@@ -958,7 +952,6 @@ async def _handle_list_company_states(websocket: WebSocket, request: CompanyWebS
             filters = CompanyFilterParams.model_validate(filter_data)
             params = AttributeListParams.model_validate(request.data)
             
-            from app.models.companies import Company, CompanyMetadata
             values = await companies_service.list_attribute_values(
                 session,
                 filters,
@@ -1009,7 +1002,6 @@ async def _handle_list_company_countries(websocket: WebSocket, request: CompanyW
             filters = CompanyFilterParams.model_validate(filter_data)
             params = AttributeListParams.model_validate(request.data)
             
-            from app.models.companies import Company, CompanyMetadata
             values = await companies_service.list_attribute_values(
                 session,
                 filters,
@@ -1060,7 +1052,6 @@ async def _handle_list_company_addresses(websocket: WebSocket, request: CompanyW
             filters = CompanyFilterParams.model_validate(filter_data)
             params = AttributeListParams.model_validate(request.data)
             
-            from app.models.companies import Company, CompanyMetadata
             values = await companies_service.list_attribute_values(
                 session,
                 filters,

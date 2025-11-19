@@ -1687,7 +1687,6 @@ class ContactRepository(AsyncRepository[Contact]):
             dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
             if dialect_name == "postgresql":
                 try:
-                    from sqlalchemy import text
                     result = await session.execute(
                         text("SELECT COALESCE(reltuples::bigint, 0) FROM pg_class WHERE relname = 'contacts'")
                     )
@@ -2898,8 +2897,6 @@ class ContactRepository(AsyncRepository[Contact]):
         Returns:
             SQLAlchemy expression representing normalized title
         """
-        from sqlalchemy import text
-        
         # Use raw SQL text for reliable PostgreSQL array sorting
         # This creates: array_to_string(ARRAY(SELECT unnest(string_to_array(lower(column), ' ')) ORDER BY 1), ' ')
         # The text() expression allows us to reference the column properly
@@ -2960,8 +2957,6 @@ class ContactRepository(AsyncRepository[Contact]):
         # Normalize the database column using SQL and use VALUES clause for exact matching
         # For PostgreSQL, use array functions to normalize and VALUES clause for efficient comparison
         if dialect == "postgresql":
-            from sqlalchemy import text
-            
             # Get table and column names for proper SQL reference
             table_name = column.table.name if hasattr(column, 'table') and hasattr(column.table, 'name') else 'contacts'
             column_name = column.name if hasattr(column, 'name') else 'title'
@@ -3084,8 +3079,6 @@ class ContactRepository(AsyncRepository[Contact]):
         # Normalize the database column using SQL and use VALUES clause for exact matching
         # For PostgreSQL, use array functions to normalize and VALUES clause for efficient comparison
         if dialect == "postgresql":
-            from sqlalchemy import text
-            
             # Get table and column names for proper SQL reference
             table_name = column.table.name if hasattr(column, 'table') and hasattr(column.table, 'name') else 'contacts'
             column_name = column.name if hasattr(column, 'name') else 'title'

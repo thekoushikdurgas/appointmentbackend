@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -69,8 +70,6 @@ async def override_get_db(db_session: AsyncSession) -> AsyncGenerator[None, None
 @pytest_asyncio.fixture(autouse=True)
 async def override_get_current_user(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     """Override get_current_user to return a test user for all tests."""
-    from uuid import uuid4
-    
     # Create a test user
     test_user = User(
         id=str(uuid4()),

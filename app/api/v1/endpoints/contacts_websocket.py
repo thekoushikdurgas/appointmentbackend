@@ -9,6 +9,7 @@ from typing import Any, Iterable, List, Optional
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_websocket
@@ -16,6 +17,9 @@ from app.repositories.user import UserProfileRepository
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import AsyncSessionLocal
+from app.models.companies import Company, CompanyMetadata
+from app.models.contacts import Contact, ContactMetadata
+from app.models.imports import ImportJobStatus
 from app.models.user import User
 from app.schemas.common import CountResponse, CursorPage, UuidListResponse
 from app.schemas.contacts import ContactCreate, ContactDetail, ContactListItem, ContactSimpleItem
@@ -594,9 +598,6 @@ async def _handle_field_action(
 
 async def _handle_get_titles_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_titles action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -607,9 +608,6 @@ async def _handle_get_titles_action(websocket: WebSocket, request: ContactsWebSo
 
 async def _handle_get_companies_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_companies action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -620,10 +618,6 @@ async def _handle_get_companies_action(websocket: WebSocket, request: ContactsWe
 
 async def _handle_get_industries_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_industries action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    from sqlalchemy import func
-    
     separated = request.data.get("separated", False)
     column_factory = (
         (lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.industries)
@@ -636,10 +630,6 @@ async def _handle_get_industries_action(websocket: WebSocket, request: ContactsW
 
 async def _handle_get_keywords_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_keywords action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    from sqlalchemy import func
-    
     separated = request.data.get("separated", False)
     column_factory = (
         (lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.keywords)
@@ -652,10 +642,6 @@ async def _handle_get_keywords_action(websocket: WebSocket, request: ContactsWeb
 
 async def _handle_get_technologies_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_technologies action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    from sqlalchemy import func
-    
     separated = request.data.get("separated", False)
     column_factory = (
         (lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.technologies)
@@ -668,9 +654,6 @@ async def _handle_get_technologies_action(websocket: WebSocket, request: Contact
 
 async def _handle_get_company_addresses_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_company_addresses action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -681,9 +664,6 @@ async def _handle_get_company_addresses_action(websocket: WebSocket, request: Co
 
 async def _handle_get_contact_addresses_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_contact_addresses action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -694,9 +674,6 @@ async def _handle_get_contact_addresses_action(websocket: WebSocket, request: Co
 
 async def _handle_get_cities_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_cities action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -707,9 +684,6 @@ async def _handle_get_cities_action(websocket: WebSocket, request: ContactsWebSo
 
 async def _handle_get_states_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_states action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -720,9 +694,6 @@ async def _handle_get_states_action(websocket: WebSocket, request: ContactsWebSo
 
 async def _handle_get_countries_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_countries action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -733,9 +704,6 @@ async def _handle_get_countries_action(websocket: WebSocket, request: ContactsWe
 
 async def _handle_get_company_cities_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_company_cities action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -746,9 +714,6 @@ async def _handle_get_company_cities_action(websocket: WebSocket, request: Conta
 
 async def _handle_get_company_states_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_company_states action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -759,9 +724,6 @@ async def _handle_get_company_states_action(websocket: WebSocket, request: Conta
 
 async def _handle_get_company_countries_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
     """Handle the get_company_countries action."""
-    from app.models.companies import Company, CompanyMetadata
-    from app.models.contacts import Contact, ContactMetadata
-    
     await _handle_field_action(
         websocket,
         request,
@@ -854,7 +816,6 @@ async def _handle_upload_contacts_csv_action(websocket: WebSocket, request: Cont
             except Exception as exc:
                 logger.exception("Failed to enqueue import job: job_id=%s", job.job_id)
                 temp_path.unlink(missing_ok=True)
-                from app.models.imports import ImportJobStatus
                 await import_service.set_status(
                     session,
                     job.job_id,

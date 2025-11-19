@@ -18,8 +18,9 @@ from app.models.user import User
 from app.schemas.common import CountResponse, CursorPage, UuidListResponse
 from app.schemas.companies import CompanyCreate, CompanyDetail, CompanyListItem, CompanyUpdate
 from app.schemas.contacts import ContactListItem
-from app.schemas.filters import AttributeListParams, CompanyFilterParams
+from app.schemas.filters import AttributeListParams, CompanyContactFilterParams, CompanyFilterParams
 from app.services.companies_service import CompaniesService
+from app.services.contacts_service import ContactsService
 from app.utils.cursor import decode_offset_cursor
 
 
@@ -604,8 +605,6 @@ async def retrieve_company_by_uuid(
 
 async def resolve_company_contact_filters(request: Request) -> "CompanyContactFilterParams":
     """Build company contact filter parameters from query string."""
-    from app.schemas.filters import CompanyContactFilterParams
-    
     query_params = request.query_params
     data = dict(query_params)
     multi_value_keys = (
@@ -638,10 +637,6 @@ async def list_company_contacts(
     current_user: User = Depends(get_current_user),
 ) -> CursorPage[ContactListItem]:
     """Return a paginated list of contacts for a specific company."""
-    from app.schemas.filters import CompanyContactFilterParams
-    from app.services.contacts_service import ContactsService
-    from app.utils.cursor import decode_offset_cursor
-    
     # Resolve pagination for company contacts
     if limit is not None:
         page_limit = limit
@@ -707,9 +702,6 @@ async def count_company_contacts(
     current_user: User = Depends(get_current_user),
 ) -> CountResponse:
     """Return the total count of contacts for a specific company matching filters."""
-    from app.schemas.filters import CompanyContactFilterParams
-    from app.services.contacts_service import ContactsService
-    
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
     logger.info(
         "Counting contacts for company %s with filters=%s",
@@ -741,9 +733,6 @@ async def get_company_contact_uuids(
     current_user: User = Depends(get_current_user),
 ) -> UuidListResponse:
     """Return contact UUIDs for a specific company that match the provided filters."""
-    from app.schemas.filters import CompanyContactFilterParams
-    from app.services.contacts_service import ContactsService
-    
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
     logger.info(
         "Getting contact UUIDs for company %s with filters=%s limit=%s",
@@ -776,9 +765,6 @@ async def _company_contact_attribute_endpoint(
     attribute: str,
 ) -> List[str]:
     """Helper for company contact attribute endpoints."""
-    from app.schemas.filters import CompanyContactFilterParams
-    from app.services.contacts_service import ContactsService
-    
     logger.info(
         "Listing attribute %s for company %s contacts with filters=%s params=%s",
         attribute,

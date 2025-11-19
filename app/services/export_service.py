@@ -1,6 +1,7 @@
 """Service layer for managing contact export jobs."""
 
 import csv
+import io
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Sequence
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.models.companies import Company
 from app.models.exports import ExportStatus, ExportType, UserExport
 from app.repositories.companies import CompanyRepository
 from app.repositories.contacts import ContactRepository
@@ -89,7 +91,6 @@ class ExportService:
         logger.info("Generating CSV: export_id=%s contact_count=%d", export_id, len(contact_uuids))
         
         # Generate CSV in memory
-        import io
         csv_buffer = io.StringIO()
         
         # Define CSV fieldnames (all fields from contact, company, and metadata)
@@ -423,7 +424,6 @@ class ExportService:
         for company_uuid in company_uuids:
                 try:
                     # Get company with metadata using base_query
-                    from app.models.companies import Company
                     stmt, company_meta_alias = self.company_repo.base_query()
                     stmt = stmt.where(Company.uuid == company_uuid)
                     result = await session.execute(stmt)
@@ -588,7 +588,6 @@ class ExportService:
             logger.info("Deleted %d CSV files", deleted_count)
             
             # Optionally clean up expired export records
-            from datetime import datetime, timezone
             stmt = select(UserExport).where(
                 UserExport.expires_at < datetime.now(timezone.utc)
             )

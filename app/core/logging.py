@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
@@ -28,7 +27,6 @@ def setup_logging() -> None:
         level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
         format=settings.LOG_FORMAT,
         handlers=[
-            logging.StreamHandler(sys.stdout),
             logging.FileHandler(log_dir / "app.log"),
         ],
     )

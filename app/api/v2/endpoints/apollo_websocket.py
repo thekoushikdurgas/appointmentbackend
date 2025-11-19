@@ -19,6 +19,8 @@ from app.schemas.apollo import (
     ApolloWebSocketRequest,
     ApolloWebSocketResponse,
     MappingSummary,
+    ParameterCategory,
+    ParameterDetail,
     UnmappedCategory,
     UnmappedParameter,
 )
@@ -27,6 +29,7 @@ from app.schemas.contacts import ContactListItem, ContactSimpleItem
 from app.schemas.filters import ContactFilterParams
 from app.services.apollo_analysis_service import ApolloAnalysisService
 from app.services.contacts_service import ContactsService
+from app.utils.cursor import decode_offset_cursor
 from app.utils.industry_mapping import get_industry_names_from_ids
 
 router = APIRouter(prefix="/apollo", tags=["Apollo WebSocket"])
@@ -273,7 +276,6 @@ async def _handle_analyze_action(websocket: WebSocket, request: ApolloWebSocketR
             converted_params = []
             for param in category.parameters:
                 converted_values = _convert_industry_tagids_to_names(param.name, param.values)
-                from app.schemas.apollo import ParameterDetail
                 converted_params.append(
                     ParameterDetail(
                         name=param.name,
@@ -282,7 +284,6 @@ async def _handle_analyze_action(websocket: WebSocket, request: ApolloWebSocketR
                         category=param.category,
                     )
                 )
-            from app.schemas.apollo import ParameterCategory
             converted_categories.append(
                 ParameterCategory(
                     name=category.name,
@@ -382,7 +383,6 @@ async def _handle_search_contacts_action(websocket: WebSocket, request: ApolloWe
             
             if cursor_token:
                 try:
-                    from app.utils.cursor import decode_offset_cursor
                     resolved_offset = decode_offset_cursor(cursor_token)
                 except ValueError as exc:
                     await _send_error_response(
@@ -741,7 +741,6 @@ async def websocket_analyze_apollo_url(
                     converted_params = []
                     for param in category.parameters:
                         converted_values = _convert_industry_tagids_to_names(param.name, param.values)
-                        from app.schemas.apollo import ParameterDetail
                         converted_params.append(
                             ParameterDetail(
                                 name=param.name,
@@ -750,7 +749,6 @@ async def websocket_analyze_apollo_url(
                                 category=param.category,
                             )
                         )
-                    from app.schemas.apollo import ParameterCategory
                     converted_categories.append(
                         ParameterCategory(
                             name=category.name,
@@ -890,7 +888,6 @@ async def websocket_search_contacts_from_apollo_url(
                     
                     if cursor_token:
                         try:
-                            from app.utils.cursor import decode_offset_cursor
                             resolved_offset = decode_offset_cursor(cursor_token)
                         except ValueError as exc:
                             await _send_error_response(
