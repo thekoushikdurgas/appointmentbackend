@@ -341,11 +341,34 @@ class ContactRepository(AsyncRepository[Contact]):
         stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
         stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
         # Use trigram optimization for title column (has trigram index)
-        stmt = self._apply_multi_value_filter(
-            stmt, Contact.title, filters.title, 
-            dialect_name=dialect_name, 
-            use_trigram_optimization=True
+        # If normalize_title_column is True, use normalized title filter
+        logger.info(
+            "Checking normalize_title_column flag: title=%s normalize_title_column=%s type=%s",
+            filters.title,
+            filters.normalize_title_column,
+            type(filters.normalize_title_column).__name__,
         )
+        if filters.normalize_title_column:
+            logger.info(
+                "Applying normalized title filter: title=%s normalize_title_column=%s",
+                filters.title,
+                filters.normalize_title_column,
+            )
+            stmt = self._apply_normalized_title_filter(
+                stmt, Contact.title, filters.title,
+                dialect_name=dialect_name
+            )
+        else:
+            logger.warning(
+                "Using standard title filter (not normalized): title=%s normalize_title_column=%s (this may be incorrect if includeSimilarTitles=false)",
+                filters.title,
+                filters.normalize_title_column,
+            )
+            stmt = self._apply_multi_value_filter(
+                stmt, Contact.title, filters.title, 
+                dialect_name=dialect_name, 
+                use_trigram_optimization=True
+            )
         stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
         stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
         stmt = self._apply_multi_value_filter(stmt, company.name, filters.company)
@@ -667,11 +690,24 @@ class ContactRepository(AsyncRepository[Contact]):
         # Contact table filters
         stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
         stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
-        stmt = self._apply_multi_value_filter(
-            stmt, Contact.title, filters.title, 
-            dialect_name=dialect_name, 
-            use_trigram_optimization=True
-        )
+        # Use trigram optimization for title column (has trigram index)
+        # If normalize_title_column is True, use normalized title filter
+        if filters.normalize_title_column:
+            logger.info(
+                "_apply_contact_filters: Applying normalized title filter: title=%s normalize_title_column=%s",
+                filters.title,
+                filters.normalize_title_column,
+            )
+            stmt = self._apply_normalized_title_filter(
+                stmt, Contact.title, filters.title,
+                dialect_name=dialect_name
+            )
+        else:
+            stmt = self._apply_multi_value_filter(
+                stmt, Contact.title, filters.title, 
+                dialect_name=dialect_name, 
+                use_trigram_optimization=True
+            )
         stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
         stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
         stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
@@ -1265,12 +1301,24 @@ class ContactRepository(AsyncRepository[Contact]):
         # Contact-only filters (no EXISTS needed)
         stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name, dialect_name=dialect_name)
         stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name, dialect_name=dialect_name)
-        # Use trigram optimization for title column
-        stmt = self._apply_multi_value_filter(
-            stmt, Contact.title, filters.title, 
-            dialect_name=dialect_name, 
-            use_trigram_optimization=True
-        )
+        # Use trigram optimization for title column (has trigram index)
+        # If normalize_title_column is True, use normalized title filter
+        if filters.normalize_title_column:
+            logger.info(
+                "_apply_filters_with_exists: Applying normalized title filter: title=%s normalize_title_column=%s",
+                filters.title,
+                filters.normalize_title_column,
+            )
+            stmt = self._apply_normalized_title_filter(
+                stmt, Contact.title, filters.title,
+                dialect_name=dialect_name
+            )
+        else:
+            stmt = self._apply_multi_value_filter(
+                stmt, Contact.title, filters.title, 
+                dialect_name=dialect_name, 
+                use_trigram_optimization=True
+            )
         stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
         stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
         stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
@@ -2583,7 +2631,20 @@ class ContactRepository(AsyncRepository[Contact]):
         
         stmt = self._apply_multi_value_filter(stmt, Contact.first_name, filters.first_name)
         stmt = self._apply_multi_value_filter(stmt, Contact.last_name, filters.last_name)
-        stmt = self._apply_multi_value_filter(stmt, Contact.title, filters.title)
+        # Use trigram optimization for title column (has trigram index)
+        # If normalize_title_column is True, use normalized title filter
+        if filters.normalize_title_column:
+            logger.info(
+                "Applying normalized title filter in EXISTS query: title=%s normalize_title_column=%s",
+                filters.title,
+                filters.normalize_title_column,
+            )
+            stmt = self._apply_normalized_title_filter(
+                stmt, Contact.title, filters.title,
+                dialect_name=dialect_name
+            )
+        else:
+            stmt = self._apply_multi_value_filter(stmt, Contact.title, filters.title)
         stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority)
         stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
         stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
@@ -2737,6 +2798,172 @@ class ContactRepository(AsyncRepository[Contact]):
     def _split_filter_values(raw_value: str) -> list[str]:
         """Normalize comma-delimited filter strings into a list of tokens."""
         return [token.strip() for token in raw_value.split(",") if token.strip()]
+
+    @staticmethod
+    def _normalize_title_in_sql(column) -> Any:
+        """
+        Generate a SQL expression that normalizes a title column by:
+        1. Converting to lowercase
+        2. Splitting into words
+        3. Sorting words alphabetically
+        4. Joining back together
+        
+        This matches the Python normalization logic in ApolloAnalysisService._normalize_title()
+        
+        Uses PostgreSQL's array functions with text() for reliable sorting.
+        
+        Args:
+            column: SQLAlchemy column expression (e.g., Contact.title)
+            
+        Returns:
+            SQLAlchemy expression representing normalized title
+        """
+        from sqlalchemy import text
+        
+        # Use raw SQL text for reliable PostgreSQL array sorting
+        # This creates: array_to_string(ARRAY(SELECT unnest(string_to_array(lower(column), ' ')) ORDER BY 1), ' ')
+        # The text() expression allows us to reference the column properly
+        return text(
+            "array_to_string(ARRAY(SELECT unnest(string_to_array(lower(:col), ' ')) ORDER BY 1), ' ')"
+        ).bindparams(col=column)
+
+    def _apply_normalized_title_filter(
+        self,
+        stmt: Select,
+        column,
+        raw_value: str | None,
+        *,
+        dialect_name: str | None = None,
+        max_or_conditions: int = 50,
+    ) -> Select:
+        """
+        Apply title filter with column normalization.
+        
+        Normalizes both the search values (already normalized in Python) and the database
+        column before comparison. This ensures correct matching when includeSimilarTitles=false.
+        
+        Args:
+            stmt: SQLAlchemy select statement
+            column: Title column to filter (e.g., Contact.title)
+            raw_value: Comma-separated normalized title values
+            dialect_name: Database dialect name (e.g., 'postgresql')
+            max_or_conditions: Maximum number of OR conditions before using alternative approach
+            
+        Returns:
+            Modified select statement with normalized title filter applied
+        """
+        logger.info(
+            "Entering _apply_normalized_title_filter: raw_value=%s dialect=%s",
+            raw_value,
+            dialect_name,
+        )
+        
+        if raw_value is None:
+            logger.debug("Exiting _apply_normalized_title_filter: raw_value is None")
+            return stmt
+        
+        values = ContactRepository._split_filter_values(raw_value)
+        logger.debug(
+            "Split filter values: raw_value=%s split_values=%s count=%d",
+            raw_value,
+            values,
+            len(values),
+        )
+        
+        if not values:
+            logger.debug("Exiting _apply_normalized_title_filter: no values after split")
+            return stmt
+        
+        dialect = (dialect_name or "").lower()
+        logger.debug("Using dialect: %s", dialect)
+        
+        # Normalize the database column using SQL and use VALUES clause for exact matching
+        # For PostgreSQL, use array functions to normalize and VALUES clause for efficient comparison
+        if dialect == "postgresql":
+            from sqlalchemy import text
+            
+            # Get table and column names for proper SQL reference
+            table_name = column.table.name if hasattr(column, 'table') and hasattr(column.table, 'name') else 'contacts'
+            column_name = column.name if hasattr(column, 'name') else 'title'
+            
+            logger.info(
+                "Building normalized title filter: table=%s column=%s values=%s",
+                table_name,
+                column_name,
+                values,
+            )
+            
+            # Build VALUES clause with escaped normalized values
+            # Escape single quotes by doubling them (PostgreSQL escaping)
+            escaped_values = []
+            for value in values:
+                # Escape single quotes and backslashes for SQL safety
+                escaped = str(value).replace("\\", "\\\\").replace("'", "''")
+                escaped_values.append(f"('{escaped}')")
+                logger.debug("Escaped value: original=%s escaped=%s", value, escaped)
+            
+            values_clause = ", ".join(escaped_values)
+            logger.debug("VALUES clause: %s", values_clause)
+            
+            # Create EXISTS subquery with VALUES clause for exact matching
+            # This ensures proper column correlation because the column reference
+            # in the text() will be part of the outer query context
+            # Use exact equality (=) instead of similarity (%) for normalized titles
+            sql_template = (
+                f"EXISTS ("
+                f"  SELECT 1 FROM (VALUES {values_clause}) AS titles(val) "
+                f"  WHERE array_to_string(ARRAY(SELECT unnest(string_to_array(lower({table_name}.{column_name}), ' ')) ORDER BY 1), ' ') = titles.val::text"
+                f")"
+            )
+            
+            logger.info(
+                "Generated SQL for normalized title filter: table=%s column=%s sql=%s",
+                table_name,
+                column_name,
+                sql_template,
+            )
+            
+            exists_sql = text(sql_template)
+            
+            logger.info(
+                "Applied normalized title filter with VALUES clause: table=%s column=%s num_values=%d values=%s",
+                table_name,
+                column_name,
+                len(values),
+                values,
+            )
+            
+            # Apply the condition to the statement
+            result = stmt.where(exists_sql)
+            logger.debug("Exiting _apply_normalized_title_filter: filter applied successfully")
+            return result
+        else:
+            # For non-PostgreSQL, fallback to simple lowercase comparison
+            logger.warning(
+                "Using non-PostgreSQL fallback for normalized title filter: dialect=%s values=%s",
+                dialect,
+                values,
+            )
+            normalized_column = func.lower(column)
+            conditions = [normalized_column == value for value in values]
+            
+            if len(conditions) <= max_or_conditions:
+                logger.debug("Applying %d conditions directly", len(conditions))
+                return stmt.where(or_(*conditions))
+            else:
+                # Split into batches if exceeds max
+                logger.debug("Splitting %d conditions into batches", len(conditions))
+                batches = [values[i:i + max_or_conditions] for i in range(0, len(values), max_or_conditions)]
+                batch_conditions = []
+                for batch in batches:
+                    batch_conds = [normalized_column == value for value in batch]
+                    if batch_conds:
+                        batch_conditions.append(or_(*batch_conds))
+                if batch_conditions:
+                    logger.debug("Applied %d batch conditions", len(batch_conditions))
+                    return stmt.where(or_(*batch_conditions))
+                logger.debug("No batch conditions to apply")
+                return stmt
 
     @staticmethod
     def _apply_multi_value_filter(

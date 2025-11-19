@@ -1,5 +1,6 @@
 """Apollo.io URL Analysis API endpoints."""
 
+import asyncio
 from typing import Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -72,6 +73,44 @@ def _convert_industry_tagids_to_names(param_name: str, tag_ids: list[str]) -> li
                 tag_ids[:5],
             )
     return tag_ids
+
+
+async def _batch_execute_tasks(
+    tasks: list,
+    max_concurrent: int = 20,
+) -> list:
+    """
+    Execute async tasks in parallel batches to avoid overwhelming the database.
+    
+    Args:
+        tasks: List of async tasks (coroutines) to execute
+        max_concurrent: Maximum number of concurrent tasks per batch
+        
+    Returns:
+        List of results in the same order as tasks
+    """
+    if not tasks:
+        return []
+    
+    results = []
+    for i in range(0, len(tasks), max_concurrent):
+        batch = tasks[i:i + max_concurrent]
+        batch_results = await asyncio.gather(*batch, return_exceptions=True)
+        # Convert exceptions to 0 (for count queries, exceptions should return 0)
+        processed_results = [
+            0 if isinstance(r, Exception) else r for r in batch_results
+        ]
+        results.extend(processed_results)
+        logger.debug(
+            "Executed batch %d-%d of %d tasks: %d succeeded, %d failed",
+            i,
+            min(i + max_concurrent - 1, len(tasks) - 1),
+            len(tasks),
+            sum(1 for r in batch_results if not isinstance(r, Exception)),
+            sum(1 for r in batch_results if isinstance(r, Exception)),
+        )
+    
+    return results
 
 
 async def _count_contacts_for_parameter(
@@ -515,75 +554,148 @@ async def analyze_apollo_url_with_counts(
         # Exclude pagination and sorting parameters from filter context (they don't filter contacts)
         all_apollo_params = dict(result.raw_parameters)
         
-        # Step 3: Convert Tag IDs to industry names and build categories with counts
-        converted_categories = []
+        # Step 2.5: Pre-compute base filter mapping (cached for reuse)
+        # This avoids calling map_to_contact_filters 100+ times with similar parameters
+        base_raw_params = {
+            k: v for k, v in all_apollo_params.items()
+            if k not in ("page", "sortByField", "sortAscending")
+        }
+        base_filter_dict, base_unmapped_dict = service.map_to_contact_filters(
+            base_raw_params, include_unmapped=True
+        )
+        logger.debug(
+            "Pre-computed base filter mapping: mapped_params=%d unmapped_params=%d",
+            len(base_filter_dict),
+            len(base_unmapped_dict),
+        )
+        
+        # Step 3: Collect all count tasks first, then execute in parallel
+        # This converts sequential execution (100+ queries) to parallel execution (batches of 20)
+        param_count_tasks = []
+        value_count_tasks = []
+        param_info_list = []  # Store parameter metadata for result assembly
         
         for category in result.categories:
-            converted_params = []
-            category_count = 0
-            
             for param in category.parameters:
                 # Skip counting for pagination and sorting parameters
                 if param.name in ("page", "sortByField", "sortAscending"):
-                    # Still include them in the response but with count 0
+                    continue
+                
+                # Convert Tag IDs to industry names if applicable
+                converted_values = _convert_industry_tagids_to_names(param.name, param.values)
+                
+                # Create task for parameter count
+                param_task = _count_contacts_for_parameter(
+                    session, param.name, param.values, all_apollo_params, service
+                )
+                param_count_tasks.append(param_task)
+                
+                # Create tasks for each value count
+                value_tasks_for_param = []
+                value_metadata = []  # Store metadata for each value
+                for original_value in param.values:
+                    # Convert this single value to get the display value
+                    converted_single = _convert_industry_tagids_to_names(param.name, [original_value])
+                    display_value = converted_single[0] if converted_single else original_value
+                    
+                    # Create task for value count
+                    value_task = _count_contacts_for_value(
+                        session, param.name, original_value, all_apollo_params, service
+                    )
+                    value_tasks_for_param.append(value_task)
+                    value_metadata.append(display_value)
+                
+                value_count_tasks.extend(value_tasks_for_param)
+                
+                # Store metadata for result assembly
+                param_info_list.append({
+                    "category": category,
+                    "param": param,
+                    "converted_values": converted_values,
+                    "value_metadata": value_metadata,
+                    "value_task_count": len(value_tasks_for_param),
+                })
+        
+        # Execute all count tasks in parallel batches
+        logger.info(
+            "Executing %d parameter counts and %d value counts in parallel batches (max 20 concurrent)",
+            len(param_count_tasks),
+            len(value_count_tasks),
+        )
+        
+        # Execute parameter counts in parallel
+        param_counts = await _batch_execute_tasks(param_count_tasks, max_concurrent=20)
+        
+        # Execute value counts in parallel
+        value_counts = await _batch_execute_tasks(value_count_tasks, max_concurrent=20)
+        
+        # Step 4: Assemble results using the collected metadata
+        converted_categories = []
+        value_count_index = 0
+        param_count_index = 0
+        
+        # Group param_info_list by category
+        category_params = {}
+        for param_info in param_info_list:
+            category_name = param_info["category"].name
+            if category_name not in category_params:
+                category_params[category_name] = {
+                    "category": param_info["category"],
+                    "params": [],
+                }
+            category_params[category_name]["params"].append(param_info)
+        
+        # Build categories with counts
+        for category in result.categories:
+            converted_params = []
+            
+            # Handle pagination/sorting parameters first
+            for param in category.parameters:
+                if param.name in ("page", "sortByField", "sortAscending"):
                     converted_values = _convert_industry_tagids_to_names(param.name, param.values)
-                    value_counts = [
+                    value_counts_list = [
                         ParameterValueWithCount(value=val, count=0)
                         for val in converted_values
                     ]
                     converted_params.append(
                         ParameterDetailWithCount(
                             name=param.name,
-                            values=value_counts,
+                            values=value_counts_list,
                             description=param.description,
                             category=param.category,
                             count=0,
                         )
                     )
-                    continue
-                
-                # Convert Tag IDs to industry names if applicable
-                converted_values = _convert_industry_tagids_to_names(param.name, param.values)
-                
-                # Count contacts for this parameter (all values combined)
-                # Pass all_apollo_params for contextual counting (within filtered result set)
-                param_count = await _count_contacts_for_parameter(
-                    session, param.name, param.values, all_apollo_params, service
-                )
-                
-                # Count contacts for each individual value
-                # Iterate through original values and convert each one to match with converted_values
-                value_counts = []
-                for i, original_value in enumerate(param.values):
-                    # Convert this single value to get the display value
-                    converted_single = _convert_industry_tagids_to_names(param.name, [original_value])
-                    display_value = converted_single[0] if converted_single else original_value
-                    
-                    # Count using the original value (before conversion)
-                    # Pass all_apollo_params for contextual counting (within filtered result set)
-                    value_count = await _count_contacts_for_value(
-                        session, param.name, original_value, all_apollo_params, service
-                    )
-                    value_counts.append(
-                        ParameterValueWithCount(value=display_value, count=value_count)
-                    )
-                
-                converted_params.append(
-                    ParameterDetailWithCount(
-                        name=param.name,
-                        values=value_counts,
-                        description=param.description,
-                        category=param.category,
-                        count=param_count,
-                    )
-                )
-                
-                # Add to category count (use max to avoid double-counting overlapping filters)
-                # For now, we'll sum them, but note that this may overcount if parameters overlap
-                category_count += param_count
             
-            # For category count, we'll use the maximum parameter count to avoid overcounting
-            # This is a simplification - ideally we'd count the union, but that's complex
+            # Process parameters with counts
+            if category.name in category_params:
+                for param_info in category_params[category.name]["params"]:
+                    param = param_info["param"]
+                    
+                    # Get parameter count
+                    param_count = param_counts[param_count_index]
+                    param_count_index += 1
+                    
+                    # Get value counts for this parameter
+                    value_counts_for_param = []
+                    for display_value in param_info["value_metadata"]:
+                        value_count = value_counts[value_count_index]
+                        value_count_index += 1
+                        value_counts_for_param.append(
+                            ParameterValueWithCount(value=display_value, count=value_count)
+                        )
+                    
+                    converted_params.append(
+                        ParameterDetailWithCount(
+                            name=param.name,
+                            values=value_counts_for_param,
+                            description=param.description,
+                            category=param.category,
+                            count=param_count,
+                        )
+                    )
+            
+            # For category count, use the maximum parameter count to avoid overcounting
             category_max_count = max(
                 [p.count for p in converted_params] + [0]
             ) if converted_params else 0
@@ -731,8 +843,19 @@ async def search_contacts_from_apollo_url(
             filter_dict["exclude_domain_list"] = normalized_exclude_domains
 
         # Step 3: Validate and construct ContactFilterParams
+        logger.info(
+            "Before ContactFilterParams validation: filter_dict keys=%s normalize_title_column=%s type=%s",
+            list(filter_dict.keys()),
+            filter_dict.get("normalize_title_column"),
+            type(filter_dict.get("normalize_title_column")).__name__ if filter_dict.get("normalize_title_column") is not None else "None",
+        )
         try:
             filters = ContactFilterParams.model_validate(filter_dict)
+            logger.info(
+                "After ContactFilterParams validation: normalize_title_column=%s type=%s",
+                filters.normalize_title_column,
+                type(filters.normalize_title_column).__name__ if filters.normalize_title_column is not None else "None",
+            )
         except ValidationError as exc:
             logger.warning("Invalid contact filter parameters: %s", exc)
             raise HTTPException(
@@ -1035,8 +1158,19 @@ async def count_contacts_from_apollo_url(
             filter_dict["exclude_domain_list"] = normalized_exclude_domains
 
         # Step 3: Validate and construct ContactFilterParams
+        logger.info(
+            "Before ContactFilterParams validation: filter_dict keys=%s normalize_title_column=%s type=%s",
+            list(filter_dict.keys()),
+            filter_dict.get("normalize_title_column"),
+            type(filter_dict.get("normalize_title_column")).__name__ if filter_dict.get("normalize_title_column") is not None else "None",
+        )
         try:
             filters = ContactFilterParams.model_validate(filter_dict)
+            logger.info(
+                "After ContactFilterParams validation: normalize_title_column=%s type=%s",
+                filters.normalize_title_column,
+                type(filters.normalize_title_column).__name__ if filters.normalize_title_column is not None else "None",
+            )
         except ValidationError as exc:
             logger.warning("Invalid contact filter parameters: %s", exc)
             raise HTTPException(
@@ -1190,8 +1324,19 @@ async def get_contact_uuids_from_apollo_url(
             filter_dict["exclude_domain_list"] = normalized_exclude_domains
 
         # Step 3: Validate and construct ContactFilterParams
+        logger.info(
+            "Before ContactFilterParams validation: filter_dict keys=%s normalize_title_column=%s type=%s",
+            list(filter_dict.keys()),
+            filter_dict.get("normalize_title_column"),
+            type(filter_dict.get("normalize_title_column")).__name__ if filter_dict.get("normalize_title_column") is not None else "None",
+        )
         try:
             filters = ContactFilterParams.model_validate(filter_dict)
+            logger.info(
+                "After ContactFilterParams validation: normalize_title_column=%s type=%s",
+                filters.normalize_title_column,
+                type(filters.normalize_title_column).__name__ if filters.normalize_title_column is not None else "None",
+            )
         except ValidationError as exc:
             logger.warning("Invalid contact filter parameters: %s", exc)
             raise HTTPException(

@@ -547,6 +547,14 @@ class ApolloAnalysisService:
                     # Exact mapping: normalize titles (sort words alphabetically)
                     normalized_titles = [self._normalize_title(t) for t in titles]
                     contact_filters["title"] = ",".join(normalized_titles)
+                    # Set flag to normalize database column before comparison
+                    contact_filters["normalize_title_column"] = True
+                    logger.info(
+                        "Using exact mapping (includeSimilarTitles=false): original_titles=%s normalized_titles=%s title_filter=%s",
+                        titles,
+                        normalized_titles,
+                        contact_filters["title"],
+                    )
                     logger.debug("Using exact mapping (includeSimilarTitles=false): %s → %s", titles[:3], normalized_titles[:3])
                 mapped_params.add("personTitles[]")
 

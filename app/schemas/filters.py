@@ -24,6 +24,10 @@ class ContactFilterParams(BaseModel):
         default=None,
         description="Case-insensitive substring match against Contact.title.",
     )
+    normalize_title_column: Optional[bool] = Field(
+        default=None,
+        description="When True, normalizes the database title column (sorts words alphabetically) before comparison. Used when includeSimilarTitles=false to match normalized titles correctly.",
+    )
     seniority: Optional[str] = Field(
         default=None,
         description="Case-insensitive substring match against Contact.seniority.",

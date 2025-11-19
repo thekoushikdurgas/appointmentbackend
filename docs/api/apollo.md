@@ -805,8 +805,10 @@ The following Apollo parameters are not mapped (no equivalent in contacts databa
 **personTitles[] with includeSimilarTitles=false** (exact mapping - normalize):
 ```
 Apollo URL: personTitles[]=Project Manager&personTitles[]=Senior Developer
-Normalized: "manager project", "developer senior"
+Normalized search terms: "manager project", "developer senior"
+Database normalization: Both search terms AND database titles are normalized before comparison
 Result: Matches contacts with "Project Manager", "Manager Project", "Senior Developer", "Developer Senior"
+Does NOT match: "Account Manager Project" (normalizes to "account manager project" ≠ "manager project")
 ```
 
 **personTitles[] with includeSimilarTitles=true** (jumble mapping - split into words):
