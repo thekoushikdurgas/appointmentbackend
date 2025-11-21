@@ -21,6 +21,7 @@ boto3
 aioboto3
 beautifulsoup4
 lxml
+urllib3
 
 # Development dependencies (optional)
 # Uncomment the following lines for development:
