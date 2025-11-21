@@ -93,6 +93,10 @@ class ContactRepository(AsyncRepository[Contact]):
         Returns:
             Tuple of (needs_company, needs_contact_meta, needs_company_meta)
         """
+        logger.debug(
+            "Detecting column table: column_type=%s",
+            type(column_expression).__name__,
+        )
         needs_company = False
         needs_contact_meta = False
         needs_company_meta = False
@@ -107,9 +111,21 @@ class ContactRepository(AsyncRepository[Contact]):
         while hasattr(column, 'clauses'):
             # For function expressions, check all clauses
             clauses = column.clauses
-            if clauses:
-                column = clauses[0]
-            else:
+            # SQLAlchemy ClauseList doesn't support direct boolean evaluation
+            # Convert to list first to check if it has elements
+            try:
+                clauses_list = list(clauses) if clauses is not None else []
+                if len(clauses_list) > 0:
+                    column = clauses_list[0]
+                else:
+                    break
+            except (TypeError, AttributeError) as e:
+                # If we can't convert to list, break the loop
+                logger.debug(
+                    "Could not process clauses in column detection: error=%s column_type=%s",
+                    e,
+                    type(column).__name__,
+                )
                 break
         
         # Check if column belongs to a specific table by comparing table references
@@ -170,6 +186,12 @@ class ContactRepository(AsyncRepository[Contact]):
                     needs_company_meta = True
                     needs_company = True
         
+        logger.debug(
+            "Column table detection result: needs_company=%s needs_contact_meta=%s needs_company_meta=%s",
+            needs_company,
+            needs_contact_meta,
+            needs_company_meta,
+        )
         return needs_company, needs_contact_meta, needs_company_meta
 
     @staticmethod
@@ -1885,6 +1907,230 @@ class ContactRepository(AsyncRepository[Contact]):
         
         return stmt
 
+    @staticmethod
+    def _can_optimize_company_query(
+        filters: ContactFilterParams,
+        params: AttributeListParams,
+        column_expression: Any,
+        company_alias: Company,
+    ) -> bool:
+        """Check if query can be optimized by querying companies table directly.
+        
+        Optimization is possible when:
+        1. Querying a company attribute (Company.text_search, Company.name, etc.)
+        2. distinct=True (most performance benefit)
+        3. No contact-specific filters that require contact table
+        4. No contact metadata filters
+        """
+        # Check if column is from Company table
+        column_needs_company, _, _ = ContactRepository._detect_column_table(
+            column_expression, company_alias, None, None
+        )
+        
+        if not column_needs_company:
+            return False
+        
+        # Check if distinct is enabled (main optimization target)
+        if not params.distinct:
+            # Can still optimize, but less critical
+            pass
+        
+        # Check if contact-specific filters are present
+        contact_only_filters = ContactRepository._get_contact_only_filters(filters)
+        has_contact_filters = any(v is not None for v in contact_only_filters.values())
+        
+        # Check if contact metadata filters are present
+        contact_meta_filters = ContactRepository._get_contact_metadata_filters(filters)
+        has_contact_meta_filters = any(v is not None for v in contact_meta_filters.values())
+        
+        # Check if search requires contact table (search might include contact fields)
+        # For attribute endpoints, search is scoped to the column, so it's usually safe
+        # But we'll be conservative and only optimize if no search or search is clearly company-only
+        
+        # Can optimize if no contact-specific filters
+        can_optimize = not has_contact_filters and not has_contact_meta_filters
+        
+        logger.debug(
+            "Company query optimization check: column_needs_company=%s distinct=%s has_contact_filters=%s has_contact_meta_filters=%s can_optimize=%s",
+            column_needs_company,
+            params.distinct,
+            has_contact_filters,
+            has_contact_meta_filters,
+            can_optimize,
+        )
+        
+        return can_optimize
+
+    async def _list_company_attribute_values_optimized(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        params: AttributeListParams,
+        column_expression: Any,
+    ) -> list[str]:
+        """Optimized method to query company attributes directly from companies table.
+        
+        This avoids the expensive join from contacts to companies when we only need
+        company data and no contact-specific filters are applied.
+        """
+        import time
+        start_time = time.time()
+        
+        logger.info(
+            "Using optimized company query path: limit=%d offset=%d distinct=%s",
+            params.limit,
+            params.offset,
+            params.distinct,
+        )
+        
+        try:
+            dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+            
+            # Ensure column_expression doesn't reference any aliases
+            # If it's a table column, use it directly; otherwise extract the column name
+            clean_column = column_expression
+            if hasattr(column_expression, 'table'):
+                # If column references a table (possibly aliased), get fresh column from Company table
+                if hasattr(column_expression, 'key'):
+                    # Use table.columns to get a fresh column without alias references
+                    clean_column = Company.__table__.columns[column_expression.key]
+                elif hasattr(column_expression, 'name'):
+                    clean_column = Company.__table__.columns[column_expression.name]
+            
+            # Start query from Company table directly with clean column
+            stmt = select(clean_column).select_from(Company)
+            
+            # Create aliases for potential joins (company metadata if needed)
+            company_meta_alias = aliased(CompanyMetadata, name="company_meta_optimized")
+            
+            # Check if company metadata join is needed for filters
+            filter_needs_company_meta = self._needs_company_metadata_join(filters)
+            
+            if filter_needs_company_meta:
+                stmt = stmt.outerjoin(company_meta_alias, Company.uuid == company_meta_alias.uuid)
+            
+            # Apply company filters only (no contact filters in optimized path)
+            if self._needs_company_join(filters):
+                stmt = self._apply_company_filters(
+                    stmt,
+                    filters,
+                    Company,  # Use Company directly, not alias
+                    company_meta_alias if filter_needs_company_meta else None,
+                    dialect_name=dialect_name,
+                )
+                
+                # Apply special filters (domain, keywords)
+                stmt = self._apply_special_filters(
+                    stmt,
+                    filters,
+                    Company,  # Use Company directly
+                    company_meta_alias if filter_needs_company_meta else None,
+                    dialect_name=dialect_name,
+                )
+            
+            # Apply search if provided (scoped to clean_column)
+            search_term = params.search or filters.search
+            if search_term:
+                search_stripped = search_term.strip()
+                if search_stripped:
+                    pattern = f"%{search_stripped}%"
+                    stmt = stmt.where(clean_column.ilike(pattern))
+                    logger.debug(
+                        "Applied optimized attribute search: column=%s search=%s",
+                        getattr(clean_column, "key", "column"),
+                        search_stripped,
+                    )
+            
+            # Filter out NULL and empty values
+            stmt = stmt.where(clean_column.isnot(None))
+            stmt = stmt.where(func.trim(clean_column) != "")
+            
+            # Apply distinct BEFORE ordering
+            if params.distinct:
+                stmt = stmt.distinct()
+            
+            # Apply ordering
+            ordering_map = {"value": clean_column}
+            stmt = apply_ordering(
+                stmt,
+                params.ordering,
+                ordering_map,
+            )
+            
+            # When using DISTINCT, ensure there's always an explicit ORDER BY
+            if params.distinct and not params.ordering:
+                stmt = stmt.order_by(clean_column.asc())
+            
+            # Apply pagination
+            stmt = stmt.offset(params.offset)
+            if params.limit is not None:
+                stmt = stmt.limit(params.limit)
+            
+            query_start_time = time.time()
+            logger.debug(
+                "Executing optimized company attribute query: limit=%s offset=%d distinct=%s",
+                params.limit,
+                params.offset,
+                params.distinct,
+            )
+            
+            result = await session.execute(stmt)
+            query_time = time.time() - query_start_time
+            
+            raw_values = result.fetchall()
+            raw_count = len(raw_values)
+            
+            logger.info(
+                "Optimized company query executed: query_time=%.3fs raw_count=%d limit=%s offset=%d distinct=%s",
+                query_time,
+                raw_count,
+                params.limit,
+                params.offset,
+                params.distinct,
+            )
+            
+            # Process results
+            values = []
+            skipped_none = 0
+            skipped_empty = 0
+            for (value,) in raw_values:
+                if value is None:
+                    skipped_none += 1
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    skipped_empty += 1
+                    continue
+                values.append(value)
+            
+            final_count = len(values)
+            total_time = time.time() - start_time
+            
+            logger.info(
+                "Optimized company query completed: total_time=%.3fs query_time=%.3fs raw_count=%d final_count=%d skipped_none=%d skipped_empty=%d",
+                total_time,
+                query_time,
+                raw_count,
+                final_count,
+                skipped_none,
+                skipped_empty,
+            )
+            
+            return values
+            
+        except Exception as e:
+            total_time = time.time() - start_time
+            logger.error(
+                "Error in optimized company query: error=%s error_type=%s total_time=%.3fs limit=%s offset=%d distinct=%s",
+                str(e),
+                type(e).__name__,
+                total_time,
+                params.limit,
+                params.offset,
+                params.distinct,
+                exc_info=True,
+            )
+            raise
+
     async def list_attribute_values(
         self,
         session: AsyncSession,
@@ -1898,7 +2144,11 @@ class ContactRepository(AsyncRepository[Contact]):
         """Return attribute values for autocomplete/dropdown endpoints.
         
         Optimized to only join tables needed for filtering.
+        Uses optimized company query path when possible.
         """
+        import time
+        start_time = time.time()
+        
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         logger.debug(
             "Listing attribute values: limit=%d offset=%d ordering=%s filters=%s",
@@ -1907,149 +2157,382 @@ class ContactRepository(AsyncRepository[Contact]):
             params.ordering,
             active_filter_keys,
         )
-        bind = session.bind
-        dialect_name = getattr(bind.dialect, "name", None) if bind is not None else None
-        use_array_optimization = array_mode and dialect_name == "postgresql"
-
-        if use_array_optimization and column_factory is not None:
-            values = await self._list_array_attribute_values(session, column_factory, filters, params)
-            logger.debug("Retrieved %d array attribute values (optimized)", len(values))
-            return values
-
-        if column_factory is None:
-            raise ValueError("column_factory must be provided for attribute value queries.")
-
-        # Determine which joins are needed for filters
-        filter_needs_company = self._needs_company_join(filters) or self._needs_company_join_for_search(params.search or filters.search)
-        filter_needs_contact_meta = self._needs_contact_metadata_join(filters)
-        filter_needs_company_meta = self._needs_company_metadata_join(filters)
         
-        # Create aliases - always create them for column_factory
-        company_alias = aliased(Company, name="company_attribute")
-        contact_meta_alias = aliased(ContactMetadata, name="contact_meta_attribute")
-        company_meta_alias = aliased(CompanyMetadata, name="company_meta_attribute")
+        try:
+            bind = session.bind
+            dialect_name = getattr(bind.dialect, "name", None) if bind is not None else None
+            use_array_optimization = array_mode and dialect_name == "postgresql"
 
-        # Get column expression first to check what it references
-        column_expression = column_factory(Contact, company_alias, contact_meta_alias, company_meta_alias)
-        
-        # Detect which tables are needed for the column itself
-        column_needs_company, column_needs_contact_meta, column_needs_company_meta = self._detect_column_table(
-            column_expression, company_alias, contact_meta_alias, company_meta_alias
-        )
-        
-        # Join tables if needed for column OR filters
-        needs_company = column_needs_company or filter_needs_company
-        needs_contact_meta = column_needs_contact_meta or filter_needs_contact_meta
-        needs_company_meta = column_needs_company_meta or filter_needs_company_meta
-        # CompanyMetadata requires Company join
-        if needs_company_meta:
-            needs_company = True
+            if use_array_optimization and column_factory is not None:
+                values = await self._list_array_attribute_values(session, column_factory, filters, params)
+                logger.debug("Retrieved %d array attribute values (optimized)", len(values))
+                return values
 
-        stmt = select(column_expression).select_from(Contact)
-        
-        # Only join tables that are actually needed
-        if needs_company:
-            stmt = stmt.outerjoin(company_alias, Contact.company_id == company_alias.uuid)
-            # CompanyMetadata requires Company, so join it if needed
+            if column_factory is None:
+                raise ValueError("column_factory must be provided for attribute value queries.")
+            
+            # Create aliases for column detection
+            company_alias = aliased(Company, name="company_attribute")
+            contact_meta_alias = aliased(ContactMetadata, name="contact_meta_attribute")
+            company_meta_alias = aliased(CompanyMetadata, name="company_meta_attribute")
+            
+            # Get column expression to check if optimization is possible
+            column_expression = column_factory(Contact, company_alias, contact_meta_alias, company_meta_alias)
+            
+            # Check if we can use optimized company query path
+            if self._can_optimize_company_query(filters, params, column_expression, company_alias):
+                # Use optimized path - query companies table directly
+                # Extract the actual Company column from the aliased expression
+                # The column_factory returns company_alias.text_search, we need Company.text_search
+                actual_column = None
+                
+                # Try to extract column name from the expression
+                column_to_check = column_expression
+                # Unwrap if it's a wrapped expression (like func.trim())
+                unwrapped = False
+                wrapper_func = None
+                while hasattr(column_to_check, 'element'):
+                    if not unwrapped:
+                        # Store wrapper function if any (for reconstruction)
+                        wrapper_func = column_to_check.__class__ if hasattr(column_to_check, '__class__') else None
+                    column_to_check = column_to_check.element
+                    unwrapped = True
+                
+                # Get the column key/name
+                column_key = None
+                if hasattr(column_to_check, 'key'):
+                    column_key = column_to_check.key
+                elif hasattr(column_to_check, 'name'):
+                    column_key = column_to_check.name
+                
+                # Check if this column belongs to company_alias
+                is_company_column = False
+                if hasattr(column_to_check, 'table'):
+                    is_company_column = column_to_check.table is company_alias
+                elif hasattr(column_to_check, '__str__'):
+                    # Fallback: check string representation
+                    col_str = str(column_to_check)
+                    is_company_column = 'company' in col_str.lower()
+                
+                # Map to actual Company column - MUST use fresh Company column to avoid alias references
+                if is_company_column and column_key and hasattr(Company, column_key):
+                    # Get a fresh column from Company table (not the alias)
+                    actual_column = getattr(Company, column_key)
+                    # Verify it's not referencing the alias
+                    if hasattr(actual_column, 'table'):
+                        if actual_column.table is company_alias:
+                            # Still referencing alias, force a fresh column
+                            logger.warning(
+                                "Column still references alias, forcing fresh column: column_key=%s",
+                                column_key,
+                            )
+                            # Create a new column expression directly from Company
+                            actual_column = Company.__table__.columns[column_key]
+                    
+                    # Reapply wrapper if there was one (e.g., func.trim())
+                    if unwrapped and wrapper_func and hasattr(wrapper_func, '__call__'):
+                        try:
+                            # Try to reconstruct wrapped expression
+                            # For simple cases like func.trim(), this should work
+                            if 'trim' in str(wrapper_func).lower() or 'trim' in str(column_expression).lower():
+                                actual_column = func.trim(actual_column)
+                        except Exception:
+                            # If reconstruction fails, use unwrapped column
+                            logger.debug("Could not reconstruct wrapped expression, using unwrapped column")
+                    
+                    logger.debug(
+                        "Mapped aliased column to Company column: alias_key=%s company_column=%s wrapped=%s",
+                        column_key,
+                        column_key,
+                        unwrapped,
+                    )
+                else:
+                    # Fallback: try to extract from string representation
+                    if not column_key:
+                        col_str = str(column_expression)
+                        if 'text_search' in col_str:
+                            column_key = 'text_search'
+                        elif 'name' in col_str:
+                            column_key = 'name'
+                        elif 'address' in col_str:
+                            column_key = 'address'
+                    
+                    if column_key and hasattr(Company, column_key):
+                        # Use table columns directly to avoid any alias references
+                        actual_column = Company.__table__.columns[column_key]
+                        logger.debug(
+                            "Mapped column from string using table.columns: column_key=%s",
+                            column_key,
+                        )
+                    else:
+                        # Last resort: use the expression as-is and hope SQLAlchemy handles it
+                        logger.warning(
+                            "Could not map column key, using expression as-is: column_expression=%s column_key=%s",
+                            str(column_expression)[:100],
+                            column_key,
+                        )
+                        actual_column = column_expression
+                
+                logger.debug(
+                    "Using optimized company query path: original_column=%s actual_column=%s",
+                    str(column_expression)[:100],
+                    str(actual_column)[:100] if actual_column else "None",
+                )
+                
+                return await self._list_company_attribute_values_optimized(
+                    session,
+                    filters,
+                    params,
+                    actual_column,
+                )
+            
+            # Determine which joins are needed for filters
+            filter_needs_company = self._needs_company_join(filters) or self._needs_company_join_for_search(params.search or filters.search)
+            filter_needs_contact_meta = self._needs_contact_metadata_join(filters)
+            filter_needs_company_meta = self._needs_company_metadata_join(filters)
+            
+            # Create aliases - always create them for column_factory
+            company_alias = aliased(Company, name="company_attribute")
+            contact_meta_alias = aliased(ContactMetadata, name="contact_meta_attribute")
+            company_meta_alias = aliased(CompanyMetadata, name="company_meta_attribute")
+
+            # Get column expression first to check what it references
+            column_expression = column_factory(Contact, company_alias, contact_meta_alias, company_meta_alias)
+            
+            # Detect which tables are needed for the column itself
+            column_needs_company, column_needs_contact_meta, column_needs_company_meta = self._detect_column_table(
+                column_expression, company_alias, contact_meta_alias, company_meta_alias
+            )
+            
+            # Join tables if needed for column OR filters
+            needs_company = column_needs_company or filter_needs_company
+            needs_contact_meta = column_needs_contact_meta or filter_needs_contact_meta
+            needs_company_meta = column_needs_company_meta or filter_needs_company_meta
+            # CompanyMetadata requires Company join
             if needs_company_meta:
-                stmt = stmt.outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
-        
-        if needs_contact_meta:
-            stmt = stmt.outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+                needs_company = True
 
-        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
-        
-        # Apply separated filtering approach (same as list_contacts)
-        # Only apply filters if the required tables are joined
-        # Step 1: Apply contact filters to the query (filters Contact table)
-        stmt = self._apply_contact_filters(
-            stmt,
-            filters,
-            contact_meta_alias if needs_contact_meta else None,
-            dialect_name=dialect_name,
-        )
-        
-        # Step 2: Apply company filters to the query (filters Company table) - only if Company is joined
-        if needs_company:
-            stmt = self._apply_company_filters(
+            # Defensive check: ensure needs_company is True when column references company_alias
+            # This prevents cartesian product when column_expression references company_alias
+            if column_needs_company and not needs_company:
+                logger.warning(
+                    "Column references company_alias but needs_company is False. Forcing needs_company=True to prevent cartesian product."
+                )
+                needs_company = True
+
+            # Build query with joins included in initial construction to prevent cartesian product warning
+            # When column_expression references aliased tables (e.g., company_alias.text_search),
+            # SQLAlchemy will add those tables to the FROM clause automatically. We must include
+            # the join conditions immediately to avoid a cartesian product warning.
+            # Build the base query and chain joins in one statement to ensure SQLAlchemy sees
+            # join conditions before analyzing the FROM clause
+            stmt = select(column_expression)
+            
+            # Build FROM clause with joins included from the start
+            # This ensures SQLAlchemy sees join conditions when it analyzes column_expression
+            if needs_company:
+                # Start with Contact and immediately join company_alias
+                from_clause = Contact.outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+                if needs_company_meta:
+                    # Chain company_meta_alias join
+                    from_clause = from_clause.outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+                if needs_contact_meta:
+                    # Chain contact_meta_alias join (can be added after company join)
+                    from_clause = from_clause.outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+                stmt = stmt.select_from(from_clause)
+            elif needs_contact_meta:
+                # Only contact_meta join needed
+                from_clause = Contact.outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+                stmt = stmt.select_from(from_clause)
+            else:
+                # No joins needed - column is from Contact table
+                stmt = stmt.select_from(Contact)
+
+            dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+            
+            # Apply separated filtering approach (same as list_contacts)
+            # Only apply filters if the required tables are joined
+            # Step 1: Apply contact filters to the query (filters Contact table)
+            stmt = self._apply_contact_filters(
                 stmt,
                 filters,
-                company_alias,
-                company_meta_alias if needs_company_meta else None,
+                contact_meta_alias if needs_contact_meta else None,
                 dialect_name=dialect_name,
             )
             
-            # Step 3: Apply special filters to the joined result (domain, keywords with field control)
-            stmt = self._apply_special_filters(
-                stmt,
-                filters,
-                company_alias,
-                company_meta_alias if needs_company_meta else None,
-                dialect_name=dialect_name,
-            )
-        
-        # Step 4: Apply search terms
-        # For attribute list endpoints, search should only apply to the selected column (column_expression)
-        # NOT across all contact/company columns, to ensure search is scoped to the attribute being listed
-        search_term = params.search or filters.search
-        if search_term:
-            search_stripped = search_term.strip()
-            if search_stripped:
-                # Apply search ONLY to the column_expression (e.g., Contact.title)
-                # This ensures that when searching for titles, we only get titles containing the search term
-                pattern = f"%{search_stripped}%"
-                stmt = stmt.where(column_expression.ilike(pattern))
-                logger.debug(
-                    "Applied attribute search: column=%s search=%s",
-                    getattr(column_expression, "key", "column"),
-                    search_stripped,
+            # Step 2: Apply company filters to the query (filters Company table) - only if Company is joined
+            if needs_company:
+                stmt = self._apply_company_filters(
+                    stmt,
+                    filters,
+                    company_alias,
+                    company_meta_alias if needs_company_meta else None,
+                    dialect_name=dialect_name,
                 )
+                
+                # Step 3: Apply special filters to the joined result (domain, keywords with field control)
+                stmt = self._apply_special_filters(
+                    stmt,
+                    filters,
+                    company_alias,
+                    company_meta_alias if needs_company_meta else None,
+                    dialect_name=dialect_name,
+                )
+            
+            # Step 4: Apply search terms
+            # For attribute list endpoints, search should only apply to the selected column (column_expression)
+            # NOT across all contact/company columns, to ensure search is scoped to the attribute being listed
+            search_term = params.search or filters.search
+            if search_term:
+                search_stripped = search_term.strip()
+                if search_stripped:
+                    # Apply search ONLY to the column_expression (e.g., Contact.title)
+                    # This ensures that when searching for titles, we only get titles containing the search term
+                    pattern = f"%{search_stripped}%"
+                    stmt = stmt.where(column_expression.ilike(pattern))
+                    logger.debug(
+                        "Applied attribute search: column=%s search=%s",
+                        getattr(column_expression, "key", "column"),
+                        search_stripped,
+                    )
+            
+            stmt = stmt.where(column_expression.isnot(None))
+            
+            # Filter out placeholder value "_" for seniority column
+            # Check if column_expression references Contact.seniority
+            # We do this by checking if the column key/name contains "seniority"
+            column_key = getattr(column_expression, "key", None) or str(column_expression)
+            if "seniority" in column_key.lower():
+                stmt = stmt.where(column_expression != "_")
+                stmt = stmt.where(func.trim(column_expression) != "_")
+            
+            # For title column, add SQL-level alphanumeric filter to ensure LIMIT works correctly
+            # This prevents post-processing filters from reducing results below the requested limit
+            if apply_title_alphanumeric_filter:
+                # PostgreSQL: Use regex to check for at least one alphanumeric character
+                # Pattern [[:alnum:]] matches any alphanumeric character (POSIX character class)
+                if dialect_name == "postgresql":
+                    # Use ~ operator for regex matching - checks if column matches pattern
+                    # [[:alnum:]] is a POSIX character class that matches any alphanumeric character
+                    stmt = stmt.where(column_expression.op('~')(r'[[:alnum:]]'))
+                else:
+                    # For other databases, use a simpler check
+                    # Check that trimmed value is not empty (already handled) and has length > 0
+                    stmt = stmt.where(func.length(func.trim(column_expression)) > 0)
+            
+            # Apply distinct BEFORE ordering to avoid SQL issues
+            if params.distinct:
+                stmt = stmt.distinct()
+            
+            # Apply ordering after distinct - only order by the selected column
+            ordering_map = {"value": column_expression}
+            stmt = apply_ordering(
+                stmt,
+                params.ordering,
+                ordering_map,
+            )
+            
+            # When using DISTINCT, ensure there's always an explicit ORDER BY
+            if params.distinct and not params.ordering:
+                stmt = stmt.order_by(column_expression.asc())
+            
+            stmt = stmt.offset(params.offset)
+            if params.limit is not None:
+                stmt = stmt.limit(params.limit)
         
-        stmt = stmt.where(column_expression.isnot(None))
-        
-        # For title column, add SQL-level alphanumeric filter to ensure LIMIT works correctly
-        # This prevents post-processing filters from reducing results below the requested limit
-        if apply_title_alphanumeric_filter:
-            # PostgreSQL: Use regex to check for at least one alphanumeric character
-            # Pattern [[:alnum:]] matches any alphanumeric character (POSIX character class)
-            if dialect_name == "postgresql":
-                # Use ~ operator for regex matching - checks if column matches pattern
-                # [[:alnum:]] is a POSIX character class that matches any alphanumeric character
-                stmt = stmt.where(column_expression.op('~')(r'[[:alnum:]]'))
+            query_start_time = time.time()
+            logger.debug(
+                "Executing attribute values query: limit=%s offset=%d distinct=%s needs_company=%s needs_contact_meta=%s needs_company_meta=%s",
+                params.limit,
+                params.offset,
+                params.distinct,
+                needs_company,
+                needs_contact_meta,
+                needs_company_meta,
+            )
+            
+            result = await session.execute(stmt)
+            query_time = time.time() - query_start_time
+            
+            raw_values = result.fetchall()
+            raw_count = len(raw_values)
+            
+            # Log query performance
+            if query_time > 1.0:
+                logger.warning(
+                    "Slow attribute query detected: query_time=%.3fs limit=%s offset=%d distinct=%s needs_company=%s",
+                    query_time,
+                    params.limit,
+                    params.offset,
+                    params.distinct,
+                    needs_company,
+                )
             else:
-                # For other databases, use a simpler check
-                # Check that trimmed value is not empty (already handled) and has length > 0
-                stmt = stmt.where(func.length(func.trim(column_expression)) > 0)
-        
-        # Apply distinct BEFORE ordering to avoid SQL issues
-        if params.distinct:
-            stmt = stmt.distinct()
-        
-        # Apply ordering after distinct - only order by the selected column
-        ordering_map = {"value": column_expression}
-        stmt = apply_ordering(
-            stmt,
-            params.ordering,
-            ordering_map,
-        )
-        
-        # When using DISTINCT, ensure there's always an explicit ORDER BY
-        if params.distinct and not params.ordering:
-            stmt = stmt.order_by(column_expression.asc())
-        
-        stmt = stmt.offset(params.offset)
-        if params.limit is not None:
-            stmt = stmt.limit(params.limit)
-        result = await session.execute(stmt)
-        values = []
-        for (value,) in result.fetchall():
-            if value is None:
-                continue
-            if isinstance(value, str) and not value.strip():
-                continue
-            values.append(value)
-        logger.debug("Retrieved %d attribute values", len(values))
-        return values
+                logger.debug(
+                    "Attribute query executed: query_time=%.3fs raw_count=%d",
+                    query_time,
+                    raw_count,
+                )
+            
+            values = []
+            skipped_none = 0
+            skipped_empty = 0
+            for (value,) in raw_values:
+                if value is None:
+                    skipped_none += 1
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    skipped_empty += 1
+                    continue
+                values.append(value)
+            
+            final_count = len(values)
+            total_skipped = skipped_none + skipped_empty
+            
+            # Log at info level if post-SQL filtering significantly reduced the count
+            # This is important for pagination logic that relies on limit+1 pattern
+            if params.limit is not None and raw_count >= params.limit and total_skipped > 0:
+                logger.info(
+                    "Post-SQL filtering reduced result count: requested_limit=%d raw_count=%d final_count=%d skipped_none=%d skipped_empty=%d (pagination may be affected)",
+                    params.limit,
+                    raw_count,
+                    final_count,
+                    skipped_none,
+                    skipped_empty,
+                )
+            else:
+                logger.debug(
+                    "Processed attribute values: raw_count=%d final_count=%d skipped_none=%d skipped_empty=%d",
+                    raw_count,
+                    final_count,
+                    skipped_none,
+                    skipped_empty,
+                )
+            
+            total_time = time.time() - start_time
+            logger.debug(
+                "Attribute values query completed: total_time=%.3fs query_time=%.3fs final_count=%d",
+                total_time,
+                query_time,
+                final_count,
+            )
+            
+            return values
+            
+        except Exception as e:
+            total_time = time.time() - start_time
+            logger.error(
+                "Error in list_attribute_values: error=%s error_type=%s total_time=%.3fs limit=%s offset=%d distinct=%s filters=%s",
+                str(e),
+                type(e).__name__,
+                total_time,
+                params.limit,
+                params.offset,
+                params.distinct,
+                active_filter_keys,
+                exc_info=True,
+            )
+            raise
 
     async def list_company_names_simple(
         self,
@@ -2119,6 +2602,118 @@ class ContactRepository(AsyncRepository[Contact]):
             values.append(value)
         
         logger.debug("Retrieved %d company names (simple)", len(values))
+        return values
+
+    async def list_company_domains_simple(
+        self,
+        session: AsyncSession,
+        params: AttributeListParams,
+    ) -> list[str]:
+        """Return company domains extracted from CompanyMetadata.website.
+        
+        This method queries ONLY the CompanyMetadata table and ignores all contact filters.
+        Only uses: distinct, limit, offset, ordering, search parameters.
+        
+        Extracts domain from website URLs using PostgreSQL regex:
+        - Removes protocol (http://, https://)
+        - Removes www. prefix
+        - Removes port numbers
+        - Converts to lowercase
+        - Filters out NULL and placeholder "_" values
+        
+        Equivalent to: SELECT DISTINCT extract_domain(website) FROM companies_metadata WHERE website IS NOT NULL
+        """
+        logger.debug(
+            "Listing company domains (simple): limit=%d offset=%d ordering=%s search=%s distinct=%s",
+            params.limit,
+            params.offset,
+            params.ordering,
+            bool(params.search),
+            params.distinct,
+        )
+        
+        bind = session.bind
+        dialect_name = getattr(bind.dialect, "name", None) if bind is not None else None
+        is_postgresql = dialect_name == "postgresql"
+        
+        # Extract domain from website URL using SQL functions
+        if is_postgresql:
+            # Use PostgreSQL regex to extract domain
+            # 1. Remove protocol (http://, https://)
+            no_protocol = func.regexp_replace(
+                func.coalesce(CompanyMetadata.website, ""),
+                r"^https?://",
+                "",
+                "i"
+            )
+            # Extract hostname (everything before first /)
+            hostname = func.split_part(no_protocol, "/", 1)
+            # Remove port
+            no_port = func.split_part(hostname, ":", 1)
+            # Remove www. prefix and convert to lowercase
+            domain_expression = func.lower(
+                func.regexp_replace(no_port, r"^www\.", "", "i")
+            )
+        else:
+            # For other databases, use column as-is (fallback)
+            domain_expression = func.lower(func.cast(CompanyMetadata.website, Text))
+        
+        # Query CompanyMetadata.website directly from companies_metadata table
+        stmt = select(domain_expression.label("domain")).select_from(CompanyMetadata)
+        
+        # Filter out NULL and placeholder "_" values
+        stmt = stmt.where(CompanyMetadata.website.isnot(None))
+        stmt = stmt.where(func.trim(CompanyMetadata.website) != "")
+        stmt = stmt.where(CompanyMetadata.website != "_")
+        stmt = stmt.where(func.trim(CompanyMetadata.website) != "_")
+        
+        # Filter out empty domains after extraction
+        stmt = stmt.where(domain_expression.isnot(None))
+        stmt = stmt.where(func.trim(domain_expression) != "")
+        
+        # Apply search if provided (search on extracted domain)
+        if params.search:
+            search_term = params.search.strip()
+            if search_term:
+                stmt = stmt.where(domain_expression.ilike(f"%{search_term}%"))
+        
+        # Apply distinct BEFORE ordering to avoid SQL issues
+        if params.distinct:
+            stmt = stmt.distinct()
+        
+        # Apply ordering - only order by the domain column
+        ordering_map = {"value": domain_expression, "name": domain_expression}
+        stmt = apply_ordering(
+            stmt,
+            params.ordering,
+            ordering_map,
+        )
+        
+        # When using DISTINCT, ensure there's always an explicit ORDER BY
+        if params.distinct and not params.ordering:
+            stmt = stmt.order_by(domain_expression.asc())
+        elif not params.ordering:
+            # Default ordering by domain ascending
+            stmt = stmt.order_by(domain_expression.asc())
+        
+        # Apply pagination
+        stmt = stmt.offset(params.offset)
+        if params.limit is not None:
+            stmt = stmt.limit(params.limit)
+        
+        result = await session.execute(stmt)
+        values = []
+        for (value,) in result.fetchall():
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            # Filter out placeholder values
+            if value == "_":
+                continue
+            values.append(value)
+        
+        logger.debug("Retrieved %d company domains (simple)", len(values))
         return values
 
     async def list_industries_simple(
@@ -2202,17 +2797,29 @@ class ContactRepository(AsyncRepository[Contact]):
                 if search_term:
                     attr_stmt = attr_stmt.where(value_column.ilike(f"%{search_term}%"))
             
-            # Apply distinct - use GROUP BY for better performance with large datasets
-            # GROUP BY can be faster than DISTINCT when combined with ORDER BY
+            # Optimize distinct queries by using subquery approach
+            # When distinct=true, use a subquery to get distinct values FIRST (without ordering)
+            # Then apply ordering and pagination on the smaller distinct set in the outer query
             if params.distinct:
-                # Use GROUP BY instead of DISTINCT - can be faster and allows better optimization
-                attr_stmt = attr_stmt.group_by(value_column)
-            
-            # Apply ordering - must come after GROUP BY if used
-            ordering_map = {"value": value_column}
-            attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
-            if params.ordering is None:
-                attr_stmt = attr_stmt.order_by(value_column.asc())
+                # Inner subquery: Get distinct values from the filtered query (no ordering, no pagination)
+                distinct_subquery = attr_stmt.distinct()
+                
+                # Convert to subquery for outer query
+                distinct_subquery_alias = distinct_subquery.subquery()
+                distinct_value_column = distinct_subquery_alias.c.value
+                
+                # Outer query: Order and paginate on the distinct set
+                attr_stmt = select(distinct_value_column).select_from(distinct_subquery_alias)
+                ordering_map = {"value": distinct_value_column}
+                attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+                if params.ordering is None:
+                    attr_stmt = attr_stmt.order_by(distinct_value_column.asc())
+            else:
+                # No distinct needed - apply ordering directly
+                ordering_map = {"value": value_column}
+                attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+                if params.ordering is None:
+                    attr_stmt = attr_stmt.order_by(value_column.asc())
             
             # Apply pagination LAST - this is critical for performance
             # PostgreSQL can use LIMIT to stop processing early if we have an index
@@ -2368,17 +2975,29 @@ class ContactRepository(AsyncRepository[Contact]):
                 if search_term:
                     attr_stmt = attr_stmt.where(value_column.ilike(f"%{search_term}%"))
             
-            # Apply distinct - use GROUP BY for better performance with large datasets
-            # GROUP BY can be faster than DISTINCT when combined with ORDER BY
+            # Optimize distinct queries by using subquery approach
+            # When distinct=true, use a subquery to get distinct values FIRST (without ordering)
+            # Then apply ordering and pagination on the smaller distinct set in the outer query
             if params.distinct:
-                # Use GROUP BY instead of DISTINCT - can be faster and allows better optimization
-                attr_stmt = attr_stmt.group_by(value_column)
-            
-            # Apply ordering - must come after GROUP BY if used
-            ordering_map = {"value": value_column}
-            attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
-            if params.ordering is None:
-                attr_stmt = attr_stmt.order_by(value_column.asc())
+                # Inner subquery: Get distinct values from the filtered query (no ordering, no pagination)
+                distinct_subquery = attr_stmt.distinct()
+                
+                # Convert to subquery for outer query
+                distinct_subquery_alias = distinct_subquery.subquery()
+                distinct_value_column = distinct_subquery_alias.c.value
+                
+                # Outer query: Order and paginate on the distinct set
+                attr_stmt = select(distinct_value_column).select_from(distinct_subquery_alias)
+                ordering_map = {"value": distinct_value_column}
+                attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+                if params.ordering is None:
+                    attr_stmt = attr_stmt.order_by(distinct_value_column.asc())
+            else:
+                # No distinct needed - apply ordering directly
+                ordering_map = {"value": value_column}
+                attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+                if params.ordering is None:
+                    attr_stmt = attr_stmt.order_by(value_column.asc())
             
             # Apply pagination LAST - this is critical for performance
             # PostgreSQL can use LIMIT to stop processing early if we have an index
@@ -2454,6 +3073,186 @@ class ContactRepository(AsyncRepository[Contact]):
             logger.debug("Retrieved %d keyword values (simple, not separated)", len(values))
             return values
 
+    async def list_technologies_simple(
+        self,
+        session: AsyncSession,
+        params: AttributeListParams,
+        company: Optional[list[str]] = None,
+        separated: bool = False,
+    ) -> list[str]:
+        """Return technology values directly from Company table.
+        
+        This method queries ONLY the Company table and ignores all contact filters.
+        Only uses: distinct, limit, offset, ordering, search, company, separated parameters.
+        
+        Args:
+            session: Database session
+            params: Attribute list parameters (distinct, limit, offset, ordering, search)
+            company: Optional list of exact company names to filter by (uses IN clause)
+            separated: If True, unnest array into individual values; if False, return comma-separated strings
+        
+        Returns:
+            List of technology values
+        """
+        logger.debug(
+            "Listing technologies (simple): limit=%d offset=%d ordering=%s search=%s distinct=%s company_count=%s separated=%s",
+            params.limit,
+            params.offset,
+            params.ordering,
+            bool(params.search),
+            params.distinct,
+            len(company) if company else 0,
+            separated,
+        )
+        
+        bind = session.bind
+        dialect_name = getattr(bind.dialect, "name", None) if bind is not None else None
+        is_postgresql = dialect_name == "postgresql"
+        
+        # Always use unnest for PostgreSQL - it's much faster than array_to_string with DISTINCT
+        # For non-PostgreSQL, fall back to array_to_string
+        use_array_optimization = (separated or is_postgresql) and is_postgresql
+        
+        if use_array_optimization:
+            # Use unnest with optimized PostgreSQL array processing
+            # CRITICAL: Match the exact pattern from list_keywords_simple for consistency
+            # This is the most efficient approach: unnest first, then filter, then distinct, then paginate
+            
+            # Build base query to unnest technologies efficiently
+            source_company = aliased(Company, name="technology_company")
+            
+            # Start with unnest - this is the most efficient way to handle arrays in PostgreSQL
+            # Use a subquery to unnest all technologies from companies that have them
+            unnest_stmt = (
+                select(
+                    func.unnest(source_company.technologies).label("value")
+                )
+                .select_from(source_company)
+                .where(source_company.technologies.isnot(None))
+            )
+            
+            # Filter by exact company name(s) if provided (apply early for better performance)
+            # This reduces the dataset BEFORE unnest, which is critical for performance
+            if company:
+                unnest_stmt = unnest_stmt.where(source_company.name.in_(company))
+                logger.debug("Applied company filter early: %d companies", len(company))
+            
+            # Convert to subquery for further processing
+            unnested = unnest_stmt.subquery()
+            value_column = unnested.c.value
+            
+            # Build main query from unnested values
+            attr_stmt = select(value_column).select_from(unnested)
+            
+            # Filter out NULL and empty values efficiently
+            trimmed_value = func.nullif(func.trim(value_column), "")
+            attr_stmt = attr_stmt.where(value_column.isnot(None))
+            attr_stmt = attr_stmt.where(trimmed_value.isnot(None))
+            
+            # Apply search on unnested values (early filtering)
+            if params.search:
+                search_term = params.search.strip()
+                if search_term:
+                    attr_stmt = attr_stmt.where(value_column.ilike(f"%{search_term}%"))
+            
+            # Optimize distinct queries by using subquery approach
+            # When distinct=true, use a subquery to get distinct values FIRST (without ordering)
+            # Then apply ordering and pagination on the smaller distinct set in the outer query
+            if params.distinct:
+                # Inner subquery: Get distinct values from the filtered query (no ordering, no pagination)
+                distinct_subquery = attr_stmt.distinct()
+                
+                # Convert to subquery for outer query
+                distinct_subquery_alias = distinct_subquery.subquery()
+                distinct_value_column = distinct_subquery_alias.c.value
+                
+                # Outer query: Order and paginate on the distinct set
+                attr_stmt = select(distinct_value_column).select_from(distinct_subquery_alias)
+                ordering_map = {"value": distinct_value_column}
+                attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+                if params.ordering is None:
+                    attr_stmt = attr_stmt.order_by(distinct_value_column.asc())
+            else:
+                # No distinct needed - apply ordering directly
+                ordering_map = {"value": value_column}
+                attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+                if params.ordering is None:
+                    attr_stmt = attr_stmt.order_by(value_column.asc())
+            
+            # Apply pagination LAST - this is critical for performance
+            # PostgreSQL can use LIMIT to stop processing early if we have an index
+            attr_stmt = attr_stmt.offset(params.offset)
+            if params.limit is not None:
+                attr_stmt = attr_stmt.limit(params.limit)
+            
+            result = await session.execute(attr_stmt)
+            values = []
+            for (value,) in result.fetchall():
+                if value is None:
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    continue
+                values.append(value)
+            
+            logger.debug("Retrieved %d technology values (simple, separated)", len(values))
+            return values
+        else:
+            # Fallback for non-PostgreSQL databases: Use array_to_string
+            # For PostgreSQL, we should use unnest (handled above) for better performance
+            # But if explicitly separated=False on non-PostgreSQL, use this path
+            column_expression = func.array_to_string(Company.technologies, ",")
+            
+            stmt = select(column_expression).select_from(Company)
+            
+            # Filter out NULL technologies - use GIN index efficiently
+            stmt = stmt.where(Company.technologies.isnot(None))
+            # Remove array_length check - it's slow and unnecessary
+            # array_to_string will return empty string for empty arrays, which we filter out below
+            
+            # Filter by exact company name(s) if provided
+            if company:
+                stmt = stmt.where(Company.name.in_(company))
+            
+            # Filter out empty strings from array_to_string
+            stmt = stmt.where(column_expression != "")
+            stmt = stmt.where(func.trim(column_expression) != "")
+            
+            # Apply search on comma-separated string
+            if params.search:
+                search_term = params.search.strip()
+                if search_term:
+                    stmt = stmt.where(column_expression.ilike(f"%{search_term}%"))
+            
+            # Apply distinct - but this is still slow on large datasets
+            # Consider using unnest even when separated=False for PostgreSQL
+            if params.distinct:
+                stmt = stmt.distinct()
+            
+            # Apply ordering
+            ordering_map = {"value": column_expression}
+            stmt = apply_ordering(stmt, params.ordering, ordering_map)
+            if params.distinct and not params.ordering:
+                stmt = stmt.order_by(column_expression.asc())
+            elif not params.ordering:
+                stmt = stmt.order_by(column_expression.asc())
+            
+            # Apply pagination
+            stmt = stmt.offset(params.offset)
+            if params.limit is not None:
+                stmt = stmt.limit(params.limit)
+            
+            result = await session.execute(stmt)
+            values = []
+            for (value,) in result.fetchall():
+                if value is None:
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    continue
+                values.append(value)
+            
+            logger.debug("Retrieved %d technology values (simple, not separated)", len(values))
+            return values
+
     async def _list_array_attribute_values(
         self,
         session: AsyncSession,
@@ -2461,7 +3260,15 @@ class ContactRepository(AsyncRepository[Contact]):
         filters: ContactFilterParams,
         params: AttributeListParams,
     ) -> list[str]:
-        """Optimized array attribute extraction using lateral unnesting."""
+        """Optimized array attribute extraction using lateral unnesting.
+        
+        Performance optimizations:
+        - Uses GROUP BY instead of DISTINCT for better performance on large datasets
+        - Applies pagination LAST to allow PostgreSQL to stop early
+        - Logs query execution time for performance monitoring
+        """
+        query_start_time = time.time()
+        
         # Array attributes are always from Company, so Company join is always needed
         # But we can optimize metadata joins based on filters
         filter_needs_contact_meta = self._needs_contact_metadata_join(filters)
@@ -2547,21 +3354,313 @@ class ContactRepository(AsyncRepository[Contact]):
         if search_term:
             attr_stmt = attr_stmt.where(value_column.ilike(f"%{search_term}%"))
 
-        ordering_map = {"value": value_column}
-        attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
-        if params.ordering is None:
-            attr_stmt = attr_stmt.order_by(value_column.asc())
-        
-        # Apply distinct to the statement if requested
+        # Optimize distinct queries by using subquery approach
+        # When distinct=true, use a subquery to get distinct values FIRST (without ordering)
+        # Then apply ordering and pagination on the smaller distinct set in the outer query
         if params.distinct:
-            attr_stmt = attr_stmt.distinct()
-
+            # Inner subquery: Get distinct values from the filtered query (no ordering, no pagination)
+            distinct_subquery = attr_stmt.distinct()
+            
+            # Convert to subquery for outer query
+            distinct_subquery_alias = distinct_subquery.subquery()
+            distinct_value_column = distinct_subquery_alias.c.value
+            
+            # Outer query: Order and paginate on the distinct set
+            attr_stmt = select(distinct_value_column).select_from(distinct_subquery_alias)
+            ordering_map = {"value": distinct_value_column}
+            attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+            if params.ordering is None:
+                attr_stmt = attr_stmt.order_by(distinct_value_column.asc())
+        else:
+            # No distinct needed - apply ordering directly
+            ordering_map = {"value": value_column}
+            attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+            if params.ordering is None:
+                attr_stmt = attr_stmt.order_by(value_column.asc())
+        
+        # Apply pagination LAST - this is critical for performance
+        # PostgreSQL can use LIMIT to stop processing early if we have an index
         attr_stmt = attr_stmt.offset(params.offset)
         if params.limit is not None:
             attr_stmt = attr_stmt.limit(params.limit)
+        
+        query_exec_start = time.time()
         result = await session.execute(attr_stmt)
+        query_exec_time = time.time() - query_exec_start
+        
         values = [value for (value,) in result.fetchall() if value]
+        
+        total_time = time.time() - query_start_time
+        logger.info(
+            "Array attribute query completed: attribute=technologies values=%d query_time=%.3fs total_time=%.3fs limit=%s offset=%d",
+            len(values),
+            query_exec_time,
+            total_time,
+            params.limit,
+            params.offset,
+        )
+        
         return values
+
+    async def list_departments_simple(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        params: AttributeListParams,
+        separated: bool = True,
+    ) -> list[str]:
+        """Return department values from Contact.departments array field.
+        
+        This method queries Contact.departments and supports all ContactFilterParams.
+        Uses unnest for PostgreSQL optimization when separated=True.
+        
+        Args:
+            session: Database session
+            filters: Contact filter parameters
+            params: Attribute list parameters (distinct, limit, offset, ordering, search)
+            separated: If True, unnest array into individual values; if False, return comma-separated strings
+        
+        Returns:
+            List of department values
+        """
+        logger.debug(
+            "Listing departments (simple): limit=%d offset=%d ordering=%s search=%s distinct=%s separated=%s",
+            params.limit,
+            params.offset,
+            params.ordering,
+            bool(params.search),
+            params.distinct,
+            separated,
+        )
+        
+        bind = session.bind
+        dialect_name = getattr(bind.dialect, "name", None) if bind is not None else None
+        is_postgresql = dialect_name == "postgresql"
+        
+        # Always use unnest for PostgreSQL - it's much faster than array_to_string with DISTINCT
+        use_array_optimization = (separated or is_postgresql) and is_postgresql
+        
+        if use_array_optimization:
+            # Use unnest with optimized PostgreSQL array processing
+            # Similar to list_industries_simple but for Contact.departments with contact filters
+            
+            # Determine which joins are needed for filters
+            filter_needs_company = self._needs_company_join(filters) or self._needs_company_join_for_search(params.search or filters.search)
+            filter_needs_contact_meta = self._needs_contact_metadata_join(filters)
+            filter_needs_company_meta = self._needs_company_metadata_join(filters)
+            
+            # Create aliases
+            contact_alias = aliased(Contact, name="department_contact")
+            company_alias = aliased(Company, name="department_company") if filter_needs_company else None
+            contact_meta_alias = aliased(ContactMetadata, name="department_contact_meta") if filter_needs_contact_meta else None
+            company_meta_alias = aliased(CompanyMetadata, name="department_company_meta") if filter_needs_company_meta else None
+            
+            # Build base query to unnest departments efficiently
+            unnest_stmt = (
+                select(
+                    func.unnest(contact_alias.departments).label("value"),
+                    contact_alias.uuid.label("contact_uuid")
+                )
+                .select_from(contact_alias)
+                .where(contact_alias.departments.isnot(None))
+            )
+            
+            # Join tables if needed for filters
+            if filter_needs_company:
+                unnest_stmt = unnest_stmt.outerjoin(company_alias, contact_alias.company_id == company_alias.uuid)
+                if filter_needs_company_meta:
+                    unnest_stmt = unnest_stmt.outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+            
+            if filter_needs_contact_meta:
+                unnest_stmt = unnest_stmt.outerjoin(contact_meta_alias, contact_alias.uuid == contact_meta_alias.uuid)
+            
+            # Apply contact filters
+            unnest_stmt = self._apply_contact_filters(
+                unnest_stmt,
+                filters,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            
+            # Apply company filters if company is joined
+            if filter_needs_company:
+                unnest_stmt = self._apply_company_filters(
+                    unnest_stmt,
+                    filters,
+                    company_alias,
+                    company_meta_alias,
+                    dialect_name=dialect_name,
+                )
+                
+                # Apply special filters
+                unnest_stmt = self._apply_special_filters(
+                    unnest_stmt,
+                    filters,
+                    company_alias,
+                    company_meta_alias,
+                    dialect_name=dialect_name,
+                )
+            
+            # Convert to subquery for further processing
+            unnested = unnest_stmt.subquery()
+            value_column = unnested.c.value
+            
+            # Build main query from unnested values
+            attr_stmt = select(value_column).select_from(unnested)
+            
+            # Filter out NULL and empty values efficiently
+            trimmed_value = func.nullif(func.trim(value_column), "")
+            attr_stmt = attr_stmt.where(value_column.isnot(None))
+            attr_stmt = attr_stmt.where(trimmed_value.isnot(None))
+            
+            # Apply search on unnested values (early filtering)
+            search_term = params.search or filters.search
+            if search_term:
+                search_stripped = search_term.strip()
+                if search_stripped:
+                    attr_stmt = attr_stmt.where(value_column.ilike(f"%{search_stripped}%"))
+            
+            # Optimize distinct queries by using subquery approach
+            if params.distinct:
+                distinct_subquery = attr_stmt.distinct()
+                distinct_subquery_alias = distinct_subquery.subquery()
+                distinct_value_column = distinct_subquery_alias.c.value
+                
+                attr_stmt = select(distinct_value_column).select_from(distinct_subquery_alias)
+                ordering_map = {"value": distinct_value_column}
+                attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+                if params.ordering is None:
+                    attr_stmt = attr_stmt.order_by(distinct_value_column.asc())
+            else:
+                ordering_map = {"value": value_column}
+                attr_stmt = apply_ordering(attr_stmt, params.ordering, ordering_map)
+                if params.ordering is None:
+                    attr_stmt = attr_stmt.order_by(value_column.asc())
+            
+            # Apply pagination LAST
+            attr_stmt = attr_stmt.offset(params.offset)
+            if params.limit is not None:
+                attr_stmt = attr_stmt.limit(params.limit)
+            
+            result = await session.execute(attr_stmt)
+            values = []
+            for (value,) in result.fetchall():
+                if value is None:
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    continue
+                values.append(value)
+            
+            logger.debug("Retrieved %d department values (simple, separated)", len(values))
+            return values
+        else:
+            # Fallback for non-PostgreSQL databases: Use array_to_string
+            # This path is less optimal but works for non-PostgreSQL
+            column_expression = func.array_to_string(Contact.departments, ",")
+            
+            # Determine which joins are needed for filters
+            filter_needs_company = self._needs_company_join(filters) or self._needs_company_join_for_search(params.search or filters.search)
+            filter_needs_contact_meta = self._needs_contact_metadata_join(filters)
+            filter_needs_company_meta = self._needs_company_metadata_join(filters)
+            
+            # Create aliases
+            company_alias = aliased(Company, name="department_company") if filter_needs_company else None
+            contact_meta_alias = aliased(ContactMetadata, name="department_contact_meta") if filter_needs_contact_meta else None
+            company_meta_alias = aliased(CompanyMetadata, name="department_company_meta") if filter_needs_company_meta else None
+            
+            # Build query with joins included in initial construction to prevent cartesian product warning
+            # Even though column_expression is from Contact table, we apply the same pattern for consistency
+            # and to prevent issues if the pattern changes in the future
+            stmt = select(column_expression)
+            
+            # Build FROM clause with joins included from the start
+            if filter_needs_company:
+                # Start with Contact and immediately join company_alias
+                from_clause = Contact.outerjoin(company_alias, Contact.company_id == company_alias.uuid)
+                if filter_needs_company_meta:
+                    # Chain company_meta_alias join
+                    from_clause = from_clause.outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+                if filter_needs_contact_meta:
+                    # Chain contact_meta_alias join (can be added after company join)
+                    from_clause = from_clause.outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+                stmt = stmt.select_from(from_clause)
+            elif filter_needs_contact_meta:
+                # Only contact_meta join needed
+                from_clause = Contact.outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
+                stmt = stmt.select_from(from_clause)
+            else:
+                # No joins needed - column is from Contact table
+                stmt = stmt.select_from(Contact)
+            
+            # Filter out NULL departments
+            stmt = stmt.where(Contact.departments.isnot(None))
+            
+            # Apply contact filters
+            stmt = self._apply_contact_filters(
+                stmt,
+                filters,
+                contact_meta_alias,
+                dialect_name=dialect_name,
+            )
+            
+            # Apply company filters if company is joined
+            if filter_needs_company:
+                stmt = self._apply_company_filters(
+                    stmt,
+                    filters,
+                    company_alias,
+                    company_meta_alias,
+                    dialect_name=dialect_name,
+                )
+                
+                # Apply special filters
+                stmt = self._apply_special_filters(
+                    stmt,
+                    filters,
+                    company_alias,
+                    company_meta_alias,
+                    dialect_name=dialect_name,
+                )
+            
+            # Filter out empty strings from array_to_string
+            stmt = stmt.where(column_expression != "")
+            stmt = stmt.where(func.trim(column_expression) != "")
+            
+            # Apply search on comma-separated string
+            search_term = params.search or filters.search
+            if search_term:
+                search_stripped = search_term.strip()
+                if search_stripped:
+                    stmt = stmt.where(column_expression.ilike(f"%{search_stripped}%"))
+            
+            # Apply distinct
+            if params.distinct:
+                stmt = stmt.distinct()
+            
+            # Apply ordering
+            ordering_map = {"value": column_expression}
+            stmt = apply_ordering(stmt, params.ordering, ordering_map)
+            if params.distinct and not params.ordering:
+                stmt = stmt.order_by(column_expression.asc())
+            elif not params.ordering:
+                stmt = stmt.order_by(column_expression.asc())
+            
+            # Apply pagination
+            stmt = stmt.offset(params.offset)
+            if params.limit is not None:
+                stmt = stmt.limit(params.limit)
+            
+            result = await session.execute(stmt)
+            values = []
+            for (value,) in result.fetchall():
+                if value is None:
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    continue
+                values.append(value)
+            
+            logger.debug("Retrieved %d department values (simple, not separated)", len(values))
+            return values
 
     async def get_uuids_by_filters(
         self,

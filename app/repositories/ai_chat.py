@@ -5,9 +5,14 @@ from typing import Optional
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from typing import Optional
+
+from sqlalchemy import func
+
 from app.core.logging import get_logger
 from app.models.ai_chat import AIChat
 from app.repositories.base import AsyncRepository
+from app.schemas.filters import AIChatFilterParams
 
 logger = get_logger(__name__)
 
@@ -49,6 +54,7 @@ class AIChatRepository(AsyncRepository[AIChat]):
         self,
         session: AsyncSession,
         user_id: str,
+        filters: Optional[AIChatFilterParams] = None,
         *,
         limit: int = 25,
         offset: int = 0,
@@ -56,27 +62,33 @@ class AIChatRepository(AsyncRepository[AIChat]):
     ) -> list[AIChat]:
         """List chats for a user with pagination and ordering."""
         logger.debug(
-            "Listing chats for user: user_id=%s limit=%d offset=%d ordering=%s",
+            "Listing chats for user: user_id=%s limit=%d offset=%d ordering=%s filters=%s",
             user_id,
             limit,
             offset,
             ordering,
+            filters.model_dump(exclude_none=True) if filters else None,
         )
         stmt: Select[tuple[AIChat]] = select(self.model).where(self.model.user_id == user_id)
 
-        # Apply ordering
-        if ordering.startswith("-"):
-            order_field = ordering[1:]
+        # Apply filters if provided
+        if filters:
+            stmt = self._apply_filters(stmt, filters)
+
+        # Apply ordering (use filter ordering if provided, otherwise use parameter)
+        resolved_ordering = filters.ordering if filters and filters.ordering else ordering
+        if resolved_ordering.startswith("-"):
+            order_field = resolved_ordering[1:]
             if hasattr(self.model, order_field):
                 stmt = stmt.order_by(getattr(self.model, order_field).desc())
             else:
-                logger.warning("Invalid ordering field: %s, using default", ordering)
+                logger.warning("Invalid ordering field: %s, using default", resolved_ordering)
                 stmt = stmt.order_by(self.model.created_at.desc())
         else:
-            if hasattr(self.model, ordering):
-                stmt = stmt.order_by(getattr(self.model, ordering).asc())
+            if hasattr(self.model, resolved_ordering):
+                stmt = stmt.order_by(getattr(self.model, resolved_ordering).asc())
             else:
-                logger.warning("Invalid ordering field: %s, using default", ordering)
+                logger.warning("Invalid ordering field: %s, using default", resolved_ordering)
                 stmt = stmt.order_by(self.model.created_at.desc())
 
         # Apply pagination
@@ -87,16 +99,63 @@ class AIChatRepository(AsyncRepository[AIChat]):
         logger.debug("Found %d chats for user_id=%s", len(chats), user_id)
         return chats
 
-    async def count_by_user_id(self, session: AsyncSession, user_id: str) -> int:
-        """Count total chats for a user."""
-        logger.debug("Counting chats for user: user_id=%s", user_id)
+    async def count_by_user_id(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        filters: Optional[AIChatFilterParams] = None,
+    ) -> int:
+        """Count total chats for a user with optional filters."""
+        logger.debug(
+            "Counting chats for user: user_id=%s filters=%s",
+            user_id,
+            filters.model_dump(exclude_none=True) if filters else None,
+        )
         stmt: Select[tuple[int]] = (
             select(func.count(self.model.id)).where(self.model.user_id == user_id)
         )
+        
+        # Apply filters if provided
+        if filters:
+            stmt = self._apply_filters(stmt, filters)
+        
         result = await session.execute(stmt)
         count = result.scalar_one() or 0
         logger.debug("Found %d total chats for user_id=%s", count, user_id)
         return count
+    
+    def _apply_filters(
+        self,
+        stmt: Select,
+        filters: AIChatFilterParams,
+    ) -> Select:
+        """Apply filter parameters to the given SQLAlchemy statement."""
+        # Title filter (case-insensitive substring match)
+        if filters.title:
+            stmt = stmt.where(
+                func.lower(self.model.title).contains(filters.title.lower())
+            )
+        
+        # Search filter (applied to title and messages)
+        if filters.search:
+            search_term = filters.search.lower()
+            stmt = stmt.where(
+                func.lower(self.model.title).contains(search_term)
+                # Note: messages is JSON, so we'd need JSONB search for full search
+                # For now, just search in title
+            )
+        
+        # Date range filters
+        if filters.created_at_after:
+            stmt = stmt.where(self.model.created_at >= filters.created_at_after)
+        if filters.created_at_before:
+            stmt = stmt.where(self.model.created_at <= filters.created_at_before)
+        if filters.updated_at_after:
+            stmt = stmt.where(self.model.updated_at >= filters.updated_at_after)
+        if filters.updated_at_before:
+            stmt = stmt.where(self.model.updated_at <= filters.updated_at_before)
+        
+        return stmt
 
     async def create_chat(
         self,

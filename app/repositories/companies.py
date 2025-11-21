@@ -916,6 +916,7 @@ class CompanyRepository(AsyncRepository[Company]):
         session: AsyncSession,
         filters: CompanyFilterParams,
         limit: Optional[int] = None,
+        offset: int = 0,
     ) -> list[str]:
         """Return company UUIDs that match the supplied filters (efficient UUID-only query).
         
@@ -938,6 +939,8 @@ class CompanyRepository(AsyncRepository[Company]):
             stmt = self._apply_search_terms_with_exists(stmt, filters.search, filters, dialect_name=dialect_name)
         
         stmt = stmt.where(Company.uuid.isnot(None))
+        if offset > 0:
+            stmt = stmt.offset(offset)
         if limit is not None:
             stmt = stmt.limit(limit)
         result = await session.execute(stmt)

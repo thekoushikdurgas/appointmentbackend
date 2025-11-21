@@ -641,14 +641,17 @@ async def _handle_get_keywords_action(websocket: WebSocket, request: ContactsWeb
 
 
 async def _handle_get_technologies_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
-    """Handle the get_technologies action."""
-    separated = request.data.get("separated", False)
-    column_factory = (
-        (lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.technologies)
-        if separated
-        else (lambda Contact, Company, ContactMetadata, CompanyMetadata: func.array_to_string(Company.technologies, ","))
-    )
+    """Handle the get_technologies action.
     
+    Technologies are always returned as individual values (one per technology),
+    not as comma-separated strings.
+    """
+    # Always use array mode - technologies are always separated
+    column_factory = (
+        lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.technologies
+    )
+    # Force separated mode by setting it in request data
+    request.data["separated"] = True
     await _handle_field_action(websocket, request, column_factory, "technologies", array_mode=True)
 
 
@@ -669,66 +672,6 @@ async def _handle_get_contact_addresses_action(websocket: WebSocket, request: Co
         request,
         lambda Contact, Company, ContactMetadata, CompanyMetadata: Contact.text_search,
         "contact_address",
-    )
-
-
-async def _handle_get_cities_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
-    """Handle the get_cities action."""
-    await _handle_field_action(
-        websocket,
-        request,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: ContactMetadata.city,
-        "city",
-    )
-
-
-async def _handle_get_states_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
-    """Handle the get_states action."""
-    await _handle_field_action(
-        websocket,
-        request,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: ContactMetadata.state,
-        "state",
-    )
-
-
-async def _handle_get_countries_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
-    """Handle the get_countries action."""
-    await _handle_field_action(
-        websocket,
-        request,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: ContactMetadata.country,
-        "country",
-    )
-
-
-async def _handle_get_company_cities_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
-    """Handle the get_company_cities action."""
-    await _handle_field_action(
-        websocket,
-        request,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: CompanyMetadata.city,
-        "company_city",
-    )
-
-
-async def _handle_get_company_states_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
-    """Handle the get_company_states action."""
-    await _handle_field_action(
-        websocket,
-        request,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: CompanyMetadata.state,
-        "company_state",
-    )
-
-
-async def _handle_get_company_countries_action(websocket: WebSocket, request: ContactsWebSocketRequest) -> None:
-    """Handle the get_company_countries action."""
-    await _handle_field_action(
-        websocket,
-        request,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: CompanyMetadata.country,
-        "company_country",
     )
 
 
@@ -940,12 +883,6 @@ async def websocket_endpoint(
     - "get_technologies": List technologies
     - "get_company_addresses": List company addresses
     - "get_contact_addresses": List contact addresses
-    - "get_cities": List contact cities
-    - "get_states": List contact states
-    - "get_countries": List contact countries
-    - "get_company_cities": List company cities
-    - "get_company_states": List company states
-    - "get_company_countries": List company countries
     - "get_import_info": Get import information
     - "upload_contacts_csv": Upload CSV for import
     - "get_import_status": Get import job status
@@ -992,18 +929,6 @@ async def websocket_endpoint(
                 await _handle_get_company_addresses_action(websocket, request)
             elif request.action == "get_contact_addresses":
                 await _handle_get_contact_addresses_action(websocket, request)
-            elif request.action == "get_cities":
-                await _handle_get_cities_action(websocket, request)
-            elif request.action == "get_states":
-                await _handle_get_states_action(websocket, request)
-            elif request.action == "get_countries":
-                await _handle_get_countries_action(websocket, request)
-            elif request.action == "get_company_cities":
-                await _handle_get_company_cities_action(websocket, request)
-            elif request.action == "get_company_states":
-                await _handle_get_company_states_action(websocket, request)
-            elif request.action == "get_company_countries":
-                await _handle_get_company_countries_action(websocket, request)
             elif request.action == "get_import_info":
                 await _handle_get_import_info_action(websocket, request)
             elif request.action == "upload_contacts_csv":
@@ -1017,7 +942,7 @@ async def websocket_endpoint(
                     websocket,
                     request.request_id,
                     request.action,
-                    f"Unknown action: {request.action}. Supported actions: list_contacts, get_contact, count_contacts, get_contact_uuids, create_contact, get_titles, get_companies, get_industries, get_keywords, get_technologies, get_company_addresses, get_contact_addresses, get_cities, get_states, get_countries, get_company_cities, get_company_states, get_company_countries, get_import_info, upload_contacts_csv, get_import_status, get_import_errors",
+                    f"Unknown action: {request.action}. Supported actions: list_contacts, get_contact, count_contacts, get_contact_uuids, create_contact, get_titles, get_companies, get_industries, get_keywords, get_technologies, get_company_addresses, get_contact_addresses, get_import_info, upload_contacts_csv, get_import_status, get_import_errors",
                     "unknown_action",
                 )
     

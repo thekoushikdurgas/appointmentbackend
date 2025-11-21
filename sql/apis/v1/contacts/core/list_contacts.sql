@@ -2,32 +2,115 @@
 -- Endpoint: GET /api/v1/contacts/
 -- API Version: v1
 -- Description: Return a paginated list of contacts using every supported filter parameter.
+--              The ORM implementation uses conditional JOINs - only joining tables when filters require them.
+--              This optimizes query performance by avoiding unnecessary joins.
 -- ============================================================================
 --
 -- Parameters (All optional):
---   Pagination:
---     limit (integer, >=1) - Number of contacts per page
---     offset (integer, >=0) - Zero-based offset into the result set
+--   Query Parameters:
+--     limit (integer, >=1) - Number of contacts per page. If not provided, returns all matching contacts.
+--     offset (integer, >=0) - Zero-based offset into the result set (default: 0)
 --     cursor (text) - Opaque cursor token for pagination (base64 encoding of offset)
 --     page (integer, >=1) - Optional 1-indexed page number (converts to offset)
 --     page_size (integer, >=1) - Explicit page size override
 --     distinct (boolean, default: false) - Return distinct contacts based on primary key
 --     view (text) - View mode: 'simple' returns ContactSimpleItem, omit for full ContactListItem
+--     ordering (text) - Sort field. Prepend '-' for descending. Valid: created_at, updated_at, first_name, 
+--                      last_name, title, email, company, employees, annual_revenue, etc.
+--     search (text) - Full-text search across multiple contact and company fields
 --
---   Contact Fields, Company Filters, Company Metrics, Array Filters, Metadata Filters,
---   Social Media Filters, Exclusion Filters, Search, Ordering, Date Range Filters
---   See full parameter documentation in the header comments above.
+--   Filter Parameters (50+ available):
+--     Contact Fields: first_name, last_name, title, email, email_status, seniority, departments, mobile_phone
+--     Company Filters: company, company_location, employees_count, employees_min, employees_max, 
+--                     annual_revenue, annual_revenue_min, annual_revenue_max, total_funding, etc.
+--     Array Filters: industries, keywords, technologies (comma-separated for OR logic)
+--     Metadata Filters: city, state, country, work_direct_phone, home_phone, corporate_phone, etc.
+--     Exclusion Filters: exclude_titles, exclude_company_ids, exclude_industries, exclude_keywords, etc.
+--     Date Range Filters: created_at_after, created_at_before, updated_at_after, updated_at_before
 --
 -- Response Structure:
 --   Returns CursorPage with results array containing ContactListItem or ContactSimpleItem objects.
+--   Each result includes contact data and optionally company/metadata data based on JOINs performed.
+--
+-- Response Codes:
+--   200 OK: Contacts retrieved successfully
+--   400 Bad Request: Invalid query parameters
+--   401 Unauthorized: Authentication required
+--   500 Internal Server Error: Error occurred while querying contacts
+--
+-- Authentication:
+--   Required - Bearer token in Authorization header
+--
+-- ORM Query Optimization Notes:
+--   The ContactRepository.list_contacts() uses conditional JOINs based on filters and ordering:
+--   
+--   JOIN Decision Logic:
+--   1. Minimal query (base_query_minimal): Only contacts table
+--      - Used when: No company filters, no metadata filters, no company/metadata ordering
+--      - Returns: (Contact, None, None, None) - normalized to 4-tuple format
+--   
+--   2. Company join (base_query_with_company): Contact + Company (LEFT JOIN)
+--      - Used when: Company filters present OR company ordering OR company search
+--      - Returns: (Contact, Company, None, None) - normalized to 4-tuple format
+--   
+--   3. Full metadata joins (base_query_with_metadata): All tables (LEFT JOINs)
+--      - Used when: ContactMetadata filters OR CompanyMetadata filters OR metadata ordering
+--      - Returns: (Contact, Company, ContactMetadata, CompanyMetadata) - full 4-tuple
+--   
+--   Filter Application Order (when joins are present):
+--   1. Contact filters (_apply_contact_filters) - filters Contact table
+--   2. Company filters (_apply_company_filters) - filters Company table
+--   3. Special filters (_apply_special_filters) - domain, keywords with field control
+--   4. Search terms (apply_search_terms) - multi-column search across joined tables
+--   
+--   When no company join is needed:
+--   - Uses EXISTS subqueries (_apply_filters_with_exists) for company/metadata filters
+--   - More efficient for count queries and when only contact filters are present
+--   
+--   Default Ordering:
+--   - created_at DESC NULLS LAST, id DESC (no Company join required, uses indexed field)
+--   - This avoids unnecessary Company join and significantly improves performance
+--   
+--   Result Normalization:
+--   - Always returns 4-tuple: (Contact, Company, ContactMetadata, CompanyMetadata)
+--   - Missing joins result in None values in the tuple
+--   - Service layer handles None values gracefully when building response
+--
+-- Example Usage:
+--   GET /api/v1/contacts/?limit=25&offset=0
+--   GET /api/v1/contacts/?company=TechCorp&employees_min=50&ordering=-created_at
+--   GET /api/v1/contacts/?search=engineer&city=San Francisco&limit=50
 -- ============================================================================
 
--- Query 1: Basic query - Get all contacts (default pagination)
+-- Query 1: Basic query - Get all contacts (default pagination, minimal query - no joins)
 -- GET /api/v1/contacts/
-c
+-- Note: The ORM uses conditional JOINs. This example shows the minimal query when no filters require joins.
+-- The ORM returns a normalized 4-tuple: (Contact, Company, ContactMetadata, CompanyMetadata)
+-- When no joins are performed, Company, ContactMetadata, and CompanyMetadata are None in the tuple.
+SELECT 
+    c.id,
+    c.uuid,
+    c.first_name,
+    c.last_name,
+    c.company_id,
+    c.email,
+    c.title,
+    c.departments,
+    c.mobile_phone,
+    c.email_status,
+    c.text_search,
+    c.seniority,
+    c.created_at,
+    c.updated_at
+FROM contacts c
+ORDER BY c.created_at DESC NULLS LAST, c.id DESC
+LIMIT 25
+OFFSET 0;
 
--- Query 2: With limit parameter
--- GET /api/v1/contacts/?limit=50
+-- Query 2: With company filter (requires Company join)
+-- GET /api/v1/contacts/?company=TechCorp&limit=50
+-- Note: When company filter is present, ORM joins Company table. If no metadata filters,
+--       ContactMetadata and CompanyMetadata are None in the returned 4-tuple.
 SELECT 
     c.id,
     c.uuid,
@@ -43,45 +126,30 @@ SELECT
     c.seniority,
     c.created_at,
     c.updated_at,
-    co.name as company,
-    co.employees_count as employees,
+    co.id as company_id_db,
+    co.uuid as company_uuid,
+    co.name as company_name,
+    co.employees_count,
+    co.industries as company_industries,
+    co.keywords as company_keywords,
+    co.address as company_address,
     co.annual_revenue,
     co.total_funding,
-    co.text_search as company_address,
-    com.company_name_for_emails,
-    com.phone_number as corporate_phone,
-    com.latest_funding,
-    com.latest_funding_amount,
-    com.last_raised_at,
-    com.city as company_city,
-    com.state as company_state,
-    com.country as company_country,
-    com.linkedin_url as company_linkedin_url,
-    cm.work_direct_phone,
-    cm.home_phone,
-    cm.other_phone,
-    cm.city,
-    cm.state,
-    cm.country,
-    cm.linkedin_url as person_linkedin_url,
-    cm.website,
-    cm.stage,
-    array_to_string(co.industries, ',') as industry,
-    array_to_string(co.keywords, ',') as keywords,
-    array_to_string(co.technologies, ',') as technologies,
-    array_to_string(c.departments, ',') as departments_display,
-    COALESCE(cm.facebook_url, com.facebook_url) as facebook_url,
-    COALESCE(cm.twitter_url, com.twitter_url) as twitter_url
+    co.technologies as company_technologies,
+    co.text_search as company_text_search,
+    co.created_at as company_created_at,
+    co.updated_at as company_updated_at
 FROM contacts c
 LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-ORDER BY c.created_at DESC NULLS LAST
+WHERE co.name ILIKE '%TechCorp%'
+ORDER BY c.created_at DESC NULLS LAST, c.id DESC
 LIMIT 50
 OFFSET 0;
 
--- Query 3: With offset parameter
--- GET /api/v1/contacts/?offset=25
+-- Query 3: With metadata filters (requires all joins)
+-- GET /api/v1/contacts/?city=San Francisco&company_city=New York&limit=25&offset=25
+-- Note: When metadata filters are present, ORM joins ContactMetadata and/or CompanyMetadata.
+--       Returns full 4-tuple: (Contact, Company, ContactMetadata, CompanyMetadata)
 SELECT 
     c.id,
     c.uuid,
@@ -97,11 +165,38 @@ SELECT
     c.seniority,
     c.created_at,
     c.updated_at,
-    co.name as company,
-    co.employees_count as employees,
+    co.id as company_id_db,
+    co.uuid as company_uuid,
+    co.name as company_name,
+    co.employees_count,
+    co.industries as company_industries,
+    co.keywords as company_keywords,
+    co.address as company_address,
     co.annual_revenue,
     co.total_funding,
-    co.text_search as company_address,
+    co.technologies as company_technologies,
+    co.text_search as company_text_search,
+    co.created_at as company_created_at,
+    co.updated_at as company_updated_at,
+    cm.id as contact_metadata_id,
+    cm.uuid as contact_metadata_uuid,
+    cm.linkedin_url as person_linkedin_url,
+    cm.facebook_url as contact_facebook_url,
+    cm.twitter_url as contact_twitter_url,
+    cm.website,
+    cm.work_direct_phone,
+    cm.home_phone,
+    cm.other_phone,
+    cm.city,
+    cm.state,
+    cm.country,
+    cm.stage,
+    com.id as company_metadata_id,
+    com.uuid as company_metadata_uuid,
+    com.linkedin_url as company_linkedin_url,
+    com.facebook_url as company_facebook_url,
+    com.twitter_url as company_twitter_url,
+    com.website as company_website,
     com.company_name_for_emails,
     com.phone_number as corporate_phone,
     com.latest_funding,
@@ -109,33 +204,20 @@ SELECT
     com.last_raised_at,
     com.city as company_city,
     com.state as company_state,
-    com.country as company_country,
-    com.linkedin_url as company_linkedin_url,
-    cm.work_direct_phone,
-    cm.home_phone,
-    cm.other_phone,
-    cm.city,
-    cm.state,
-    cm.country,
-    cm.linkedin_url as person_linkedin_url,
-    cm.website,
-    cm.stage,
-    array_to_string(co.industries, ',') as industry,
-    array_to_string(co.keywords, ',') as keywords,
-    array_to_string(co.technologies, ',') as technologies,
-    array_to_string(c.departments, ',') as departments_display,
-    COALESCE(cm.facebook_url, com.facebook_url) as facebook_url,
-    COALESCE(cm.twitter_url, com.twitter_url) as twitter_url
+    com.country as company_country
 FROM contacts c
 LEFT JOIN companies co ON c.company_id = co.uuid
 LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
 LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-ORDER BY c.created_at DESC NULLS LAST
+WHERE cm.city ILIKE '%San Francisco%'
+  AND com.city ILIKE '%New York%'
+ORDER BY c.created_at DESC NULLS LAST, c.id DESC
 LIMIT 25
 OFFSET 25;
 
--- Query 4: With page parameter (page 2, converts to offset 25)
--- GET /api/v1/contacts/?page=2
+-- Query 4: With ordering by company name (requires Company join)
+-- GET /api/v1/contacts/?ordering=company&limit=25&offset=25
+-- Note: Ordering by company fields requires Company join. Default ordering uses created_at (no join needed).
 SELECT 
     c.id,
     c.uuid,
@@ -151,45 +233,29 @@ SELECT
     c.seniority,
     c.created_at,
     c.updated_at,
-    co.name as company,
-    co.employees_count as employees,
+    co.id as company_id_db,
+    co.uuid as company_uuid,
+    co.name as company_name,
+    co.employees_count,
+    co.industries as company_industries,
+    co.keywords as company_keywords,
+    co.address as company_address,
     co.annual_revenue,
     co.total_funding,
-    co.text_search as company_address,
-    com.company_name_for_emails,
-    com.phone_number as corporate_phone,
-    com.latest_funding,
-    com.latest_funding_amount,
-    com.last_raised_at,
-    com.city as company_city,
-    com.state as company_state,
-    com.country as company_country,
-    com.linkedin_url as company_linkedin_url,
-    cm.work_direct_phone,
-    cm.home_phone,
-    cm.other_phone,
-    cm.city,
-    cm.state,
-    cm.country,
-    cm.linkedin_url as person_linkedin_url,
-    cm.website,
-    cm.stage,
-    array_to_string(co.industries, ',') as industry,
-    array_to_string(co.keywords, ',') as keywords,
-    array_to_string(co.technologies, ',') as technologies,
-    array_to_string(c.departments, ',') as departments_display,
-    COALESCE(cm.facebook_url, com.facebook_url) as facebook_url,
-    COALESCE(cm.twitter_url, com.twitter_url) as twitter_url
+    co.technologies as company_technologies,
+    co.text_search as company_text_search,
+    co.created_at as company_created_at,
+    co.updated_at as company_updated_at
 FROM contacts c
 LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-ORDER BY c.created_at DESC NULLS LAST
+ORDER BY co.name ASC NULLS LAST, c.created_at DESC NULLS LAST, c.id DESC
 LIMIT 25
 OFFSET 25;
 
--- Query 5: With limit and offset
--- GET /api/v1/contacts/?limit=10&offset=20
+-- Query 5: With search parameter (may require joins based on search scope)
+-- GET /api/v1/contacts/?search=engineer&limit=10&offset=20
+-- Note: Search across contact fields only - no joins needed. If search includes company fields,
+--       Company join is required. Returns minimal query when search is contact-only.
 SELECT 
     c.id,
     c.uuid,
@@ -204,46 +270,24 @@ SELECT
     c.text_search,
     c.seniority,
     c.created_at,
-    c.updated_at,
-    co.name as company,
-    co.employees_count as employees,
-    co.annual_revenue,
-    co.total_funding,
-    co.text_search as company_address,
-    com.company_name_for_emails,
-    com.phone_number as corporate_phone,
-    com.latest_funding,
-    com.latest_funding_amount,
-    com.last_raised_at,
-    com.city as company_city,
-    com.state as company_state,
-    com.country as company_country,
-    com.linkedin_url as company_linkedin_url,
-    cm.work_direct_phone,
-    cm.home_phone,
-    cm.other_phone,
-    cm.city,
-    cm.state,
-    cm.country,
-    cm.linkedin_url as person_linkedin_url,
-    cm.website,
-    cm.stage,
-    array_to_string(co.industries, ',') as industry,
-    array_to_string(co.keywords, ',') as keywords,
-    array_to_string(co.technologies, ',') as technologies,
-    array_to_string(c.departments, ',') as departments_display,
-    COALESCE(cm.facebook_url, com.facebook_url) as facebook_url,
-    COALESCE(cm.twitter_url, com.twitter_url) as twitter_url
+    c.updated_at
 FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-ORDER BY c.created_at DESC NULLS LAST
+WHERE (
+    c.first_name ILIKE '%engineer%' OR
+    c.last_name ILIKE '%engineer%' OR
+    c.email ILIKE '%engineer%' OR
+    c.title ILIKE '%engineer%' OR
+    c.seniority ILIKE '%engineer%' OR
+    c.text_search ILIKE '%engineer%'
+)
+ORDER BY c.created_at DESC NULLS LAST, c.id DESC
 LIMIT 10
 OFFSET 20;
 
--- Query 6: With distinct=true
--- GET /api/v1/contacts/?distinct=true
+-- Query 6: With distinct=true and company filter
+-- GET /api/v1/contacts/?distinct=true&company=TechCorp
+-- Note: DISTINCT ON (c.id) is used when joins are present to handle potential duplicates.
+--       The ORM normalizes results to 4-tuple format regardless of joins performed.
 SELECT DISTINCT ON (c.id)
     c.id,
     c.uuid,
@@ -259,40 +303,23 @@ SELECT DISTINCT ON (c.id)
     c.seniority,
     c.created_at,
     c.updated_at,
-    co.name as company,
-    co.employees_count as employees,
+    co.id as company_id_db,
+    co.uuid as company_uuid,
+    co.name as company_name,
+    co.employees_count,
+    co.industries as company_industries,
+    co.keywords as company_keywords,
+    co.address as company_address,
     co.annual_revenue,
     co.total_funding,
-    co.text_search as company_address,
-    com.company_name_for_emails,
-    com.phone_number as corporate_phone,
-    com.latest_funding,
-    com.latest_funding_amount,
-    com.last_raised_at,
-    com.city as company_city,
-    com.state as company_state,
-    com.country as company_country,
-    com.linkedin_url as company_linkedin_url,
-    cm.work_direct_phone,
-    cm.home_phone,
-    cm.other_phone,
-    cm.city,
-    cm.state,
-    cm.country,
-    cm.linkedin_url as person_linkedin_url,
-    cm.website,
-    cm.stage,
-    array_to_string(co.industries, ',') as industry,
-    array_to_string(co.keywords, ',') as keywords,
-    array_to_string(co.technologies, ',') as technologies,
-    array_to_string(c.departments, ',') as departments_display,
-    COALESCE(cm.facebook_url, com.facebook_url) as facebook_url,
-    COALESCE(cm.twitter_url, com.twitter_url) as twitter_url
+    co.technologies as company_technologies,
+    co.text_search as company_text_search,
+    co.created_at as company_created_at,
+    co.updated_at as company_updated_at
 FROM contacts c
 LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-ORDER BY c.id, c.created_at DESC NULLS LAST
+WHERE co.name ILIKE '%TechCorp%'
+ORDER BY c.id, c.created_at DESC NULLS LAST, c.id DESC
 LIMIT 25
 OFFSET 0;
 
@@ -350,8 +377,99 @@ ORDER BY c.last_name ASC NULLS LAST
 LIMIT 25
 OFFSET 0;
 
--- Query 8: With ordering=-last_name (descending)
+-- Query 8: With ordering=-last_name (descending, no joins needed)
 -- GET /api/v1/contacts/?ordering=-last_name
+-- Note: Ordering by Contact fields does not require joins. Deterministic ordering ensures consistent pagination.
+SELECT 
+    c.id,
+    c.uuid,
+    c.first_name,
+    c.last_name,
+    c.company_id,
+    c.email,
+    c.title,
+    c.departments,
+    c.mobile_phone,
+    c.email_status,
+    c.text_search,
+    c.seniority,
+    c.created_at,
+    c.updated_at
+FROM contacts c
+ORDER BY c.last_name DESC NULLS LAST, c.created_at DESC NULLS LAST, c.id DESC
+LIMIT 25
+OFFSET 0;
+
+-- Query 9: Complex filter example with all joins
+-- GET /api/v1/contacts/?company=TechCorp&city=San Francisco&company_city=New York&keywords=AI&limit=25
+-- Note: This example shows when all joins are required due to filters on multiple tables.
+--       Filter application order: Contact filters → Company filters → Special filters → Search
+SELECT 
+    c.id,
+    c.uuid,
+    c.first_name,
+    c.last_name,
+    c.company_id,
+    c.email,
+    c.title,
+    c.departments,
+    c.mobile_phone,
+    c.email_status,
+    c.text_search,
+    c.seniority,
+    c.created_at,
+    c.updated_at,
+    co.id as company_id_db,
+    co.uuid as company_uuid,
+    co.name as company_name,
+    co.employees_count,
+    co.industries as company_industries,
+    co.keywords as company_keywords,
+    co.address as company_address,
+    co.annual_revenue,
+    co.total_funding,
+    co.technologies as company_technologies,
+    co.text_search as company_text_search,
+    co.created_at as company_created_at,
+    co.updated_at as company_updated_at,
+    cm.id as contact_metadata_id,
+    cm.uuid as contact_metadata_uuid,
+    cm.linkedin_url as person_linkedin_url,
+    cm.facebook_url as contact_facebook_url,
+    cm.twitter_url as contact_twitter_url,
+    cm.website,
+    cm.work_direct_phone,
+    cm.home_phone,
+    cm.other_phone,
+    cm.city,
+    cm.state,
+    cm.country,
+    cm.stage,
+    com.id as company_metadata_id,
+    com.uuid as company_metadata_uuid,
+    com.linkedin_url as company_linkedin_url,
+    com.facebook_url as company_facebook_url,
+    com.twitter_url as company_twitter_url,
+    com.website as company_website,
+    com.company_name_for_emails,
+    com.phone_number as corporate_phone,
+    com.latest_funding,
+    com.latest_funding_amount,
+    com.last_raised_at,
+    com.city as company_city,
+    com.state as company_state,
+    com.country as company_country
+FROM contacts c
+LEFT JOIN companies co ON c.company_id = co.uuid
+LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
+LEFT JOIN companies_metadata com ON co.uuid = com.uuid
+WHERE co.name ILIKE '%TechCorp%'
+  AND cm.city ILIKE '%San Francisco%'
+  AND com.city ILIKE '%New York%'
+  AND array_to_string(co.keywords, ',') ILIKE '%AI%'
+ORDER BY c.created_at DESC NULLS LAST, c.id DESC
+LIMIT 25
+OFFSET 0;
 SELECT 
     c.id,
     c.uuid,
@@ -642,8 +760,10 @@ ORDER BY c.created_at DESC NULLS LAST
 LIMIT 25
 OFFSET 0;
 
--- Query 13: With first_name filter
+-- Query 13: With first_name filter (no joins needed - contact-only filter)
 -- GET /api/v1/contacts/?first_name=Patrick
+-- Note: Contact-only filters (first_name, last_name, email, title, etc.) do not require joins.
+--       Returns minimal query: (Contact, None, None, None)
 SELECT 
     c.id,
     c.uuid,
@@ -658,47 +778,16 @@ SELECT
     c.text_search,
     c.seniority,
     c.created_at,
-    c.updated_at,
-    co.name as company,
-    co.employees_count as employees,
-    co.annual_revenue,
-    co.total_funding,
-    co.text_search as company_address,
-    com.company_name_for_emails,
-    com.phone_number as corporate_phone,
-    com.latest_funding,
-    com.latest_funding_amount,
-    com.last_raised_at,
-    com.city as company_city,
-    com.state as company_state,
-    com.country as company_country,
-    com.linkedin_url as company_linkedin_url,
-    cm.work_direct_phone,
-    cm.home_phone,
-    cm.other_phone,
-    cm.city,
-    cm.state,
-    cm.country,
-    cm.linkedin_url as person_linkedin_url,
-    cm.website,
-    cm.stage,
-    array_to_string(co.industries, ',') as industry,
-    array_to_string(co.keywords, ',') as keywords,
-    array_to_string(co.technologies, ',') as technologies,
-    array_to_string(c.departments, ',') as departments_display,
-    COALESCE(cm.facebook_url, com.facebook_url) as facebook_url,
-    COALESCE(cm.twitter_url, com.twitter_url) as twitter_url
+    c.updated_at
 FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE c.first_name ILIKE '%Patrick%'
-ORDER BY c.created_at DESC NULLS LAST
+ORDER BY c.created_at DESC NULLS LAST, c.id DESC
 LIMIT 25
 OFFSET 0;
 
--- Query 14: With last_name filter
+-- Query 14: With last_name filter (no joins needed - contact-only filter)
 -- GET /api/v1/contacts/?last_name=McGarry
+-- Note: Contact-only filters do not require joins. Returns minimal query.
 SELECT 
     c.id,
     c.uuid,
@@ -713,47 +802,17 @@ SELECT
     c.text_search,
     c.seniority,
     c.created_at,
-    c.updated_at,
-    co.name as company,
-    co.employees_count as employees,
-    co.annual_revenue,
-    co.total_funding,
-    co.text_search as company_address,
-    com.company_name_for_emails,
-    com.phone_number as corporate_phone,
-    com.latest_funding,
-    com.latest_funding_amount,
-    com.last_raised_at,
-    com.city as company_city,
-    com.state as company_state,
-    com.country as company_country,
-    com.linkedin_url as company_linkedin_url,
-    cm.work_direct_phone,
-    cm.home_phone,
-    cm.other_phone,
-    cm.city,
-    cm.state,
-    cm.country,
-    cm.linkedin_url as person_linkedin_url,
-    cm.website,
-    cm.stage,
-    array_to_string(co.industries, ',') as industry,
-    array_to_string(co.keywords, ',') as keywords,
-    array_to_string(co.technologies, ',') as technologies,
-    array_to_string(c.departments, ',') as departments_display,
-    COALESCE(cm.facebook_url, com.facebook_url) as facebook_url,
-    COALESCE(cm.twitter_url, com.twitter_url) as twitter_url
+    c.updated_at
 FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE c.last_name ILIKE '%McGarry%'
-ORDER BY c.created_at DESC NULLS LAST
+ORDER BY c.created_at DESC NULLS LAST, c.id DESC
 LIMIT 25
 OFFSET 0;
 
--- Query 15: With title filter
+-- Query 15: With title filter (no joins needed - contact-only filter)
 -- GET /api/v1/contacts/?title=Chief Technology Officer
+-- Note: Title filter uses trigram optimization when many values provided, but still no joins needed.
+--       Returns minimal query: (Contact, None, None, None)
 SELECT 
     c.id,
     c.uuid,
@@ -768,42 +827,10 @@ SELECT
     c.text_search,
     c.seniority,
     c.created_at,
-    c.updated_at,
-    co.name as company,
-    co.employees_count as employees,
-    co.annual_revenue,
-    co.total_funding,
-    co.text_search as company_address,
-    com.company_name_for_emails,
-    com.phone_number as corporate_phone,
-    com.latest_funding,
-    com.latest_funding_amount,
-    com.last_raised_at,
-    com.city as company_city,
-    com.state as company_state,
-    com.country as company_country,
-    com.linkedin_url as company_linkedin_url,
-    cm.work_direct_phone,
-    cm.home_phone,
-    cm.other_phone,
-    cm.city,
-    cm.state,
-    cm.country,
-    cm.linkedin_url as person_linkedin_url,
-    cm.website,
-    cm.stage,
-    array_to_string(co.industries, ',') as industry,
-    array_to_string(co.keywords, ',') as keywords,
-    array_to_string(co.technologies, ',') as technologies,
-    array_to_string(c.departments, ',') as departments_display,
-    COALESCE(cm.facebook_url, com.facebook_url) as facebook_url,
-    COALESCE(cm.twitter_url, com.twitter_url) as twitter_url
+    c.updated_at
 FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE c.title ILIKE '%Chief Technology Officer%'
-ORDER BY c.created_at DESC NULLS LAST
+ORDER BY c.created_at DESC NULLS LAST, c.id DESC
 LIMIT 25
 OFFSET 0;
 

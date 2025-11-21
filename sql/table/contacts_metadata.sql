@@ -1,24 +1,30 @@
-create table public.contacts_metadata
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS public.contacts_metadata CASCADE;
+
+-- Create table
+CREATE TABLE public.contacts_metadata
 (
     id                bigserial
-        primary key,
+        PRIMARY KEY,
     uuid              text,
-    linkedin_url      text default '_'::text,
-    facebook_url      text default '_'::text,
-    twitter_url       text default '_'::text,
-    website           text default '_'::text,
-    work_direct_phone text default '_'::text,
-    home_phone        text default '_'::text,
-    city              text default '_'::text,
-    state             text default '_'::text,
-    country           text default '_'::text,
-    other_phone       text default '_'::text,
-    stage             text default '_'::text
+    linkedin_url      text DEFAULT '_'::text,
+    facebook_url      text DEFAULT '_'::text,
+    twitter_url       text DEFAULT '_'::text,
+    website           text DEFAULT '_'::text,
+    work_direct_phone text DEFAULT '_'::text,
+    home_phone        text DEFAULT '_'::text,
+    city              text DEFAULT '_'::text,
+    state             text DEFAULT '_'::text,
+    country           text DEFAULT '_'::text,
+    other_phone       text DEFAULT '_'::text,
+    stage             text DEFAULT '_'::text
 );
 
-alter table public.contacts_metadata
-    owner to postgres;
+-- Set table owner
+ALTER TABLE public.contacts_metadata
+    OWNER TO postgres;
 
-create unique index idx_contacts_metadata_uuid_unique
-    on public.contacts_metadata (uuid);
+-- Create indexes
+CREATE UNIQUE INDEX idx_contacts_metadata_uuid_unique
+    ON public.contacts_metadata (uuid);
 

@@ -18,14 +18,22 @@
 --   See list_companies.sql for complete filter parameter list.
 -- ============================================================================
 
+-- ORM Implementation Notes:
+--   The CompanyRepository.list_attribute_values() with array_mode uses optimized PostgreSQL unnesting:
+--   - When separated=true and PostgreSQL: Uses _list_array_attribute_values() with lateral unnesting
+--   - When separated=false: Uses array_to_string() with regular query
+--   - Always joins CompanyMetadata (unlike list_companies which uses conditional JOINs)
+--   - Column factory: lambda Company, CompanyMetadata: Company.industries
+--   - Note: COUNT(*) in GROUP BY queries is for ordering by count only, not returned by ORM
+
 -- Query 1: Basic query with separated=false (comma-separated strings)
 -- GET /api/v1/companies/industry/
-SELECT DISTINCT array_to_string(co.industries, ',') as value, COUNT(*) as count
+-- Note: Always joins CompanyMetadata to support all filter parameters. COUNT(*) is for ordering only.
+SELECT DISTINCT array_to_string(co.industries, ',') as value
 FROM companies co
 LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE co.industries IS NOT NULL
     AND array_length(co.industries, 1) > 0
-GROUP BY array_to_string(co.industries, ',')
 ORDER BY array_to_string(co.industries, ',') ASC
 LIMIT 25
 OFFSET 0;

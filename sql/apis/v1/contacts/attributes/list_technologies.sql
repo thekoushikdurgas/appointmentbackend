@@ -1,602 +1,239 @@
 -- ============================================================================
 -- Endpoint: GET /api/v1/contacts/technologies/
 -- API Version: v1
--- Description: Return distinct values for /contacts/technologies/ using AttributeListParams. The separated parameter controls whether array columns are split into unique tokens.
+-- Description: Return distinct technology values directly from the Company table.
+-- Technologies are always returned as individual values (one per technology), 
+-- not as comma-separated strings.
+-- 
+-- This endpoint queries ONLY the Company table and ignores all contact filters.
+-- Always uses: separated=true, distinct=true (hardcoded for optimal performance)
+-- 
+-- Equivalent to: SELECT DISTINCT unnest(technologies) FROM companies WHERE technologies IS NOT NULL
 -- ============================================================================
 --
 -- Parameters:
---   All ContactFilterParams are supported for filtering which contacts to consider.
---   Attribute list specific parameters:
---     distinct (boolean, default: true) - Return unique values
---     limit (integer, default: 25) - Maximum number of results
---     offset (integer, default: 0) - Offset applied before fetching values
+--   Query Parameters:
+--     distinct (boolean, always true) - Always enforced as true (hardcoded for optimal performance)
+--     limit (integer, optional) - Maximum number of results. If not provided, returns all matching values (unlimited)
+--     offset (integer, default: 0) - Offset for pagination
 --     ordering (text, default: 'value') - Sort alphabetically ('value' or '-value')
---     search (text, optional) - Optional case-insensitive search term
---     company (text, optional) - Restrict results to a single company
---     separated (boolean, default: false) - Split array columns into unique tokens
+--     search (text, optional) - Optional case-insensitive search term to filter technologies
+--     company (text or array, optional) - Filter by exact company name(s). Supports multiple values:
+--       - Multiple query params: ?company=Acme&company=Corp
+--       - Comma-separated: ?company=Acme,Corp
+--       - Mixed: ?company=Acme,Corp&company=Tech
 --
---   All other ContactFilterParams can be applied to filter the base contact set.
---   See list_contacts.sql for complete filter parameter list.
+--   Note: ContactFilterParams are NOT supported - this endpoint queries only the Company table.
+--
+-- Response Structure:
+--   Returns array of strings: ["Salesforce", "Python", "JavaScript", ...]
+--   Technologies are always returned as individual values (one per technology).
+--
+-- Response Codes:
+--   200 OK: Technologies retrieved successfully
+--   400 Bad Request: Invalid query parameters
+--   401 Unauthorized: Authentication required
+--   500 Internal Server Error: Error occurred while querying technologies
+--
+-- Authentication:
+--   Required - Bearer token in Authorization header
+--
+-- ORM Implementation Notes:
+--   The ContactRepository.list_technologies_simple() queries ONLY the Company table:
+--   - No contact filters are supported (ignores ContactFilterParams)
+--   - Always uses unnest(Company.technologies) - separated=true is hardcoded
+--   - Always uses DISTINCT - distinct=true is hardcoded
+--   - Company filter (if provided) is applied early (before unnest) for better performance
+--   - Only uses AttributeListParams: distinct (always true), limit, offset, ordering, search, company
+--
+-- Example Usage:
+--   GET /api/v1/contacts/technologies/
+--   GET /api/v1/contacts/technologies/?search=Salesforce&limit=50
+--   GET /api/v1/contacts/technologies/?company=Bandura&company=Acme
 -- ============================================================================
 
--- Query 1: Basic query with separated=false (comma-separated strings)
+-- Query 1: Basic query (unnest array into individual values - always uses unnest)
 -- GET /api/v1/contacts/technologies/
-SELECT DISTINCT array_to_string(co.technologies, ',') as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-ORDER BY array_to_string(co.technologies, ',') ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 2: With separated=true (unnest array into individual values)
--- GET /api/v1/contacts/technologies/?separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
 ORDER BY value ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 3: With separated=false (explicit)
--- GET /api/v1/contacts/technologies/?separated=false
-SELECT DISTINCT array_to_string(co.technologies, ',') as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-ORDER BY array_to_string(co.technologies, ',') ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 4: With distinct=true and separated=true
--- GET /api/v1/contacts/technologies/?distinct=true&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
+-- Query 2: With distinct=true (always enforced, but shown for clarity)
+-- GET /api/v1/contacts/technologies/?distinct=true
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
 ORDER BY value ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 5: With distinct=false and separated=true
--- GET /api/v1/contacts/technologies/?distinct=false&separated=true
-SELECT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
+-- Query 3: With ordering=value
+-- GET /api/v1/contacts/technologies/?ordering=value
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
 ORDER BY value ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 6: With ordering=value and separated=true
--- GET /api/v1/contacts/technologies/?ordering=value&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 7: With ordering=-value and separated=true
--- GET /api/v1/contacts/technologies/?ordering=-value&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
+-- Query 4: With ordering=-value
+-- GET /api/v1/contacts/technologies/?ordering=-value
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
 ORDER BY value DESC
 LIMIT 25
 OFFSET 0;
 
--- Query 8: With search parameter and separated=true
--- GET /api/v1/contacts/technologies/?search=Salesforce&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND EXISTS (
-        SELECT 1 FROM unnest(co.technologies) AS technology 
-        WHERE technology ILIKE '%Salesforce%'
-    )
+-- Query 5: With search parameter
+-- GET /api/v1/contacts/technologies/?search=Salesforce
+-- Note: Uses subquery pattern - unnest first, then filter, then distinct, then paginate
+SELECT DISTINCT unnested.value
+FROM (
+    SELECT unnest(technologies) as value
+    FROM companies
+    WHERE technologies IS NOT NULL
+) AS unnested
+WHERE unnested.value IS NOT NULL
+    AND trim(unnested.value) != ''
+    AND unnested.value ILIKE '%Salesforce%'
+ORDER BY unnested.value ASC
+LIMIT 25
+OFFSET 0;
+
+-- Query 6: With company filter (exact match, single company)
+-- GET /api/v1/contacts/technologies/?company=Bandura
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
+    AND name IN ('Bandura')
 ORDER BY value ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 9: With search parameter and separated=false
--- GET /api/v1/contacts/technologies/?search=Salesforce&separated=false
-SELECT DISTINCT array_to_string(co.technologies, ',') as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND array_to_string(co.technologies, ',') ILIKE '%Salesforce%'
-ORDER BY array_to_string(co.technologies, ',') ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 10: With company filter and separated=true
--- GET /api/v1/contacts/technologies/?company=Bandura&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND co.name ILIKE '%Bandura%'
+-- Query 7: With company filter (exact match, multiple companies)
+-- GET /api/v1/contacts/technologies/?company=Bandura&company=Acme
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
+    AND name IN ('Bandura', 'Acme')
 ORDER BY value ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 11: With limit parameter and separated=true
--- GET /api/v1/contacts/technologies/?limit=50&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
+-- Query 8: With limit parameter
+-- GET /api/v1/contacts/technologies/?limit=50
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
 ORDER BY value ASC
 LIMIT 50
 OFFSET 0;
 
--- Query 12: With offset parameter and separated=true
--- GET /api/v1/contacts/technologies/?offset=25&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
+-- Query 9: With offset parameter
+-- GET /api/v1/contacts/technologies/?offset=25
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
 ORDER BY value ASC
 LIMIT 25
 OFFSET 25;
 
--- Query 13: With limit and offset and separated=true
--- GET /api/v1/contacts/technologies/?limit=10&offset=20&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
+-- Query 10: With limit and offset
+-- GET /api/v1/contacts/technologies/?limit=10&offset=20
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
 ORDER BY value ASC
 LIMIT 10
 OFFSET 20;
 
--- Query 14: With search and company and separated=true
--- GET /api/v1/contacts/technologies/?search=Salesforce&company=Bandura&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND EXISTS (
-        SELECT 1 FROM unnest(co.technologies) AS technology 
-        WHERE technology ILIKE '%Salesforce%'
-    )
-    AND co.name ILIKE '%Bandura%'
-ORDER BY value ASC
+-- Query 11: With search and company
+-- GET /api/v1/contacts/technologies/?search=Salesforce&company=Bandura
+-- Note: Company filter is applied early (before unnest) for better performance
+SELECT DISTINCT unnested.value
+FROM (
+    SELECT unnest(technologies) as value
+    FROM companies
+    WHERE technologies IS NOT NULL
+        AND name IN ('Bandura')
+) AS unnested
+WHERE unnested.value IS NOT NULL
+    AND trim(unnested.value) != ''
+    AND unnested.value ILIKE '%Salesforce%'
+ORDER BY unnested.value ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 15: With distinct, ordering, search, and separated=true
--- GET /api/v1/contacts/technologies/?distinct=true&ordering=-value&search=Salesforce&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND EXISTS (
-        SELECT 1 FROM unnest(co.technologies) AS technology 
-        WHERE technology ILIKE '%Salesforce%'
-    )
-ORDER BY value DESC
+-- Query 12: With distinct, ordering, search
+-- GET /api/v1/contacts/technologies/?distinct=true&ordering=-value&search=Salesforce
+-- Note: distinct=true is always enforced (hardcoded)
+SELECT DISTINCT unnested.value
+FROM (
+    SELECT unnest(technologies) as value
+    FROM companies
+    WHERE technologies IS NOT NULL
+) AS unnested
+WHERE unnested.value IS NOT NULL
+    AND trim(unnested.value) != ''
+    AND unnested.value ILIKE '%Salesforce%'
+ORDER BY unnested.value DESC
 LIMIT 25
 OFFSET 0;
 
--- Query 16: With all attribute parameters and separated=true
--- GET /api/v1/contacts/technologies/?distinct=true&limit=50&offset=0&ordering=value&search=Salesforce&company=Bandura&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND EXISTS (
-        SELECT 1 FROM unnest(co.technologies) AS technology 
-        WHERE technology ILIKE '%Salesforce%'
-    )
-    AND co.name ILIKE '%Bandura%'
-ORDER BY value ASC
+-- Query 13: With all attribute parameters
+-- GET /api/v1/contacts/technologies/?distinct=true&limit=50&offset=0&ordering=value&search=Salesforce&company=Bandura
+-- Note: distinct=true is always enforced (hardcoded), company filter applied early
+SELECT DISTINCT unnested.value
+FROM (
+    SELECT unnest(technologies) as value
+    FROM companies
+    WHERE technologies IS NOT NULL
+        AND name IN ('Bandura')
+) AS unnested
+WHERE unnested.value IS NOT NULL
+    AND trim(unnested.value) != ''
+    AND unnested.value ILIKE '%Salesforce%'
+ORDER BY unnested.value ASC
 LIMIT 50
 OFFSET 0;
 
--- Query 17: With ContactFilterParams - first_name filter and separated=true
--- GET /api/v1/contacts/technologies/?first_name=Patrick&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND c.first_name ILIKE '%Patrick%'
+-- Query 14: With multiple companies (comma-separated format)
+-- GET /api/v1/contacts/technologies/?company=Bandura,Acme
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+    AND array_length(technologies, 1) > 0
+    AND name IN ('Bandura', 'Acme')
 ORDER BY value ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 18: With ContactFilterParams - last_name filter and separated=true
--- GET /api/v1/contacts/technologies/?last_name=McGarry&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND c.last_name ILIKE '%McGarry%'
-ORDER BY value ASC
+-- Query 15: With search, multiple companies, and ordering
+-- GET /api/v1/contacts/technologies/?search=Python&company=Bandura&company=Acme&ordering=-value
+-- Note: Company filter is applied early (before unnest) for better performance, search after unnest
+SELECT DISTINCT unnested.value
+FROM (
+    SELECT unnest(technologies) as value
+    FROM companies
+    WHERE technologies IS NOT NULL
+        AND name IN ('Bandura', 'Acme')
+) AS unnested
+WHERE unnested.value IS NOT NULL
+    AND trim(unnested.value) != ''
+    AND unnested.value ILIKE '%Python%'
+ORDER BY unnested.value DESC
 LIMIT 25
-OFFSET 0;
-
--- Query 19: With ContactFilterParams - seniority filter and separated=true
--- GET /api/v1/contacts/technologies/?seniority=C suite&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND c.seniority ILIKE '%C suite%'
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 20: With ContactFilterParams - email filter and separated=true
--- GET /api/v1/contacts/technologies/?email=banduracyber.com&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND c.email ILIKE '%banduracyber.com%'
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 21: With ContactFilterParams - department filter and separated=true
--- GET /api/v1/contacts/technologies/?department=C-Suite&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND array_to_string(c.departments, ',') ILIKE '%C-Suite%'
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 22: With ContactFilterParams - employees_min filter and separated=true
--- GET /api/v1/contacts/technologies/?employees_min=20&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND co.employees_count >= 20
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 23: With ContactFilterParams - employees_max filter and separated=true
--- GET /api/v1/contacts/technologies/?employees_max=100&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND co.employees_count <= 100
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 24: With ContactFilterParams - employees range and separated=true
--- GET /api/v1/contacts/technologies/?employees_min=20&employees_max=100&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND co.employees_count >= 20
-    AND co.employees_count <= 100
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 25: With ContactFilterParams - industries filter and separated=true
--- GET /api/v1/contacts/technologies/?industries=information technology&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND array_to_string(co.industries, ',') ILIKE '%information technology%'
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 26: With ContactFilterParams - keywords filter and separated=true
--- GET /api/v1/contacts/technologies/?keywords=cyber security&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND array_to_string(co.keywords, ',') ILIKE '%cyber security%'
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 27: With ContactFilterParams - city filter and separated=true
--- GET /api/v1/contacts/technologies/?city=Miamisburg&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND cm.city ILIKE '%Miamisburg%'
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 28: With ContactFilterParams - state filter and separated=true
--- GET /api/v1/contacts/technologies/?state=Ohio&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND cm.state ILIKE '%Ohio%'
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 29: With ContactFilterParams - country filter and separated=true
--- GET /api/v1/contacts/technologies/?country=United States&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND cm.country ILIKE '%United States%'
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 30: With ContactFilterParams - annual_revenue_min filter and separated=true
--- GET /api/v1/contacts/technologies/?annual_revenue_min=7000000&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND co.annual_revenue >= 7000000
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 31: With ContactFilterParams - annual_revenue_max filter and separated=true
--- GET /api/v1/contacts/technologies/?annual_revenue_max=9000000&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND co.annual_revenue <= 9000000
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 32: With ContactFilterParams - exclude_technologies filter and separated=true
--- GET /api/v1/contacts/technologies/?exclude_technologies=Legacy,Old&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND NOT EXISTS (
-        SELECT 1 FROM unnest(ARRAY['Legacy', 'Old']) AS exclude_val 
-        WHERE array_to_string(co.technologies, ',') ILIKE '%' || exclude_val || '%'
-    )
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 33: With ContactFilterParams - exclude_company_ids filter and separated=true
--- GET /api/v1/contacts/technologies/?exclude_company_ids=398cce44-233d-5f7c-aea1-e4a6a79df10c&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND (c.company_id IS NULL OR NOT (c.company_id = ANY(ARRAY['398cce44-233d-5f7c-aea1-e4a6a79df10c'])))
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 34: With ContactFilterParams - created_at_after filter and separated=true
--- GET /api/v1/contacts/technologies/?created_at_after=2024-01-01T00:00:00&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND c.created_at >= '2024-01-01 00:00:00'::timestamp
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 35: With ContactFilterParams - created_at_before filter and separated=true
--- GET /api/v1/contacts/technologies/?created_at_before=2024-12-31T23:59:59&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND c.created_at <= '2024-12-31 23:59:59'::timestamp
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 36: With multiple ContactFilterParams combined and separated=true
--- GET /api/v1/contacts/technologies/?company=Bandura&seniority=C suite&employees_min=20&employees_max=100&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND co.name ILIKE '%Bandura%'
-    AND c.seniority ILIKE '%C suite%'
-    AND co.employees_count >= 20
-    AND co.employees_count <= 100
-ORDER BY value ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 37: With search parameter and ContactFilterParams and separated=true
--- GET /api/v1/contacts/technologies/?search=Salesforce&company=Bandura&distinct=true&ordering=-value&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND EXISTS (
-        SELECT 1 FROM unnest(co.technologies) AS technology 
-        WHERE technology ILIKE '%Salesforce%'
-    )
-    AND co.name ILIKE '%Bandura%'
-ORDER BY value DESC
-LIMIT 25
-OFFSET 0;
-
--- Query 38: With separated=false and ContactFilterParams
--- GET /api/v1/contacts/technologies/?company=Bandura&separated=false
-SELECT DISTINCT array_to_string(co.technologies, ',') as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND co.name ILIKE '%Bandura%'
-ORDER BY array_to_string(co.technologies, ',') ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 39: With separated=false, search, and company
--- GET /api/v1/contacts/technologies/?search=Salesforce&company=Bandura&separated=false
-SELECT DISTINCT array_to_string(co.technologies, ',') as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND array_to_string(co.technologies, ',') ILIKE '%Salesforce%'
-    AND co.name ILIKE '%Bandura%'
-ORDER BY array_to_string(co.technologies, ',') ASC
-LIMIT 25
-OFFSET 0;
-
--- Query 40: Complex query with all parameters and separated=true
--- GET /api/v1/contacts/technologies/?distinct=true&limit=50&offset=0&ordering=value&search=Salesforce&company=Bandura&seniority=C suite&employees_min=20&separated=true
-SELECT DISTINCT unnest(co.technologies) as value
-FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE co.technologies IS NOT NULL
-    AND array_length(co.technologies, 1) > 0
-    AND EXISTS (
-        SELECT 1 FROM unnest(co.technologies) AS technology 
-        WHERE technology ILIKE '%Salesforce%'
-    )
-    AND co.name ILIKE '%Bandura%'
-    AND c.seniority ILIKE '%C suite%'
-    AND co.employees_count >= 20
-ORDER BY value ASC
-LIMIT 50
 OFFSET 0;

@@ -22,6 +22,7 @@ class ContactExportResponse(BaseModel):
     expires_at: datetime
     contact_count: int
     status: ExportStatus
+    job_id: Optional[str] = Field(None, description="Celery task ID for tracking the background job")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -40,6 +41,7 @@ class CompanyExportResponse(BaseModel):
     expires_at: datetime
     company_count: int
     status: ExportStatus
+    job_id: Optional[str] = Field(None, description="Celery task ID for tracking the background job")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -56,6 +58,7 @@ class UserExportDetail(BaseModel):
     contact_uuids: Optional[List[str]] = None
     company_count: int = 0
     company_uuids: Optional[List[str]] = None
+    linkedin_urls: Optional[List[str]] = Field(None, description="LinkedIn URLs used for LinkedIn exports. Only populated for exports created via POST /api/v2/linkedin/export.")
     status: ExportStatus
     created_at: datetime
     expires_at: Optional[datetime] = None
@@ -72,3 +75,35 @@ class ExportListResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class ExportStatusResponse(BaseModel):
+    """Response schema for export status endpoint."""
+
+    export_id: str
+    status: ExportStatus
+    progress_percentage: Optional[float] = Field(None, ge=0, le=100, description="Progress percentage (0-100)")
+    estimated_time: Optional[int] = Field(None, ge=0, description="Estimated time remaining in seconds")
+    error_message: Optional[str] = Field(None, description="Error message if export failed")
+    download_url: Optional[str] = Field(None, description="Download URL if export is completed")
+    expires_at: Optional[datetime] = Field(None, description="Expiration time of the download URL")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChunkedExportRequest(BaseModel):
+    """Request schema for chunked export."""
+
+    chunks: List[List[str]] = Field(..., description="List of UUID chunks to export", min_length=1)
+    merge: bool = Field(True, description="Whether to merge chunks into a single export file")
+
+
+class ChunkedExportResponse(BaseModel):
+    """Response schema for chunked export creation."""
+
+    export_id: str
+    chunk_ids: List[str] = Field(..., description="List of chunk export IDs")
+    total_count: int = Field(..., description="Total number of records across all chunks")
+    status: ExportStatus
+    job_id: Optional[str] = Field(None, description="Celery task ID for tracking the background job")
+
+    model_config = ConfigDict(from_attributes=True)

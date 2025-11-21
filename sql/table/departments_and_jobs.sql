@@ -1,12 +1,17 @@
-create table public.departments_and_jobs
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS public.departments_and_jobs CASCADE;
+
+-- Create table
+CREATE TABLE public.departments_and_jobs
 (
     id           bigserial
-        primary key,
-    department   text default '_'::text,
-    job_function text default '_'::text,
-    uuid         varchar(50) not null
+        PRIMARY KEY,
+    department   text DEFAULT '_'::text,
+    job_function text DEFAULT '_'::text,
+    uuid         varchar(50) NOT NULL
 );
 
-alter table public.departments_and_jobs
-    owner to postgres;
+-- Set table owner
+ALTER TABLE public.departments_and_jobs
+    OWNER TO postgres;
 

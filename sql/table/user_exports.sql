@@ -1,7 +1,14 @@
-create type export_status as enum ('pending', 'completed', 'failed');
-create type export_type as enum ('contacts', 'companies');
+-- Drop existing table and types if they exist
+DROP TABLE IF EXISTS public.user_exports CASCADE;
+DROP TYPE IF EXISTS export_status CASCADE;
+DROP TYPE IF EXISTS export_type CASCADE;
 
-create table public.user_exports
+-- Create enum types
+CREATE TYPE export_status AS ENUM ('pending', 'processing', 'completed', 'failed', 'cancelled');
+CREATE TYPE export_type AS ENUM ('contacts', 'companies');
+
+-- Create table
+CREATE TABLE public.user_exports
 (
     id            bigserial
         primary key,
@@ -14,38 +21,47 @@ create table public.user_exports
     contact_uuids text[],
     company_count integer      default 0,
     company_uuids text[],
+    linkedin_urls text[],  -- LinkedIn URLs used for LinkedIn exports (only populated for LinkedIn export type)
     status        export_status not null default 'pending'::export_status,
     created_at    timestamp with time zone not null default now(),
     expires_at    timestamp with time zone,
     download_url  text,
     download_token text,
+    -- Progress tracking fields
+    records_processed integer default 0,
+    total_records integer default 0,
+    progress_percentage double precision,
+    estimated_time_remaining integer,
+    error_message text,
     constraint fk_user_exports_user_id
         foreign key (user_id)
             references public.users (id)
             on delete cascade
 );
 
-alter table public.user_exports
-    owner to postgres;
+-- Set table owner
+ALTER TABLE public.user_exports
+    OWNER TO postgres;
 
-create unique index idx_user_exports_export_id_unique
-    on public.user_exports (export_id);
+-- Create indexes
+CREATE UNIQUE INDEX idx_user_exports_export_id_unique
+    ON public.user_exports (export_id);
 
-create index idx_user_exports_user_id
-    on public.user_exports (user_id);
+CREATE INDEX idx_user_exports_user_id
+    ON public.user_exports (user_id);
 
-create index idx_user_exports_export_id
-    on public.user_exports (export_id);
+CREATE INDEX idx_user_exports_export_id
+    ON public.user_exports (export_id);
 
-create index idx_user_exports_expires_at
-    on public.user_exports (expires_at);
+CREATE INDEX idx_user_exports_expires_at
+    ON public.user_exports (expires_at);
 
-create index idx_user_exports_status
-    on public.user_exports (status);
+CREATE INDEX idx_user_exports_status
+    ON public.user_exports (status);
 
-create index idx_user_exports_created_at
-    on public.user_exports (created_at);
+CREATE INDEX idx_user_exports_created_at
+    ON public.user_exports (created_at);
 
-create index idx_user_exports_export_type
-    on public.user_exports (export_type);
+CREATE INDEX idx_user_exports_export_type
+    ON public.user_exports (export_type);
 

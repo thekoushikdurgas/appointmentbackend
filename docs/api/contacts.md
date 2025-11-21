@@ -664,6 +664,53 @@ GET /api/v1/contacts/title/?distinct=true&limit=50
 
 ---
 
+### GET /api/v1/contacts/seniority/ - List Seniority Values
+
+Get list of distinct seniority values from contacts. Filters out placeholder value "_" (default value in database).
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+- All ContactFilterParams are supported for filtering which contacts to consider
+- `search` (string): Search term to filter results (case-insensitive, searches within seniority field)
+- `distinct` (boolean): If `true`, returns only distinct seniority values (default: `true`)
+- `limit` (integer, optional): Maximum number of results. Default: 25
+- `offset` (integer): Offset for pagination. Default: 0
+- `ordering` (string): Sort order - `value` (ascending) or `-value` (descending). Default: `value`
+
+**Response:**
+
+```json
+{
+  "next": "http://54.87.173.234:8000/api/v1/contacts/seniority/?limit=25&offset=25",
+  "previous": null,
+  "results": [
+    "C suite",
+    "Senior",
+    "Mid-level",
+    "Junior"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+- `400 Bad Request`: Invalid parameters
+
+**Example Requests:**
+
+```txt
+GET /api/v1/contacts/seniority/?search=Senior
+GET /api/v1/contacts/seniority/?distinct=true&limit=50&company=Bandura
+GET /api/v1/contacts/seniority/?ordering=-value&title=Chief
+```
+
+---
+
 ### GET /api/v1/contacts/company/ - List Companies
 
 Get list of contacts with only id and company field.
@@ -711,6 +758,62 @@ GET /api/v1/contacts/company/?distinct=true
 
 ---
 
+### GET /api/v1/contacts/company/domain/ - List Company Domains
+
+Get list of distinct company domains extracted from CompanyMetadata.website. This endpoint queries ONLY the CompanyMetadata table and ignores all contact filters.
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+- `search` (string): Search term to filter results (case-insensitive, searches within domain field)
+- `distinct` (boolean): If `true`, returns only distinct domain values (default: `true`)
+- `limit` (integer, optional): Maximum number of results. Default: 25
+- `offset` (integer): Offset for pagination. Default: 0
+- `ordering` (string): Sort order - `value` (ascending) or `-value` (descending). Default: `value`
+
+**Note:** ContactFilterParams are NOT supported - this endpoint queries only CompanyMetadata table.
+
+**Domain Extraction:**
+
+The endpoint extracts domains from website URLs:
+- Removes protocol (http://, https://)
+- Removes www. prefix
+- Removes port numbers
+- Converts to lowercase
+- Filters out NULL and placeholder "_" values
+
+**Response:**
+
+```json
+{
+  "next": "http://54.87.173.234:8000/api/v1/contacts/company/domain/?limit=25&offset=25",
+  "previous": null,
+  "results": [
+    "example.com",
+    "acme.com",
+    "techcorp.com"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+- `400 Bad Request`: Invalid parameters
+
+**Example Requests:**
+
+```txt
+GET /api/v1/contacts/company/domain/?search=example
+GET /api/v1/contacts/company/domain/?distinct=true&limit=50
+GET /api/v1/contacts/company/domain/?ordering=-value
+```
+
+---
+
 ### GET /api/v1/contacts/industry/ - List Industries
 
 Get list of contacts with only id and industry field.
@@ -749,6 +852,54 @@ Get list of contacts with only id and industry field.
 **Status Codes:**
 
 - `200 OK`: Success
+
+---
+
+### GET /api/v1/contacts/department/ - List Departments
+
+Get list of distinct department values from Contact.departments array field. Supports all ContactFilterParams for filtering.
+
+**Headers:**
+
+- `X-Request-Id` (optional): Request tracking ID
+
+**Query Parameters:**
+
+- All ContactFilterParams are supported for filtering which contacts to consider
+- `search` (string): Search term to filter results (case-insensitive, searches within department field)
+- `distinct` (boolean): If `true`, returns only distinct department values (default: `true`)
+- `separated` (boolean): If `true`, expands array departments into individual records (one record per department). Always uses `separated=true` for optimal performance. Default: `true`
+- `limit` (integer, optional): Maximum number of results. Default: 25
+- `offset` (integer): Offset for pagination. Default: 0
+- `ordering` (string): Sort order - `value` (ascending) or `-value` (descending). Default: `value`
+
+**Response:**
+
+```json
+{
+  "next": "http://54.87.173.234:8000/api/v1/contacts/department/?limit=25&offset=25",
+  "previous": null,
+  "results": [
+    "Engineering",
+    "Sales",
+    "Marketing",
+    "C-Suite"
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200 OK`: Success
+- `400 Bad Request`: Invalid parameters
+
+**Example Requests:**
+
+```txt
+GET /api/v1/contacts/department/?search=Engineering
+GET /api/v1/contacts/department/?distinct=true&limit=50&company=Bandura
+GET /api/v1/contacts/department/?separated=true&seniority=C suite
+```
 
 ---
 
@@ -877,7 +1028,7 @@ GET /api/contacts/keywords/?separated=true&search=cloud&distinct=true
 
 ### GET /api/v1/contacts/technologies/ - List Technologies
 
-Get list of contacts with only id and technologies field.
+Get list of distinct technology values directly from the Company table. Technologies are always returned as individual values (one per technology), not as comma-separated strings.
 
 **Headers:**
 
@@ -885,27 +1036,34 @@ Get list of contacts with only id and technologies field.
 
 **Query Parameters:**
 
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct technology values
-- `separated` (boolean): If `true`, expands comma-separated technologies into individual records (one record per technology). Each contact ID may appear multiple times.
+- `search` (string): Search term to filter results (case-insensitive, searches within technology field)
+- `distinct` (boolean): Always `true` (hardcoded for optimal performance). This parameter is accepted but always enforced as `true`.
 - `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
-- `offset` (integer): Offset for pagination
+- `offset` (integer): Offset for pagination. Default: 0
+- `ordering` (string): Sort order - `value` (ascending) or `-value` (descending). Default is `value`.
+- `company` (string or array): Filter by exact company name(s). Supports multiple values:
+  - Multiple query params: `?company=Acme&company=Corp`
+  - Comma-separated: `?company=Acme,Corp`
+  - Mixed: `?company=Acme,Corp&company=Tech`
+
+**Note:** This endpoint queries ONLY the Company table and ignores all contact filters. It always uses `separated=true` and `distinct=true` internally for optimal performance.
 
 **Response:**
 
+Returns a paginated response with technology strings:
+
 ```json
 {
-  "next": null,
+  "next": "http://54.87.173.234:8000/api/v1/contacts/technologies/?limit=25&offset=25",
   "previous": null,
   "results": [
-    {
-      "id": 1,
-      "technologies": "Python, Django, PostgreSQL"
-    },
-    {
-      "id": 2,
-      "technologies": "JavaScript, React, Node.js"
-    }
+    "AWS",
+    "Django",
+    "JavaScript",
+    "Node.js",
+    "PostgreSQL",
+    "Python",
+    "React"
   ]
 }
 ```
@@ -913,6 +1071,24 @@ Get list of contacts with only id and technologies field.
 **Status Codes:**
 
 - `200 OK`: Success
+- `400 Bad Request`: Invalid parameters
+
+**Example Requests:**
+
+```txt
+GET /api/v1/contacts/technologies/
+GET /api/v1/contacts/technologies/?search=Python
+GET /api/v1/contacts/technologies/?limit=10&offset=0&ordering=-value
+GET /api/v1/contacts/technologies/?company=Acme
+GET /api/v1/contacts/technologies/?company=Acme&company=Corp&search=Python
+```
+
+**Notes:**
+
+- Always uses `separated=true` and `distinct=true` internally (hardcoded for optimal performance)
+- Queries ONLY the Company table (no Contact table joins)
+- Equivalent to: `SELECT DISTINCT unnest(technologies) FROM companies WHERE technologies IS NOT NULL`
+- The `distinct` parameter is accepted but always enforced as `true` regardless of user input
 
 ---
 
@@ -933,22 +1109,24 @@ Return address text for related companies, sourced from the `Company.text_search
 
 **Response:**
 
+Returns a paginated response with company address strings:
+
 ```json
 {
-  "next": null,
+  "next": "http://54.87.173.234:8000/api/v1/contacts/company_address/?limit=25&offset=25",
   "previous": null,
   "results": [
-    {
-      "id": 1,
-      "company_address": "123 Main St, Austin, TX"
-    },
-    {
-      "id": 2,
-      "company_address": "456 Oak Ave, Denver, CO"
-    }
+    "123 Main St, Austin, TX",
+    "456 Oak Ave, Denver, CO"
   ]
 }
 ```
+
+**Pagination Notes:**
+
+- `next`: Full URL to fetch the next page of results (null if no more results)
+- `previous`: Full URL to fetch the previous page of results (null if on first page)
+- `results`: Array of company address strings
 
 **Status Codes:**
 
@@ -973,236 +1151,29 @@ Return person-level address text sourced from the `Contact.text_search` column.
 
 **Response:**
 
+Returns a paginated response with contact address strings:
+
 ```json
 {
-  "next": null,
+  "next": "http://54.87.173.234:8000/api/v1/contacts/contact_address/?limit=25&offset=25",
   "previous": null,
   "results": [
-    {
-      "id": 1,
-      "contact_address": "789 Market St, San Francisco, CA"
-    },
-    {
-      "id": 2,
-      "contact_address": "456 Sample Ave, Denver, CO"
-    }
+    "789 Market St, San Francisco, CA",
+    "456 Sample Ave, Denver, CO"
   ]
 }
 ```
+
+**Pagination Notes:**
+
+- `next`: Full URL to fetch the next page of results (null if no more results)
+- `previous`: Full URL to fetch the previous page of results (null if on first page)
+- `results`: Array of contact address strings
 
 **Status Codes:**
 
 - `200 OK`: Success
 
----
-
-### GET /api/v1/contacts/city/ - List Contact Cities
-
-Get list of contacts with only id and city field (from ContactMetadata).
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct city values
-- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    "San Francisco",
-    "New York",
-    "Austin"
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
-### GET /api/v1/contacts/state/ - List Contact States
-
-Get list of contacts with only id and state field (from ContactMetadata).
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct state values
-- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    "CA",
-    "NY",
-    "TX"
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
-### GET /api/v1/contacts/country/ - List Contact Countries
-
-Get list of contacts with only id and country field (from ContactMetadata).
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct country values
-- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    "United States",
-    "United Kingdom",
-    "Canada"
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
-### GET /api/v1/contacts/company_city/ - List Company Cities
-
-Get list of contacts with only id and company city field (from CompanyMetadata).
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct company city values
-- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    "San Francisco",
-    "New York",
-    "Austin"
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
-### GET /api/v1/contacts/company_state/ - List Company States
-
-Get list of contacts with only id and company state field (from CompanyMetadata).
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct company state values
-- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    "CA",
-    "NY",
-    "TX"
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
-
----
-
-### GET /api/v1/contacts/company_country/ - List Company Countries
-
-Get list of contacts with only id and company country field (from CompanyMetadata).
-
-**Headers:**
-
-- `X-Request-Id` (optional): Request tracking ID
-
-**Query Parameters:**
-
-- `search` (string): Search term to filter results (case-insensitive)
-- `distinct` (boolean): If `true`, returns only distinct company country values
-- `limit` (integer, optional): Maximum number of results. **If not provided, returns all matching values (unlimited).** When provided, limits results to the specified number.
-- `offset` (integer): Offset for pagination
-
-**Response:**
-
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    "United States",
-    "United Kingdom",
-    "Canada"
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200 OK`: Success
 
 ---
 

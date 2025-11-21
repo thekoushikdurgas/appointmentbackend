@@ -1,12 +1,14 @@
 """User profile API endpoints."""
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.filters import UserFilterParams
 from app.schemas.user import AvatarUploadResponse, ProfileResponse, ProfileUpdate
 from app.services.user_service import UserService
 
@@ -15,9 +17,22 @@ logger = get_logger(__name__)
 service = UserService()
 
 
+async def resolve_user_filters(request: Request) -> UserFilterParams:
+    """Build user filter parameters from query string."""
+    query_params = request.query_params
+    data = dict(query_params)
+    try:
+        return UserFilterParams.model_validate(data)
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
 @router.get("/profile/", response_model=ProfileResponse)
 @log_function_call(logger=logger, log_result=True)
 async def get_profile(
+    filters: UserFilterParams = Depends(resolve_user_filters),
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ) -> ProfileResponse:
@@ -46,6 +61,7 @@ async def get_profile(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def update_profile(
     update_data: ProfileUpdate,
+    filters: UserFilterParams = Depends(resolve_user_filters),
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ) -> ProfileResponse:
@@ -75,6 +91,7 @@ async def update_profile(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def upload_avatar(
     avatar: UploadFile = File(...),
+    filters: UserFilterParams = Depends(resolve_user_filters),
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ) -> AvatarUploadResponse:
@@ -113,6 +130,7 @@ async def upload_avatar(
 @router.post("/promote-to-admin/", response_model=ProfileResponse)
 @log_function_call(logger=logger, log_result=True)
 async def promote_to_admin(
+    filters: UserFilterParams = Depends(resolve_user_filters),
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ) -> ProfileResponse:

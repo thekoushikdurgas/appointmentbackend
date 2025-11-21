@@ -7,7 +7,8 @@ import uuid
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_admin, get_current_user
@@ -17,6 +18,7 @@ from app.db.session import get_db
 from app.models.imports import ContactImportError, ImportJobStatus
 from app.models.user import User
 from app.schemas.common import MessageResponse
+from app.schemas.filters import ImportFilterParams
 from app.schemas.imports import ImportErrorRecord, ImportJobDetail, ImportJobWithErrors
 from app.services.import_service import ImportService
 from app.tasks.import_tasks import process_contacts_import
@@ -28,8 +30,21 @@ service = ImportService()
 logger = get_logger(__name__)
 
 
+async def resolve_import_filters(request: Request) -> ImportFilterParams:
+    """Build import filter parameters from query string."""
+    query_params = request.query_params
+    data = dict(query_params)
+    try:
+        return ImportFilterParams.model_validate(data)
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
 @router.get("/", response_model=MessageResponse)
 async def import_info(
+    filters: ImportFilterParams = Depends(resolve_import_filters),
     current_user: User = Depends(get_current_user),
 ) -> MessageResponse:
     """Provide instructions for triggering a contacts import."""
@@ -44,6 +59,7 @@ async def import_info(
 @router.post("/", response_model=ImportJobDetail, status_code=status.HTTP_202_ACCEPTED)
 async def upload_contacts_import(
     file: UploadFile = File(...),
+    filters: ImportFilterParams = Depends(resolve_import_filters),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin),
 ) -> ImportJobDetail:
@@ -150,6 +166,7 @@ async def upload_contacts_import(
 async def import_job_detail(
     job_id: str,
     include_errors: bool = False,
+    filters: ImportFilterParams = Depends(resolve_import_filters),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ImportJobWithErrors | ImportJobDetail:
@@ -170,6 +187,7 @@ async def import_job_detail(
 @router.get("/{job_id}/errors/", response_model=List[ImportErrorRecord])
 async def download_import_errors(
     job_id: str,
+    filters: ImportFilterParams = Depends(resolve_import_filters),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[ImportErrorRecord]:

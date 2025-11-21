@@ -2,14 +2,26 @@
 -- Endpoint: GET /api/v1/contacts/import/
 -- API Version: v1
 -- Description: Provides instructions for uploading a contacts CSV file.
+--              This endpoint does not perform any database queries.
 -- ============================================================================
--- This endpoint does not perform any database queries.
--- It returns a message with instructions.
+--
+-- Parameters:
+--   None
 --
 -- Response Structure:
--- {
---   "message": "Upload a CSV file via POST to /api/contacts/import/ to start a background import job."
--- }
+--   {
+--     "message": "Upload a CSV file via POST to /api/v1/contacts/import/ to start a background import job."
+--   }
+--
+-- Response Codes:
+--   200 OK: Instructions retrieved successfully
+--   401 Unauthorized: Authentication required
+--
+-- Authentication:
+--   Required - Bearer token in Authorization header
+--
+-- Example Usage:
+--   GET /api/v1/contacts/import/
 -- ============================================================================
 
 -- No SQL query required - returns static message only

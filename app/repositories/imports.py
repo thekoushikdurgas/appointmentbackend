@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from typing import Iterable, Optional
 
+from sqlalchemy import Select
+
 from sqlalchemy import Select, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.models.imports import ContactImportError, ContactImportJob, ImportJobStatus
 from app.repositories.base import AsyncRepository
+from app.schemas.filters import ImportFilterParams
 
 
 logger = get_logger(__name__)
@@ -135,19 +138,62 @@ class ImportJobRepository(AsyncRepository[ContactImportJob]):
     async def list_jobs(
         self,
         session: AsyncSession,
+        filters: Optional[ImportFilterParams] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> list[ContactImportJob]:
-        """List jobs ordered from newest to oldest."""
+        """List jobs ordered from newest to oldest with optional filters."""
         logger.debug(
-            "Entering ImportJobRepository.list_jobs limit=%d offset=%d", limit, offset
+            "Entering ImportJobRepository.list_jobs limit=%d offset=%d filters=%s",
+            limit,
+            offset,
+            filters.model_dump(exclude_none=True) if filters else None,
         )
-        stmt = select(ContactImportJob).order_by(ContactImportJob.created_at.desc())
+        stmt = select(ContactImportJob)
+        
+        # Apply filters if provided
+        if filters:
+            stmt = self._apply_filters(stmt, filters)
+        
+        stmt = stmt.order_by(ContactImportJob.created_at.desc())
         stmt = stmt.limit(limit).offset(offset)
         result = await session.execute(stmt)
         jobs = list(result.scalars().all())
         logger.debug("Listed %d jobs limit=%d offset=%d", len(jobs), limit, offset)
         return jobs
+    
+    def _apply_filters(
+        self,
+        stmt: Select,
+        filters: ImportFilterParams,
+    ) -> Select:
+        """Apply filter parameters to the given SQLAlchemy statement."""
+        from sqlalchemy import func
+        
+        # Status filter
+        if filters.status:
+            try:
+                status_enum = ImportJobStatus(filters.status.lower())
+                stmt = stmt.where(ContactImportJob.status == status_enum)
+            except ValueError:
+                # Invalid status, ignore filter
+                logger.warning("Invalid import job status filter: %s", filters.status)
+        
+        # File name filter (case-insensitive substring match)
+        if filters.file_name:
+            stmt = stmt.where(
+                func.lower(ContactImportJob.file_name).contains(
+                    filters.file_name.lower()
+                )
+            )
+        
+        # Date range filters
+        if filters.created_at_after:
+            stmt = stmt.where(ContactImportJob.created_at >= filters.created_at_after)
+        if filters.created_at_before:
+            stmt = stmt.where(ContactImportJob.created_at <= filters.created_at_before)
+        
+        return stmt
 
 
 class ImportErrorRepository(AsyncRepository[ContactImportError]):

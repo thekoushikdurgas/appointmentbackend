@@ -1,6 +1,7 @@
 """AI Chat API endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -13,6 +14,7 @@ from app.schemas.ai_chat import (
     AIChatUpdate,
     PaginatedAIChatResponse,
 )
+from app.schemas.filters import AIChatFilterParams
 from app.services.ai_chat_service import AIChatService
 
 router = APIRouter(prefix="/ai-chats", tags=["AI Chat"])
@@ -20,10 +22,23 @@ logger = get_logger(__name__)
 service = AIChatService()
 
 
+async def resolve_ai_chat_filters(request: Request) -> AIChatFilterParams:
+    """Build AI chat filter parameters from query string."""
+    query_params = request.query_params
+    data = dict(query_params)
+    try:
+        return AIChatFilterParams.model_validate(data)
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
 @router.get("/", response_model=PaginatedAIChatResponse)
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def list_chats(
     request: Request,
+    filters: AIChatFilterParams = Depends(resolve_ai_chat_filters),
     limit: int = Query(25, ge=1, le=100, description="Number of results per page"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     ordering: str = Query(
@@ -48,12 +63,20 @@ async def list_chats(
     )
 
     try:
+        # Use filters for pagination and ordering if provided
+        resolved_limit = filters.page_size if filters.page_size is not None else limit
+        resolved_offset = offset
+        if filters.page is not None:
+            resolved_offset = (filters.page - 1) * resolved_limit
+        resolved_ordering = filters.ordering if filters.ordering is not None else ordering
+        
         result = await service.list_chats(
             session,
             current_user.id,
-            limit=limit,
-            offset=offset,
-            ordering=ordering,
+            filters=filters,
+            limit=resolved_limit,
+            offset=resolved_offset,
+            ordering=resolved_ordering,
             request_url=str(request.url),
         )
         logger.info("Listed chats: user_id=%s count=%d", current_user.id, result.count)
@@ -72,6 +95,7 @@ async def list_chats(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def create_chat(
     chat_data: AIChatCreate,
+    filters: AIChatFilterParams = Depends(resolve_ai_chat_filters),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> AIChatResponse:
@@ -102,6 +126,7 @@ async def create_chat(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def get_chat(
     chat_id: str,
+    filters: AIChatFilterParams = Depends(resolve_ai_chat_filters),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> AIChatResponse:
@@ -131,6 +156,7 @@ async def get_chat(
 async def update_chat(
     chat_id: str,
     update_data: AIChatUpdate,
+    filters: AIChatFilterParams = Depends(resolve_ai_chat_filters),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> AIChatResponse:
@@ -161,6 +187,7 @@ async def update_chat(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def delete_chat(
     chat_id: str,
+    filters: AIChatFilterParams = Depends(resolve_ai_chat_filters),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> None:

@@ -243,14 +243,15 @@ async def count_companies(
 @router.get("/count/uuids/", response_model=UuidListResponse)
 async def get_company_uuids(
     filters: CompanyFilterParams = Depends(resolve_company_filters),
+    offset: int = Query(0, ge=0, description="Number of UUIDs to skip before returning results"),
     limit: Optional[int] = Query(None, ge=1, description="Limit the number of UUIDs returned. If not provided, returns all matching UUIDs."),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> UuidListResponse:
     """Return company UUIDs that match the provided filters."""
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-    logger.info("Getting company UUIDs with filters=%s limit=%s", active_filter_keys, limit)
-    uuids = await service.get_uuids_by_filters(session, filters, limit)
+    logger.info("Getting company UUIDs with filters=%s offset=%d limit=%s", active_filter_keys, offset, limit)
+    uuids = await service.get_uuids_by_filters(session, filters, limit, offset)
     logger.info("Retrieved company UUIDs: filters=%s count=%d", active_filter_keys, len(uuids))
     return UuidListResponse(count=len(uuids), uuids=uuids)
 
@@ -728,6 +729,7 @@ async def count_company_contacts(
 async def get_company_contact_uuids(
     company_uuid: str,
     filters: "CompanyContactFilterParams" = Depends(resolve_company_contact_filters),
+    offset: int = Query(0, ge=0, description="Number of UUIDs to skip before returning results"),
     limit: Optional[int] = Query(None, ge=1, description="Limit the number of UUIDs returned. If not provided, returns all matching UUIDs."),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -735,9 +737,10 @@ async def get_company_contact_uuids(
     """Return contact UUIDs for a specific company that match the provided filters."""
     active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
     logger.info(
-        "Getting contact UUIDs for company %s with filters=%s limit=%s",
+        "Getting contact UUIDs for company %s with filters=%s offset=%d limit=%s",
         company_uuid,
         active_filter_keys,
+        offset,
         limit,
     )
     
@@ -747,6 +750,7 @@ async def get_company_contact_uuids(
         company_uuid,
         filters,
         limit,
+        offset,
     )
     
     logger.info(

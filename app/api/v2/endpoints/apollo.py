@@ -31,7 +31,7 @@ from app.schemas.apollo import (
 )
 from app.schemas.common import CountResponse, CursorPage, UuidListResponse
 from app.schemas.contacts import ContactListItem, ContactSimpleItem
-from app.schemas.filters import ContactFilterParams
+from app.schemas.filters import ApolloFilterParams, ContactFilterParams
 from app.services.apollo_analysis_service import ApolloAnalysisService
 from app.services.contacts_service import ContactsService
 from app.utils.cursor import decode_offset_cursor
@@ -117,12 +117,12 @@ async def _batch_execute_tasks(
     return results
 
 
-def _get_filter_signature(filters: ContactFilterParams) -> str:
+def _get_filter_signature(filters: ApolloFilterParams) -> str:
     """
     Generate a deterministic signature for filter parameters for deduplication.
     
     Args:
-        filters: ContactFilterParams instance
+        filters: ApolloFilterParams instance
         
     Returns:
         MD5 hash string representing the filter combination
@@ -151,14 +151,14 @@ def _get_filter_signature(filters: ContactFilterParams) -> str:
     return key_hash
 
 
-def _generate_count_cache_key(filters: ContactFilterParams) -> str:
+def _generate_count_cache_key(filters: ApolloFilterParams) -> str:
     """
     Generate a cache key for contact count queries.
     
     Uses the same logic as _get_filter_signature for consistency.
     
     Args:
-        filters: ContactFilterParams instance
+        filters: ApolloFilterParams instance
         
     Returns:
         Cache key string for use with query_cache
@@ -220,7 +220,7 @@ def _build_filter_from_base(
                 # Remove any existing employee range filters
                 filter_dict.pop("employees_min", None)
                 filter_dict.pop("employees_max", None)
-                # Add the specific range
+                #-nm`1111`9631581 Add the specific range
                 filter_dict["employees_min"] = min_val
                 filter_dict["employees_max"] = max_val
                 return filter_dict, base_unmapped_dict
@@ -247,7 +247,7 @@ def _build_filter_from_base(
     
     # For exclusion parameters, use base filters as-is (all exclusion values are already included)
     if param_name in exclusion_params:
-        # For exclusion params, the base filters already include all exclusion values
+        # For 31- params, the base filters already include all exclusion values
         # So we can use them directly
         return filter_dict, base_unmapped_dict
     
@@ -341,9 +341,9 @@ async def _count_contacts_for_parameter(
             logger.debug("No filters created for parameter %s, returning count 0", param_name)
             return 0
         
-        # Validate and construct ContactFilterParams
+        # Validate and construct ApolloFilterParams
         try:
-            filters = ContactFilterParams.model_validate(filter_dict)
+            filters = ApolloFilterParams.model_validate(filter_dict)
         except ValidationError as exc:
             logger.warning("Invalid filter parameters for %s: %s", param_name, exc)
             return 0
@@ -463,7 +463,7 @@ async def _count_contacts_for_value(
                         )
                         other_filter_dict["employees_min"] = min_val
                         other_filter_dict["employees_max"] = max_val
-                        filters = ContactFilterParams.model_validate(other_filter_dict)
+                        filters = ApolloFilterParams.model_validate(other_filter_dict)
                         count_response = await contacts_service.count_contacts(session, filters)
                         return count_response.count
                     except (ValueError, ValidationError) as exc:
@@ -502,9 +502,9 @@ async def _count_contacts_for_value(
         if not filter_dict:
             return 0
         
-        # Validate and construct ContactFilterParams
+        # Validate and construct ApolloFilterParams
         try:
-            filters = ContactFilterParams.model_validate(filter_dict)
+            filters = ApolloFilterParams.model_validate(filter_dict)
         except ValidationError as exc:
             logger.warning("Invalid filter parameters for %s=%s: %s", param_name, single_value, exc)
             return 0
@@ -573,7 +573,7 @@ def _normalize_list_query_param(param_value: Optional[list[str]]) -> Optional[li
 
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 def _resolve_pagination(
-    filters: ContactFilterParams,
+    filters: ApolloFilterParams,
     limit: Optional[int],
 ) -> Optional[int]:
     """Choose the most appropriate page size within configured bounds."""
@@ -1222,17 +1222,17 @@ async def search_contacts_from_apollo_url(
         if normalized_exclude_domains is not None:
             filter_dict["exclude_domain_list"] = normalized_exclude_domains
 
-        # Step 3: Validate and construct ContactFilterParams
+        # Step 3: Validate and construct ApolloFilterParams
         logger.info(
-            "Before ContactFilterParams validation: filter_dict keys=%s normalize_title_column=%s type=%s",
+            "Before ApolloFilterParams validation: filter_dict keys=%s normalize_title_column=%s type=%s",
             list(filter_dict.keys()),
             filter_dict.get("normalize_title_column"),
             type(filter_dict.get("normalize_title_column")).__name__ if filter_dict.get("normalize_title_column") is not None else "None",
         )
         try:
-            filters = ContactFilterParams.model_validate(filter_dict)
+            filters = ApolloFilterParams.model_validate(filter_dict)
             logger.info(
-                "After ContactFilterParams validation: normalize_title_column=%s type=%s",
+                "After ApolloFilterParams validation: normalize_title_column=%s type=%s",
                 filters.normalize_title_column,
                 type(filters.normalize_title_column).__name__ if filters.normalize_title_column is not None else "None",
             )
@@ -1571,17 +1571,17 @@ async def count_contacts_from_apollo_url(
         if normalized_exclude_domains is not None:
             filter_dict["exclude_domain_list"] = normalized_exclude_domains
 
-        # Step 3: Validate and construct ContactFilterParams
+        # Step 3: Validate and construct ApolloFilterParams
         logger.info(
-            "Before ContactFilterParams validation: filter_dict keys=%s normalize_title_column=%s type=%s",
+            "Before ApolloFilterParams validation: filter_dict keys=%s normalize_title_column=%s type=%s",
             list(filter_dict.keys()),
             filter_dict.get("normalize_title_column"),
             type(filter_dict.get("normalize_title_column")).__name__ if filter_dict.get("normalize_title_column") is not None else "None",
         )
         try:
-            filters = ContactFilterParams.model_validate(filter_dict)
+            filters = ApolloFilterParams.model_validate(filter_dict)
             logger.info(
-                "After ContactFilterParams validation: normalize_title_column=%s type=%s",
+                "After ApolloFilterParams validation: normalize_title_column=%s type=%s",
                 filters.normalize_title_column,
                 type(filters.normalize_title_column).__name__ if filters.normalize_title_column is not None else "None",
             )
@@ -1663,6 +1663,7 @@ async def count_contacts_from_apollo_url(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def get_contact_uuids_from_apollo_url(
     request_data: ApolloUrlAnalysisRequest,
+    offset: int = Query(0, ge=0, description="Number of UUIDs to skip before returning results"),
     limit: Optional[int] = Query(None, ge=1, description="Limit the number of UUIDs returned. If not provided, returns all matching UUIDs."),
     include_company_name: Optional[str] = Query(None, description="Include contacts whose company name matches (case-insensitive substring)"),
     exclude_company_name: Optional[list[str]] = Query(None, description="Exclude contacts whose company name matches any provided value (case-insensitive)"),
@@ -1682,6 +1683,7 @@ async def get_contact_uuids_from_apollo_url(
     mapped to contact filters using the same logic.
 
     **Query Parameters:**
+    - `offset`: Number of UUIDs to skip before returning results (default: 0)
     - `limit`: Limit the number of UUIDs returned. If not provided, returns all matching UUIDs.
     - `include_company_name`: Include contacts whose company name matches (case-insensitive substring)
     - `exclude_company_name`: Exclude contacts whose company name matches any provided value (case-insensitive)
@@ -1690,6 +1692,7 @@ async def get_contact_uuids_from_apollo_url(
 
         Args:
         request_data: Request containing the Apollo.io URL to convert
+        offset: Number of UUIDs to skip before returning results (default: 0)
         limit: Optional limit on number of UUIDs to return
         include_company_name: Optional company name inclusion filter
         exclude_company_name: Optional list of company names to exclude
@@ -1705,9 +1708,10 @@ async def get_contact_uuids_from_apollo_url(
         HTTPException: If URL is invalid, not from Apollo.io, or query fails
     """
     logger.info(
-        "Apollo contacts UUID request: user_id=%s url_length=%d limit=%s",
+        "Apollo contacts UUID request: user_id=%s url_length=%d offset=%d limit=%s",
         current_user.id,
         len(request_data.url),
+        offset,
         limit,
     )
 
@@ -1737,17 +1741,17 @@ async def get_contact_uuids_from_apollo_url(
         if normalized_exclude_domains is not None:
             filter_dict["exclude_domain_list"] = normalized_exclude_domains
 
-        # Step 3: Validate and construct ContactFilterParams
+        # Step 3: Validate and construct ApolloFilterParams
         logger.info(
-            "Before ContactFilterParams validation: filter_dict keys=%s normalize_title_column=%s type=%s",
+            "Before ApolloFilterParams validation: filter_dict keys=%s normalize_title_column=%s type=%s",
             list(filter_dict.keys()),
             filter_dict.get("normalize_title_column"),
             type(filter_dict.get("normalize_title_column")).__name__ if filter_dict.get("normalize_title_column") is not None else "None",
         )
         try:
-            filters = ContactFilterParams.model_validate(filter_dict)
+            filters = ApolloFilterParams.model_validate(filter_dict)
             logger.info(
-                "After ContactFilterParams validation: normalize_title_column=%s type=%s",
+                "After ApolloFilterParams validation: normalize_title_column=%s type=%s",
                 filters.normalize_title_column,
                 type(filters.normalize_title_column).__name__ if filters.normalize_title_column is not None else "None",
             )
@@ -1765,13 +1769,14 @@ async def get_contact_uuids_from_apollo_url(
                 active_filter_keys,
             )
         logger.info(
-            "Getting contact UUIDs with Apollo filters: limit=%s filters=%s",
+            "Getting contact UUIDs with Apollo filters: offset=%d limit=%s filters=%s",
+            offset,
             limit,
             active_filter_keys,
         )
 
         # Step 4: Get contact UUIDs
-        uuids = await contacts_service.get_uuids_by_filters(session, filters, limit)
+        uuids = await contacts_service.get_uuids_by_filters(session, filters, limit, offset)
 
         logger.info(
             "Apollo contacts UUID completed: user_id=%s count=%d",

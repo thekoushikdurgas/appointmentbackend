@@ -1,7 +1,11 @@
-create table companies
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS companies CASCADE;
+
+-- Create table
+CREATE TABLE companies
 (
     id              bigserial
-        primary key,
+        PRIMARY KEY,
     uuid            text,
     name            text,
     employees_count bigint,
@@ -16,42 +20,44 @@ create table companies
     updated_at      timestamp
 );
 
-alter table companies
-    owner to postgres;
+-- Set table owner
+ALTER TABLE companies
+    OWNER TO postgres;
 
-create unique index idx_companies_uuid_unique
-    on companies (uuid);
+-- Create indexes
+CREATE UNIQUE INDEX idx_companies_uuid_unique
+    ON companies (uuid);
 
-create index idx_dec_trgm
-    on companies using gin (text_search gin_trgm_ops);
+CREATE INDEX idx_dec_trgm
+    ON companies USING gin (text_search gin_trgm_ops);
 
-create index idx_companies_name
-    on companies (name);
+CREATE INDEX idx_companies_name
+    ON companies (name);
 
-create index idx_companies_employees_count
-    on companies (employees_count);
+CREATE INDEX idx_companies_employees_count
+    ON companies (employees_count);
 
-create index idx_companies_annual_revenue
-    on companies (annual_revenue);
+CREATE INDEX idx_companies_annual_revenue
+    ON companies (annual_revenue);
 
-create index idx_companies_total_funding
-    on companies (total_funding);
+CREATE INDEX idx_companies_total_funding
+    ON companies (total_funding);
 
-create index idx_companies_industries_gin
-    on companies using gin (industries);
+CREATE INDEX idx_companies_industries_gin
+    ON companies USING gin (industries);
 
-create index idx_companies_keywords_gin
-    on companies using gin (keywords);
+CREATE INDEX idx_companies_keywords_gin
+    ON companies USING gin (keywords);
 
-create index idx_companies_technologies_gin
-    on companies using gin (technologies);
+CREATE INDEX idx_companies_technologies_gin
+    ON companies USING gin (technologies);
 
-create index idx_companies_name_trgm
-    on companies using gin (name gin_trgm_ops);
+CREATE INDEX idx_companies_name_trgm
+    ON companies USING gin (name gin_trgm_ops);
 
-create index idx_companies_created_at
-    on companies (created_at);
+CREATE INDEX idx_companies_created_at
+    ON companies (created_at);
 
-create index idx_companies_annual_revenue_industries
-    on companies (annual_revenue, industries);
+CREATE INDEX idx_companies_annual_revenue_industries
+    ON companies (annual_revenue, industries);
 

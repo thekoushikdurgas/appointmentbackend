@@ -1,7 +1,11 @@
-create table public.contacts
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS public.contacts CASCADE;
+
+-- Create table
+CREATE TABLE public.contacts
 (
     id           bigserial
-        primary key,
+        PRIMARY KEY,
     uuid         text,
     first_name   text,
     last_name    text,
@@ -14,63 +18,65 @@ create table public.contacts
     text_search  text,
     created_at   timestamp,
     updated_at   timestamp,
-    seniority    text default '_'::text
+    seniority    text DEFAULT '_'::text
 );
 
-alter table public.contacts
-    owner to postgres;
+-- Set table owner
+ALTER TABLE public.contacts
+    OWNER TO postgres;
 
-create unique index idx_contacts_uuid_unique
-    on public.contacts (uuid);
+-- Create indexes
+CREATE UNIQUE INDEX idx_contacts_uuid_unique
+    ON public.contacts (uuid);
 
-create index idx_contacts_first_name
-    on public.contacts (first_name);
+CREATE INDEX idx_contacts_first_name
+    ON public.contacts (first_name);
 
-create index idx_contacts_last_name
-    on public.contacts (last_name);
+CREATE INDEX idx_contacts_last_name
+    ON public.contacts (last_name);
 
-create index idx_contacts_company_id
-    on public.contacts (company_id);
+CREATE INDEX idx_contacts_company_id
+    ON public.contacts (company_id);
 
-create index idx_contacts_email
-    on public.contacts (email);
+CREATE INDEX idx_contacts_email
+    ON public.contacts (email);
 
-create index idx_contacts_mobile_phone
-    on public.contacts (mobile_phone);
+CREATE INDEX idx_contacts_mobile_phone
+    ON public.contacts (mobile_phone);
 
-create index idx_contacts_email_status
-    on public.contacts (email_status);
+CREATE INDEX idx_contacts_email_status
+    ON public.contacts (email_status);
 
-create index idx_contacts_title
-    on public.contacts (title);
+CREATE INDEX idx_contacts_title
+    ON public.contacts (title);
 
-create index idx_contacts_title_trgm
-    on public.contacts using gin (title public.gin_trgm_ops);
+CREATE INDEX idx_contacts_title_trgm
+    ON public.contacts USING gin (title public.gin_trgm_ops);
 
-create index idx_contacts_email_company
-    on public.contacts (email, company_id);
+CREATE INDEX idx_contacts_email_company
+    ON public.contacts (email, company_id);
 
-create index idx_contacts_name_company
-    on public.contacts (first_name, last_name, company_id);
+CREATE INDEX idx_contacts_name_company
+    ON public.contacts (first_name, last_name, company_id);
 
-create index idx_contacts_created_at
-    on public.contacts (created_at);
+CREATE INDEX idx_contacts_created_at
+    ON public.contacts (created_at);
 
-create index idx_contacts_seniority
-    on public.contacts (seniority);
+CREATE INDEX idx_contacts_seniority
+    ON public.contacts (seniority);
 
-create index idx_contacts_seniority_company_id
-    on public.contacts (seniority, company_id);
+CREATE INDEX idx_contacts_seniority_company_id
+    ON public.contacts (seniority, company_id);
 
-create index idx_contacts_departments_gin
-    on public.contacts using gin (departments);
+CREATE INDEX idx_contacts_departments_gin
+    ON public.contacts USING gin (departments);
 
-create index idx_contacts_company_department
-    on public.contacts (company_id, departments);
+CREATE INDEX idx_contacts_company_department
+    ON public.contacts (company_id, departments);
 
-create index idx_contacts_seniority_department
-    on public.contacts (seniority, departments);
+CREATE INDEX idx_contacts_seniority_department
+    ON public.contacts (seniority, departments);
 
-create index idx_contacts_dec_trgm
-    on public.contacts using gin (text_search public.gin_trgm_ops);
+CREATE INDEX idx_contacts_dec_trgm
+    ON public.contacts USING gin (text_search public.gin_trgm_ops);
 

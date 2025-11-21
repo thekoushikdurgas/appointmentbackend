@@ -1144,3 +1144,292 @@ class CountParams(BaseModel):
     search: Optional[str] = None
     distinct: bool = False
 
+
+class RootFilterParams(BaseModel):
+    """Filter parameters for root/health endpoints (minimal, mostly for consistency)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ImportFilterParams(BaseModel):
+    """Filter parameters for import job listing/filtering."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    status: Optional[str] = Field(
+        default=None,
+        description="Filter by import job status (pending, processing, completed, failed).",
+    )
+    file_name: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against import job file_name.",
+    )
+    created_at_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter import jobs created after the provided ISO timestamp (inclusive).",
+    )
+    created_at_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter import jobs created before the provided ISO timestamp (inclusive).",
+    )
+    page: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="1-indexed page number converted to an offset when pagination parameters are supplied.",
+    )
+    page_size: Optional[int] = Field(
+        default=None,
+        description="Explicit page size override (bounded by settings.MAX_PAGE_SIZE).",
+        ge=1,
+    )
+
+    @staticmethod
+    def _coerce_datetime_to_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+        """Convert aware datetimes to UTC naive to align with DB columns."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    @field_validator(
+        "created_at_after",
+        "created_at_before",
+        mode="after",
+    )
+    @classmethod
+    def _normalize_datetimes(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Ensure datetime filters are timezone-naive UTC to match storage."""
+        return cls._coerce_datetime_to_utc_naive(value)
+
+
+class AuthFilterParams(BaseModel):
+    """Filter parameters for auth endpoints (validation-focused)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    email: Optional[str] = Field(
+        default=None,
+        description="Email address for validation (used in register/login endpoints).",
+    )
+    token: Optional[str] = Field(
+        default=None,
+        description="Token for validation (used in refresh/logout endpoints).",
+    )
+
+
+class UserFilterParams(BaseModel):
+    """Filter parameters for user/profile endpoints."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against User.name.",
+    )
+    email: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against User.email.",
+    )
+    role: Optional[str] = Field(
+        default=None,
+        description="Exact match against UserProfile.role.",
+    )
+    is_active: Optional[bool] = Field(
+        default=None,
+        description="Filter by user active status.",
+    )
+    created_at_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter users created after the provided ISO timestamp (inclusive).",
+    )
+    created_at_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter users created before the provided ISO timestamp (inclusive).",
+    )
+    last_sign_in_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter users who signed in after the provided ISO timestamp (inclusive).",
+    )
+    last_sign_in_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter users who signed in before the provided ISO timestamp (inclusive).",
+    )
+
+    @staticmethod
+    def _coerce_datetime_to_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+        """Convert aware datetimes to UTC naive to align with DB columns."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    @field_validator(
+        "created_at_after",
+        "created_at_before",
+        "last_sign_in_after",
+        "last_sign_in_before",
+        mode="after",
+    )
+    @classmethod
+    def _normalize_datetimes(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Ensure datetime filters are timezone-naive UTC to match storage."""
+        return cls._coerce_datetime_to_utc_naive(value)
+
+    @staticmethod
+    def _coerce_bool(value, *, default: Optional[bool] = None) -> Optional[bool]:
+        """Best-effort conversion of common truthy/falsey representations to bool."""
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return default
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "n", "off", ""}:
+                return False
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return default
+
+    @field_validator("is_active", mode="before")
+    @classmethod
+    def _normalize_is_active(cls, value):
+        """Coerce truthy/falsey query parameters into bool without raising."""
+        return cls._coerce_bool(value, default=None)
+
+
+class AIChatFilterParams(BaseModel):
+    """Filter parameters for AI chat endpoints."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    title: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive substring match against AIChat.title.",
+    )
+    search: Optional[str] = Field(
+        default=None,
+        description="General-purpose search term applied across chat text columns.",
+    )
+    created_at_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter chats created after the provided ISO timestamp (inclusive).",
+    )
+    created_at_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter chats created before the provided ISO timestamp (inclusive).",
+    )
+    updated_at_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter chats updated after the provided ISO timestamp (inclusive).",
+    )
+    updated_at_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter chats updated before the provided ISO timestamp (inclusive).",
+    )
+    ordering: Optional[str] = Field(
+        default=None,
+        description="Ordering key referencing exposed AIChat columns (created_at, updated_at, title).",
+    )
+    page: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="1-indexed page number converted to an offset when pagination parameters are supplied.",
+    )
+    page_size: Optional[int] = Field(
+        default=None,
+        description="Explicit page size override (bounded by settings.MAX_PAGE_SIZE).",
+        ge=1,
+    )
+
+    @staticmethod
+    def _coerce_datetime_to_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+        """Convert aware datetimes to UTC naive to align with DB columns."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    @field_validator(
+        "created_at_after",
+        "created_at_before",
+        "updated_at_after",
+        "updated_at_before",
+        mode="after",
+    )
+    @classmethod
+    def _normalize_datetimes(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Ensure datetime filters are timezone-naive UTC to match storage."""
+        return cls._coerce_datetime_to_utc_naive(value)
+
+
+class ExportFilterParams(BaseModel):
+    """Filter parameters for export endpoints."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    status: Optional[str] = Field(
+        default=None,
+        description="Filter by export status (pending, processing, completed, failed, cancelled).",
+    )
+    export_type: Optional[str] = Field(
+        default=None,
+        description="Filter by export type (contacts, companies).",
+    )
+    user_id: Optional[str] = Field(
+        default=None,
+        description="Filter by user ID (UUID).",
+    )
+    created_at_after: Optional[datetime] = Field(
+        default=None,
+        description="Filter exports created after the provided ISO timestamp (inclusive).",
+    )
+    created_at_before: Optional[datetime] = Field(
+        default=None,
+        description="Filter exports created before the provided ISO timestamp (inclusive).",
+    )
+    page: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="1-indexed page number converted to an offset when pagination parameters are supplied.",
+    )
+    page_size: Optional[int] = Field(
+        default=None,
+        description="Explicit page size override (bounded by settings.MAX_PAGE_SIZE).",
+        ge=1,
+    )
+
+    @staticmethod
+    def _coerce_datetime_to_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+        """Convert aware datetimes to UTC naive to align with DB columns."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    @field_validator(
+        "created_at_after",
+        "created_at_before",
+        mode="after",
+    )
+    @classmethod
+    def _normalize_datetimes(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Ensure datetime filters are timezone-naive UTC to match storage."""
+        return cls._coerce_datetime_to_utc_naive(value)
+
+
+class ApolloFilterParams(ContactFilterParams):
+    """Dedicated filter schema for Apollo endpoints.
+
+    Extends ContactFilterParams with Apollo-specific fields and behavior.
+    This allows Apollo endpoints to have their own filter schema while
+    maintaining compatibility with all contact filter features.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+

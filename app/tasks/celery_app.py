@@ -42,6 +42,7 @@ celery_app.conf.update(
     # Task routing and prioritization
     task_routes={
         "app.tasks.import_tasks.*": {"queue": "imports", "priority": 5},
+        "app.tasks.export_tasks.*": {"queue": "exports", "priority": 4},
         "app.tasks.*": {"queue": "default", "priority": 3},
     },
     task_default_queue="default",
@@ -70,6 +71,6 @@ celery_app.autodiscover_tasks(["app.tasks"])
 logger.info(
     "Configured Celery app: concurrency=%d queues=%s",
     settings.CELERY_WORKER_CONCURRENCY,
-    ["default", "imports"],
+    ["default", "imports", "exports"],
 )
 

@@ -3,6 +3,7 @@
 Complete API documentation for AI chat conversation endpoints, including listing, creating, retrieving, updating, and deleting chat conversations.
 
 **Related Documentation:**
+
 - [User API](./user.md) - For authentication endpoints
 - [Contacts API](./contacts.md) - For contact search functionality used in chat responses
 

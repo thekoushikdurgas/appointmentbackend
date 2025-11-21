@@ -102,6 +102,7 @@ class CompanyMetadata(Base):
     facebook_url: Mapped[Optional[str]] = mapped_column(Text)
     twitter_url: Mapped[Optional[str]] = mapped_column(Text)
     website: Mapped[Optional[str]] = mapped_column(Text)
+    normalized_domain: Mapped[Optional[str]] = mapped_column(Text)
     company_name_for_emails: Mapped[Optional[str]] = mapped_column(Text)
     phone_number: Mapped[Optional[str]] = mapped_column(Text)
     latest_funding: Mapped[Optional[str]] = mapped_column(Text)

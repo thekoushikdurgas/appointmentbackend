@@ -71,3 +71,95 @@ also in root codebase also modify thsThe src folder codebase is modified, but th
 Reviewing key files to understand the project structure and determine how to run it.
 
 personTitles[] are depentent on includeSimilarTitles and personNotTitles are not  depentent on includeSimilarTitles , so personNotTitles  always extract mapping and if includeSimilarTitles is false, personTitles is extract mapping and includeSimilarTitles is true, personTitles is jumble mapping like personTitles = "project manager" , you sreach for "project" and "manager" ,Learn, understand, and analyse this deeply, and then break your tasks into smaller tasks
+
+company :-
+/contacts/company/?distinct=true&limit=25&offset=0
+/contacts/company/?search={search term}&distinct=true&limit=25&offset=0
+
+company domains :-
+/contacts/company/domain/?distinct=true&limit=25&offset=0
+/contacts/company/domain/?search={search term}&distinct=true&limit=25&offset=0
+
+
+title :-
+/contacts/title/?limit=25&distinct=true&offset=0
+/contacts/title/?limit=25&search={search term}&distinct=true&offset=0
+/contacts/title/?company={Company Names}&limit=25&search={search term}&distinct=true&offset=0
+
+seniority :-
+/contacts/seniority/?distinct=true&limit=25&offset=0
+/contacts/seniority/?search={search term}&distinct=true&limit=25&offset=0
+/contacts/seniority/?company={Company Names}&search={search term}&distinct=true&limit=25&offset=0
+
+industry :-
+/contacts/industry/?distinct=true&limit=25&offset=0
+/contacts/industry/?search={search term}&distinct=true&limit=25&offset=0
+/contacts/industry/?company={Company Names}&search={search term}&distinct=true&limit=25&offset=0
+
+department :-
+/contacts/department/?distinct=true&limit=25&offset=0
+/contacts/department/?search={search term}&distinct=true&limit=25&offset=0
+/contacts/department/?company={Company Names}&search={search term}&distinct=true&limit=25&offset=0
+
+keywords :-
+/contacts/keywords/?distinct=true&limit=25&offset=0
+/contacts/keywords/?search={search term}&distinct=true&limit=25&offset=0
+/contacts/keywords/?company={Company Names}&search={search term}&distinct=true&limit=25&offset=0
+
+technologies :-
+/contacts/technologies/?distinct=true&limit=25&offset=0
+/contacts/technologies/?search={search term}&distinct=true&limit=25&offset=0
+/contacts/technologies/?company={Company Names}&search={search term}&distinct=true&limit=25&offset=0
+
+company_address :-
+/contacts/company_address/?distinct=true&limit=25&offset=0
+/contacts/company_address/?search={search term}&distinct=true&limit=25&offset=0
+
+contact_address :-
+/contacts/contact_address/?distinct=true&limit=25&offset=0
+/contacts/contact_address/?search={search term}&distinct=true&limit=25&offset=0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -16,13 +16,24 @@ def build_pagination_link(base_url: str, *, limit: int, offset: int) -> str:
         offset,
     )
     url = urlparse(base_url)
+    logger.debug(
+        "URL parsed: scheme=%s netloc=%s path=%s query=%s",
+        url.scheme,
+        url.netloc,
+        url.path,
+        url.query,
+    )
     query = dict(parse_qsl(url.query))
     query["limit"] = str(limit)
     query["offset"] = str(offset)
     new_query = urlencode(query)
     new_url = url._replace(query=new_query)
     result = urlunparse(new_url)
-    logger.debug("Exiting build_pagination_link result=%s", result)
+    logger.debug(
+        "Exiting build_pagination_link result=%s (path=%s)",
+        result,
+        urlparse(result).path,
+    )
     return result
 
 

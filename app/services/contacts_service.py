@@ -404,6 +404,51 @@ class ContactsService:
         )
         return CursorPage(next=next_link, previous=previous_link, results=values)
 
+    async def list_company_domains_simple(
+        self,
+        session: AsyncSession,
+        params: AttributeListParams,
+        request_url: str,
+    ) -> CursorPage[str]:
+        """List company domains extracted from CompanyMetadata.website.
+        
+        This method queries ONLY the CompanyMetadata table and ignores all contact filters.
+        Only uses: distinct, limit, offset, ordering, search parameters.
+        
+        Extracts domain from website URLs (removes protocol, www, port, converts to lowercase).
+        
+        Returns paginated response with next and previous URLs.
+        """
+        self.logger.info(
+            "Service listing company domains (simple): limit=%s offset=%d distinct=%s search=%s",
+            params.limit,
+            params.offset,
+            params.distinct,
+            bool(params.search),
+        )
+        values = await self.repository.list_company_domains_simple(session, params)
+        
+        # Build pagination links
+        next_link = None
+        if params.limit is not None and len(values) == params.limit:
+            # If we got exactly 'limit' results, there might be more
+            next_offset = params.offset + params.limit
+            next_link = build_pagination_link(request_url, limit=params.limit, offset=next_offset)
+        
+        previous_link = None
+        if params.offset > 0:
+            # If we're not at the start, there's a previous page
+            prev_offset = max(params.offset - (params.limit or 0), 0)
+            previous_link = build_pagination_link(request_url, limit=params.limit or 25, offset=prev_offset)
+        
+        self.logger.info(
+            "Service retrieved %d company domains (simple): next=%s previous=%s",
+            len(values),
+            bool(next_link),
+            bool(previous_link),
+        )
+        return CursorPage(next=next_link, previous=previous_link, results=values)
+
     async def list_industries_simple(
         self,
         session: AsyncSession,
@@ -499,6 +544,103 @@ class ContactsService:
         )
         return CursorPage(next=next_link, previous=previous_link, results=values)
 
+    async def list_departments_simple(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        params: AttributeListParams,
+        separated: bool,
+        request_url: str,
+    ) -> CursorPage[str]:
+        """List department values from Contact.departments array field.
+        
+        This method queries Contact.departments and supports all ContactFilterParams.
+        Only uses: distinct, limit, offset, ordering, search, separated parameters.
+        
+        Always uses: separated=true, distinct=true (hardcoded for optimal performance)
+        
+        Returns paginated response with next and previous URLs.
+        """
+        self.logger.info(
+            "Service listing departments (simple): limit=%s offset=%d distinct=%s search=%s separated=%s",
+            params.limit,
+            params.offset,
+            params.distinct,
+            bool(params.search),
+            separated,
+        )
+        # Always use separated=True for optimal performance
+        values = await self.repository.list_departments_simple(session, filters, params, separated=True)
+        
+        # Build pagination links
+        next_link = None
+        if params.limit is not None and len(values) == params.limit:
+            # If we got exactly 'limit' results, there might be more
+            next_offset = params.offset + params.limit
+            next_link = build_pagination_link(request_url, limit=params.limit, offset=next_offset)
+        
+        previous_link = None
+        if params.offset > 0:
+            # If we're not at the start, there's a previous page
+            prev_offset = max(params.offset - (params.limit or 0), 0)
+            previous_link = build_pagination_link(request_url, limit=params.limit or 25, offset=prev_offset)
+        
+        self.logger.info(
+            "Service retrieved %d department values (simple): next=%s previous=%s",
+            len(values),
+            bool(next_link),
+            bool(previous_link),
+        )
+        return CursorPage(next=next_link, previous=previous_link, results=values)
+
+    async def list_technologies_simple(
+        self,
+        session: AsyncSession,
+        params: AttributeListParams,
+        company: Optional[list[str]],
+        request_url: str,
+    ) -> CursorPage[str]:
+        """List technology values directly from Company table.
+        
+        This method queries ONLY the Company table and ignores all contact filters.
+        Only uses: distinct, limit, offset, ordering, search, company parameters.
+        
+        Always uses: separated=True, distinct=True (hardcoded for optimal performance)
+        
+        Returns paginated response with next and previous URLs.
+        """
+        self.logger.info(
+            "Service listing technologies (simple): limit=%s offset=%d distinct=%s search=%s company_count=%s separated=true",
+            params.limit,
+            params.offset,
+            params.distinct,
+            bool(params.search),
+            len(company) if company else 0,
+        )
+        # Always use separated=True for optimal performance
+        values = await self.repository.list_technologies_simple(session, params, company, separated=True)
+        
+        # Build pagination links
+        next_link = None
+        if params.limit is not None and len(values) == params.limit:
+            # If we got exactly 'limit' results, there might be more
+            next_offset = params.offset + params.limit
+            next_link = build_pagination_link(request_url, limit=params.limit, offset=next_offset)
+        
+        previous_link = None
+        if params.offset > 0:
+            # If we're not at the start, there's a previous page
+            prev_offset = max(params.offset - (params.limit or 0), 0)
+            previous_link = build_pagination_link(request_url, limit=params.limit or 25, offset=prev_offset)
+        
+        self.logger.info(
+            "Service retrieved %d technology values (simple): next=%s previous=%s",
+            len(values),
+            bool(next_link),
+            bool(previous_link),
+        )
+        return CursorPage(next=next_link, previous=previous_link, results=values)
+
     async def list_attribute_values(
         self,
         session: AsyncSession,
@@ -536,6 +678,385 @@ class ContactsService:
         self.logger.debug("Service received %d attribute values", len(values))
         self.logger.debug("Exiting ContactsService.list_attribute_values")
         return values
+
+    async def list_company_addresses_paginated(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        params: AttributeListParams,
+        request_url: str,
+    ) -> CursorPage[str]:
+        """List company address values with pagination URLs.
+        
+        Returns paginated response with next and previous URLs.
+        Addresses are sourced from Company.text_search column.
+        Uses limit+1 pattern to accurately detect if more results exist.
+        """
+        import time
+        start_time = time.time()
+        
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        self.logger.info(
+            "Service listing company addresses (paginated): limit=%s offset=%d distinct=%s filters=%s",
+            params.limit,
+            params.offset,
+            params.distinct,
+            active_filter_keys,
+        )
+        
+        try:
+            # Use limit+1 pattern to accurately detect if more results exist
+            # Request limit+1 from repository, then check if we got more than limit
+            modified_params = params
+            if params.limit is not None:
+                modified_params = params.model_copy(update={"limit": params.limit + 1})
+            
+            # Get values using the attribute endpoint logic
+            column_factory = lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.text_search
+            
+            repository_start_time = time.time()
+            try:
+                values = await self.repository.list_attribute_values(
+                    session,
+                    filters,
+                    modified_params,
+                    array_mode=False,
+                    column_factory=column_factory,
+                )
+                repository_time = time.time() - repository_start_time
+                self.logger.info(
+                    "Repository query completed: repository_time=%.3fs distinct=%s",
+                    repository_time,
+                    params.distinct,
+                )
+            except ValueError as exc:
+                repository_time = time.time() - repository_start_time
+                self.logger.warning(
+                    "Service company address list rejected: error=%s repository_time=%.3fs",
+                    exc,
+                    repository_time,
+                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            except Exception as exc:
+                repository_time = time.time() - repository_start_time
+                self.logger.error(
+                    "Repository error in company address list: error=%s error_type=%s repository_time=%.3fs distinct=%s filters=%s",
+                    str(exc),
+                    type(exc).__name__,
+                    repository_time,
+                    params.distinct,
+                    active_filter_keys,
+                    exc_info=True,
+                )
+                raise
+            
+            # Check BEFORE Python filtering - if we got exactly limit+1, there are more results
+            # This works because SQL filtering happens before LIMIT, so if we get limit+1, there are definitely more
+            # However, the repository filters NULL/empty strings AFTER SQL LIMIT, which can reduce the count
+            # So we need to handle the case where SQL returns limit+1 rows but post-SQL filtering reduces it
+            raw_count = len(values)
+            has_more_results = params.limit is not None and raw_count == modified_params.limit
+            
+            self.logger.debug(
+                "Pagination check (after repository, before deduplication): requested_limit=%d fetch_limit=%d raw_count=%d has_more=%s",
+                params.limit,
+                modified_params.limit if params.limit is not None else None,
+                raw_count,
+                has_more_results,
+            )
+            
+            # Edge case: Post-SQL filtering (NULL/empty string removal) can reduce count
+            # If we requested limit+1 but got close to limit items (limit-2 to limit), 
+            # conservatively assume there may be more results. This handles cases where:
+            # - SQL returns limit+1 rows but some are NULL/empty and filtered out
+            # - We end up with fewer than limit+1 valid items, but more results exist
+            if params.limit is not None and not has_more_results:
+                # Check if we got close to the limit (within 2 items)
+                # This suggests SQL might have returned limit+1 but filtering reduced it
+                if raw_count >= params.limit - 2 and raw_count <= params.limit:
+                    has_more_results = True
+                    self.logger.debug(
+                        "Conservative pagination: got %d items (close to limit %d), assuming more may exist due to post-SQL filtering",
+                        raw_count,
+                        params.limit,
+                    )
+            
+            # Apply deduplication if needed (before truncating to limit)
+            distinct_requested = params.distinct
+            if distinct_requested:
+                seen = set()
+                unique_values = []
+                for value in values:
+                    if value is None:
+                        continue
+                    normalized = value.lower() if isinstance(value, str) else str(value)
+                    if normalized not in seen:
+                        seen.add(normalized)
+                        unique_values.append(value)
+                self.logger.debug(
+                    "Deduplicated company address values: before=%d after=%d",
+                    len(values),
+                    len(unique_values),
+                )
+                values = unique_values
+                deduplicated_count = len(values)
+                
+                # Edge case: When distinct=True, Python-level deduplication may further reduce count
+                # If after deduplication we still have close to 'limit' items, conservatively assume more may exist
+                if params.limit is not None and not has_more_results:
+                    # Check if deduplicated count is close to the limit (within 2 items)
+                    # This handles cases where both post-SQL filtering and deduplication reduced the count
+                    if deduplicated_count >= params.limit - 2 and deduplicated_count <= params.limit:
+                        has_more_results = True
+                        self.logger.debug(
+                            "Conservative pagination (distinct=True): raw_count=%d deduplicated_count=%d (close to limit %d), assuming more may exist",
+                            raw_count,
+                            deduplicated_count,
+                            params.limit,
+                        )
+            
+            # Return only the first 'limit' rows to the client
+            if params.limit is not None and len(values) > params.limit:
+                values = values[:params.limit]
+            
+            # Build pagination links
+            next_link = None
+            if has_more_results:
+                # If we got more than 'limit' results, there are more pages
+                next_offset = params.offset + params.limit
+                next_link = build_pagination_link(request_url, limit=params.limit, offset=next_offset)
+                self.logger.debug(
+                    "Built next pagination link: current_offset=%d next_offset=%d limit=%d url=%s",
+                    params.offset,
+                    next_offset,
+                    params.limit,
+                    next_link,
+                )
+            else:
+                self.logger.debug(
+                    "No next link: has_more_results=%s limit=%s raw_count=%d final_count=%d",
+                    has_more_results,
+                    params.limit,
+                    raw_count,
+                    len(values),
+                )
+            
+            previous_link = None
+            if params.offset > 0:
+                # If we're not at the start, there's a previous page
+                prev_offset = max(params.offset - params.limit, 0) if params.limit is not None else 0
+                previous_link = build_pagination_link(request_url, limit=params.limit or 25, offset=prev_offset)
+                self.logger.debug(
+                    "Built previous pagination link: current_offset=%d prev_offset=%d limit=%d url=%s",
+                    params.offset,
+                    prev_offset,
+                    params.limit or 25,
+                    previous_link,
+                )
+            
+            total_time = time.time() - start_time
+            self.logger.info(
+                "Service retrieved %d company address values (paginated): total_time=%.3fs requested_limit=%s offset=%d raw_count=%d final_count=%d has_more=%s next=%s previous=%s distinct=%s",
+                len(values),
+                total_time,
+                params.limit,
+                params.offset,
+                raw_count,
+                len(values),
+                has_more_results,
+                bool(next_link),
+                bool(previous_link),
+                distinct_requested,
+            )
+            
+            if total_time > 5.0:
+                self.logger.warning(
+                    "Slow company address query: total_time=%.3fs distinct=%s limit=%s offset=%d",
+                    total_time,
+                    params.distinct,
+                    params.limit,
+                    params.offset,
+                )
+            
+            return CursorPage(next=next_link, previous=previous_link, results=values)
+            
+        except HTTPException:
+            # Re-raise HTTP exceptions as-is
+            raise
+        except Exception as e:
+            total_time = time.time() - start_time
+            self.logger.error(
+                "Error in list_company_addresses_paginated: error=%s error_type=%s total_time=%.3fs limit=%s offset=%d distinct=%s filters=%s",
+                str(e),
+                type(e).__name__,
+                total_time,
+                params.limit,
+                params.offset,
+                params.distinct,
+                active_filter_keys,
+                exc_info=True,
+            )
+            raise
+
+    async def list_contact_addresses_paginated(
+        self,
+        session: AsyncSession,
+        filters: ContactFilterParams,
+        params: AttributeListParams,
+        request_url: str,
+    ) -> CursorPage[str]:
+        """List contact address values with pagination URLs.
+        
+        Returns paginated response with next and previous URLs.
+        Addresses are sourced from Contact.text_search column.
+        Uses limit+1 pattern to accurately detect if more results exist.
+        """
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        self.logger.info(
+            "Service listing contact addresses (paginated): limit=%s offset=%d distinct=%s filters=%s",
+            params.limit,
+            params.offset,
+            params.distinct,
+            active_filter_keys,
+        )
+        
+        # Use limit+1 pattern to accurately detect if more results exist
+        # Request limit+1 from repository, then check if we got more than limit
+        modified_params = params
+        if params.limit is not None:
+            modified_params = params.model_copy(update={"limit": params.limit + 1})
+        
+        # Get values using the attribute endpoint logic
+        column_factory = lambda Contact, Company, ContactMetadata, CompanyMetadata: Contact.text_search
+        try:
+            values = await self.repository.list_attribute_values(
+                session,
+                filters,
+                modified_params,
+                array_mode=False,
+                column_factory=column_factory,
+            )
+        except ValueError as exc:
+            self.logger.warning("Service contact address list rejected: %s", exc)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        
+        # Check BEFORE Python filtering - if we got exactly limit+1, there are more results
+        # This works because SQL filtering happens before LIMIT, so if we get limit+1, there are definitely more
+        # However, the repository filters NULL/empty strings AFTER SQL LIMIT, which can reduce the count
+        # So we need to handle the case where SQL returns limit+1 rows but post-SQL filtering reduces it
+        raw_count = len(values)
+        has_more_results = params.limit is not None and raw_count == modified_params.limit
+        
+        self.logger.debug(
+            "Pagination check (after repository, before deduplication): requested_limit=%d fetch_limit=%d raw_count=%d has_more=%s",
+            params.limit,
+            modified_params.limit if params.limit is not None else None,
+            raw_count,
+            has_more_results,
+        )
+        
+        # Edge case: Post-SQL filtering (NULL/empty string removal) can reduce count
+        # If we requested limit+1 but got close to limit items (limit-2 to limit), 
+        # conservatively assume there may be more results. This handles cases where:
+        # - SQL returns limit+1 rows but some are NULL/empty and filtered out
+        # - We end up with fewer than limit+1 valid items, but more results exist
+        if params.limit is not None and not has_more_results:
+            # Check if we got close to the limit (within 2 items)
+            # This suggests SQL might have returned limit+1 but filtering reduced it
+            if raw_count >= params.limit - 2 and raw_count <= params.limit:
+                has_more_results = True
+                self.logger.debug(
+                    "Conservative pagination: got %d items (close to limit %d), assuming more may exist due to post-SQL filtering",
+                    raw_count,
+                    params.limit,
+                )
+        
+        # Apply deduplication if needed (before truncating to limit)
+        distinct_requested = params.distinct
+        if distinct_requested:
+            seen = set()
+            unique_values = []
+            for value in values:
+                if value is None:
+                    continue
+                normalized = value.lower() if isinstance(value, str) else str(value)
+                if normalized not in seen:
+                    seen.add(normalized)
+                    unique_values.append(value)
+            self.logger.debug(
+                "Deduplicated contact address values: before=%d after=%d",
+                len(values),
+                len(unique_values),
+            )
+            values = unique_values
+            deduplicated_count = len(values)
+            
+            # Edge case: When distinct=True, Python-level deduplication may further reduce count
+            # If after deduplication we still have close to 'limit' items, conservatively assume more may exist
+            if params.limit is not None and not has_more_results:
+                # Check if deduplicated count is close to the limit (within 2 items)
+                # This handles cases where both post-SQL filtering and deduplication reduced the count
+                if deduplicated_count >= params.limit - 2 and deduplicated_count <= params.limit:
+                    has_more_results = True
+                    self.logger.debug(
+                        "Conservative pagination (distinct=True): raw_count=%d deduplicated_count=%d (close to limit %d), assuming more may exist",
+                        raw_count,
+                        deduplicated_count,
+                        params.limit,
+                    )
+        
+        # Return only the first 'limit' rows to the client
+        if params.limit is not None and len(values) > params.limit:
+            values = values[:params.limit]
+        
+        # Build pagination links
+        next_link = None
+        if has_more_results:
+            # If we got more than 'limit' results, there are more pages
+            next_offset = params.offset + params.limit
+            next_link = build_pagination_link(request_url, limit=params.limit, offset=next_offset)
+            self.logger.debug(
+                "Built next pagination link: current_offset=%d next_offset=%d limit=%d url=%s",
+                params.offset,
+                next_offset,
+                params.limit,
+                next_link,
+            )
+        else:
+            self.logger.debug(
+                "No next link: has_more_results=%s limit=%s raw_count=%d final_count=%d",
+                has_more_results,
+                params.limit,
+                raw_count,
+                len(values),
+            )
+        
+        previous_link = None
+        if params.offset > 0:
+            # If we're not at the start, there's a previous page
+            prev_offset = max(params.offset - params.limit, 0) if params.limit is not None else 0
+            previous_link = build_pagination_link(request_url, limit=params.limit or 25, offset=prev_offset)
+            self.logger.debug(
+                "Built previous pagination link: current_offset=%d prev_offset=%d limit=%d url=%s",
+                params.offset,
+                prev_offset,
+                params.limit or 25,
+                previous_link,
+            )
+        
+        self.logger.info(
+            "Service retrieved %d contact address values (paginated): requested_limit=%s offset=%d raw_count=%d final_count=%d has_more=%s next=%s previous=%s distinct=%s",
+            len(values),
+            params.limit,
+            params.offset,
+            raw_count,
+            len(values),
+            has_more_results,
+            bool(next_link),
+            bool(previous_link),
+            distinct_requested,
+        )
+        return CursorPage(next=next_link, previous=previous_link, results=values)
 
     def _has_alphanumeric(self, value: Any) -> bool:
         """Return True when the value contains at least one alphanumeric character."""

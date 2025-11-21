@@ -16,24 +16,18 @@
 --   "count": 42
 -- }
 --
--- Note: This query uses the same filter logic as list_company_contacts.sql but returns COUNT(*)
--- instead of the actual rows. All filter conditions apply here.
---
--- Example Usage:
---   SELECT COUNT(co.id) as count
---   FROM contacts co
---   LEFT JOIN companies comp ON co.company_id = comp.uuid
---   LEFT JOIN contacts_metadata com ON co.uuid = com.uuid
---   LEFT JOIN companies_metadata comp_meta ON comp.uuid = comp_meta.uuid
---   WHERE co.company_id = $1
---     AND co.title ILIKE '%engineer%';
--- ============================================================================
+-- ORM Implementation Notes:
+--   The ContactRepository.count_contacts_by_company() uses optimized queries:
+--   - Uses minimal query (only contacts table) with EXISTS subqueries
+--   - No JOINs unless ContactMetadata filters require them (uses EXISTS instead)
+--   - Optimized for performance - avoids unnecessary joins in count queries
+--   - Applies all CompanyContactFilterParams filters
 
+-- Query 1: Count contacts for company (minimal - no joins, uses EXISTS for metadata filters)
+-- GET /api/v1/companies/company/{company_uuid}/contacts/count/
+-- Note: Uses EXISTS subqueries for ContactMetadata filters instead of JOINs for better performance.
 SELECT COUNT(co.id) as count
 FROM contacts co
-LEFT JOIN companies comp ON co.company_id = comp.uuid
-LEFT JOIN contacts_metadata com ON co.uuid = com.uuid
-LEFT JOIN companies_metadata comp_meta ON comp.uuid = comp_meta.uuid
 WHERE co.company_id = $1
     -- Add filter conditions here based on query parameters
     -- Example filters:

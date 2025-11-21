@@ -5,8 +5,7 @@
 -- ============================================================================
 --
 -- Parameters:
---   All ContactFilterParams are supported for filtering which contacts to consider.
---   Attribute list specific parameters:
+--   Query Parameters:
 --     distinct (boolean, default: true) - Return unique values
 --     limit (integer, default: 25) - Maximum number of results
 --     offset (integer, default: 0) - Offset applied before fetching values
@@ -14,32 +13,54 @@
 --     search (text, optional) - Optional case-insensitive search term
 --     company (text, optional) - Restrict results to a single company
 --
---   All other ContactFilterParams can be applied to filter the base contact set.
+--   All ContactFilterParams are supported for filtering which contacts to consider.
 --   See list_contacts.sql for complete filter parameter list.
+--
+-- Response Structure:
+--   Returns array of strings: ["Address 1", "Address 2", ...]
+--
+-- Response Codes:
+--   200 OK: Contact addresses retrieved successfully
+--   400 Bad Request: Invalid query parameters
+--   401 Unauthorized: Authentication required
+--   500 Internal Server Error: Error occurred while querying contact addresses
+--
+-- Authentication:
+--   Required - Bearer token in Authorization header
+--
+-- Example Usage:
+--   GET /api/v1/contacts/contact_address/
+--   GET /api/v1/contacts/contact_address/?search=Ohio&limit=50
+--   GET /api/v1/contacts/contact_address/?company=Bandura&city=Miamisburg
 -- ============================================================================
 
--- Query 1: Basic query - Get all distinct contact addresses
+-- ORM Implementation Notes:
+--   The ContactRepository.list_attribute_values() uses conditional JOINs based on filters:
+--   - Always uses Contact table (since selecting Contact.text_search)
+--   - Only joins Company/ContactMetadata/CompanyMetadata when filters require them
+--   - Uses same conditional JOIN logic as list_contacts (see list_contacts.sql for details)
+--   - Column factory: lambda Contact, Company, ContactMetadata, CompanyMetadata: Contact.text_search
+
+-- Query 1: Basic query - Get all distinct contact addresses (minimal - only Contact table)
 -- GET /api/v1/contacts/contact_address/
+-- Note: Always uses Contact table since selecting Contact.text_search. Other joins only added when filters require them.
 SELECT DISTINCT c.text_search as value
 FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE c.text_search IS NOT NULL
-    AND c.text_search != ''
+    AND TRIM(c.text_search) != ''
 ORDER BY c.text_search ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 2: With distinct=true
--- GET /api/v1/contacts/contact_address/?distinct=true
+-- Query 2: With company filter (requires Company join)
+-- GET /api/v1/contacts/contact_address/?company=TechCorp
+-- Note: When company filters are present, Company join is added
 SELECT DISTINCT c.text_search as value
 FROM contacts c
 LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE c.text_search IS NOT NULL
-    AND c.text_search != ''
+    AND TRIM(c.text_search) != ''
+    AND co.name ILIKE '%TechCorp%'
 ORDER BY c.text_search ASC
 LIMIT 25
 OFFSET 0;

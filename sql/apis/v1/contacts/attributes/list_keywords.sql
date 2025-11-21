@@ -5,8 +5,7 @@
 -- ============================================================================
 --
 -- Parameters:
---   All ContactFilterParams are supported for filtering which contacts to consider.
---   Attribute list specific parameters:
+--   Query Parameters:
 --     distinct (boolean, default: true) - Return unique values
 --     limit (integer, default: 25) - Maximum number of results
 --     offset (integer, default: 0) - Offset applied before fetching values
@@ -15,30 +14,54 @@
 --     company (text, optional) - Restrict results to a single company
 --     separated (boolean, default: false) - Split array columns into unique tokens
 --
---   All other ContactFilterParams can be applied to filter the base contact set.
+--   All ContactFilterParams are supported for filtering which contacts to consider.
 --   See list_contacts.sql for complete filter parameter list.
+--
+-- Response Structure:
+--   Returns array of strings: ["cyber security", "cloud", ...] when separated=true
+--   Returns array of comma-separated strings: ["cyber security,cloud", ...] when separated=false
+--
+-- Response Codes:
+--   200 OK: Keywords retrieved successfully
+--   400 Bad Request: Invalid query parameters
+--   401 Unauthorized: Authentication required
+--   500 Internal Server Error: Error occurred while querying keywords
+--
+-- Authentication:
+--   Required - Bearer token in Authorization header
+--
+-- Example Usage:
+--   GET /api/v1/contacts/keywords/
+--   GET /api/v1/contacts/keywords/?search=cyber&separated=true
+--   GET /api/v1/contacts/keywords/?company=Bandura&separated=false
 -- ============================================================================
 
--- Query 1: Basic query with separated=false (comma-separated strings)
+-- ORM Implementation Notes:
+--   The ContactRepository.list_keywords_simple() uses conditional JOINs based on filters:
+--   - When separated=true and PostgreSQL: Uses unnest(Company.keywords) with conditional JOINs
+--   - When separated=false: Uses array_to_string(Company.keywords, ',') with conditional JOINs
+--   - Always requires Company join (since selecting Company.keywords)
+--   - Only joins ContactMetadata/CompanyMetadata when filters require them
+--   - Uses same conditional JOIN logic as list_contacts (see list_contacts.sql for details)
+
+-- Query 1: Basic query with separated=false (comma-separated strings, minimal - only Company join)
 -- GET /api/v1/contacts/keywords/
+-- Note: Always requires Company join since selecting Company.keywords. Metadata joins only added when filters require them.
 SELECT DISTINCT array_to_string(co.keywords, ',') as value
 FROM contacts c
 LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE co.keywords IS NOT NULL
     AND array_length(co.keywords, 1) > 0
 ORDER BY array_to_string(co.keywords, ',') ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 2: With separated=true (unnest array into individual values)
+-- Query 2: With separated=true (unnest array into individual values, minimal - only Company join)
 -- GET /api/v1/contacts/keywords/?separated=true
+-- Note: When separated=true and PostgreSQL, uses unnest optimization. Metadata joins only added when filters require them.
 SELECT DISTINCT unnest(co.keywords) as value
 FROM contacts c
 LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE co.keywords IS NOT NULL
     AND array_length(co.keywords, 1) > 0
 ORDER BY value ASC

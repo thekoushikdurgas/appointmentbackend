@@ -21,6 +21,7 @@ from app.schemas.contacts import ContactCreate, ContactDetail, ContactListItem, 
 from app.schemas.filters import AttributeListParams, ContactFilterParams
 from app.services.contacts_service import ContactsService
 from app.utils.cursor import decode_offset_cursor
+from app.utils.pagination import build_pagination_link
 
 
 settings = get_settings()
@@ -98,6 +99,23 @@ async def resolve_industry_attribute_params(request: Request) -> AttributeListPa
 
 async def resolve_keywords_attribute_params(request: Request) -> AttributeListParams:
     """Parse attribute list query parameters for keywords endpoint with distinct=True always enforced."""
+    query_params = dict(request.query_params)
+    # Always set distinct=True - remove it from query params so users can't override
+    query_params.pop("distinct", None)
+    query_params["distinct"] = "true"
+    try:
+        params = AttributeListParams.model_validate(query_params)
+        # Force distinct to True regardless of user input
+        params.distinct = True
+        return params
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
+async def resolve_technologies_attribute_params(request: Request) -> AttributeListParams:
+    """Parse attribute list query parameters for technologies endpoint with distinct=True always enforced."""
     query_params = dict(request.query_params)
     # Always set distinct=True - remove it from query params so users can't override
     query_params.pop("distinct", None)
@@ -460,6 +478,81 @@ async def list_titles(
     return result
 
 
+@router.get("/seniority/", response_model=CursorPage[str])
+async def list_seniority(
+    request: Request,
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
+    params: AttributeListParams = Depends(resolve_attribute_params),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CursorPage[str]:
+    """Return contact seniority values filtered by the supplied parameters.
+    
+    Filters out placeholder value "_" (default value in database).
+    Response includes next and previous pagination URLs.
+    """
+    logger.info(
+        "Listing seniority: distinct=%s limit=%d offset=%d ordering=%s search=%s",
+        params.distinct,
+        params.limit or 0,
+        params.offset,
+        params.ordering,
+        bool(params.search),
+    )
+    request_url = str(request.url)
+    result = await service.list_titles_paginated(
+        session,
+        filters,
+        params,
+        request_url,
+        lambda Contact, Company, ContactMetadata, CompanyMetadata: Contact.seniority,
+    )
+    logger.info(
+        "Listed seniority: count=%d next=%s previous=%s",
+        len(result.results),
+        bool(result.next),
+        bool(result.previous),
+    )
+    return result
+
+
+@router.get("/department/", response_model=CursorPage[str])
+async def list_departments(
+    request: Request,
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
+    params: AttributeListParams = Depends(resolve_attribute_params),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CursorPage[str]:
+    """Return department values from Contact.departments array field.
+    
+    This endpoint queries Contact.departments and supports all contact filters.
+    Always uses: separated=true, distinct=true (hardcoded for optimal performance)
+    
+    Equivalent to: SELECT DISTINCT unnest(departments) FROM contacts WHERE departments IS NOT NULL
+    
+    Response includes next and previous pagination URLs.
+    """
+    logger.info(
+        "Listing departments (simple): distinct=%s limit=%d offset=%d ordering=%s search=%s separated=true",
+        params.distinct,
+        params.limit or 0,
+        params.offset,
+        params.ordering,
+        bool(params.search),
+    )
+    request_url = str(request.url)
+    # Always use separated=True and distinct=True for optimal performance
+    result = await service.list_departments_simple(session, filters, params, separated=True, request_url=request_url)
+    logger.info(
+        "Listed departments (simple): count=%d next=%s previous=%s",
+        len(result.results),
+        bool(result.next),
+        bool(result.previous),
+    )
+    return result
+
+
 @router.get("/company/", response_model=CursorPage[str])
 async def list_companies(
     request: Request,
@@ -488,6 +581,47 @@ async def list_companies(
     result = await service.list_company_names_simple(session, params, request_url)
     logger.info(
         "Listed company names (simple): count=%d next=%s previous=%s",
+        len(result.results),
+        bool(result.next),
+        bool(result.previous),
+    )
+    return result
+
+
+@router.get("/company/domain/", response_model=CursorPage[str])
+async def list_company_domains(
+    request: Request,
+    params: AttributeListParams = Depends(resolve_attribute_params),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CursorPage[str]:
+    """Return company domains extracted from CompanyMetadata.website.
+    
+    This endpoint queries ONLY the CompanyMetadata table and ignores all contact filters.
+    Only uses: distinct, limit, offset, ordering, search parameters.
+    
+    Extracts domain from website URLs:
+    - Removes protocol (http://, https://)
+    - Removes www. prefix
+    - Removes port numbers
+    - Converts to lowercase
+    
+    Equivalent to: SELECT DISTINCT extract_domain(website) FROM companies_metadata WHERE website IS NOT NULL
+    
+    Response includes next and previous pagination URLs.
+    """
+    logger.info(
+        "Listing company domains (simple): distinct=%s limit=%d offset=%d ordering=%s search=%s",
+        params.distinct,
+        params.limit or 0,
+        params.offset,
+        params.ordering,
+        bool(params.search),
+    )
+    request_url = str(request.url)
+    result = await service.list_company_domains_simple(session, params, request_url)
+    logger.info(
+        "Listed company domains (simple): count=%d next=%s previous=%s",
         len(result.results),
         bool(result.next),
         bool(result.previous),
@@ -626,179 +760,209 @@ async def list_keywords(
     return result
 
 
-@router.get("/technologies/", response_model=List[str])
+@router.get("/technologies/", response_model=CursorPage[str])
 async def list_technologies(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(resolve_attribute_params),
-    separated: bool = Query(False),
+    request: Request,
+    params: AttributeListParams = Depends(resolve_technologies_attribute_params),
+    company: Optional[list[str]] = Query(None, description="Filter by exact company name(s). Supports multiple values: ?company=Acme&company=Corp or ?company=Acme,Corp"),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return technology values for associated companies."""
-    column_factory = (
-        (
-            lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.technologies
-        )
-        if separated
-        else (
-            lambda Contact, Company, ContactMetadata, CompanyMetadata: func.array_to_string(
-                Company.technologies, ","
-            )
-        )
+) -> CursorPage[str]:
+    """Return technology values directly from Company table.
+    
+    This endpoint queries ONLY the Company table and ignores all contact filters.
+    Only uses: limit, offset, ordering, search, company parameters.
+    
+    Always uses: separated=true, distinct=true (hardcoded for optimal performance)
+    
+    Equivalent to: SELECT DISTINCT unnest(technologies) FROM companies WHERE technologies IS NOT NULL
+    
+    Response includes next and previous pagination URLs.
+    
+    Company parameter supports multiple values:
+    - Multiple query params: ?company=Acme&company=Corp
+    - Comma-separated: ?company=Acme,Corp
+    - Mixed: ?company=Acme,Corp&company=Tech
+    """
+    # Normalize company list to handle comma-separated values
+    normalized_companies = _normalize_company_list(company)
+    
+    logger.info(
+        "Listing technologies (simple): distinct=%s limit=%d offset=%d ordering=%s search=%s company=%s separated=true",
+        params.distinct,
+        params.limit or 0,
+        params.offset,
+        params.ordering,
+        bool(params.search),
+        len(normalized_companies) if normalized_companies else 0,
     )
-    values = await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        column_factory,
-        "technologies",
-        array_mode=separated,
+    request_url = str(request.url)
+    # Always use separated=True and distinct=True for optimal performance
+    result = await service.list_technologies_simple(session, params, normalized_companies, request_url)
+    logger.info(
+        "Listed technologies (simple): count=%d next=%s previous=%s",
+        len(result.results),
+        bool(result.next),
+        bool(result.previous),
     )
-    if separated:
-        deduped = _normalize_array_values(values)
-        if params.limit:
-            deduped = deduped[: params.limit]
-        logger.debug("Separated technology values count=%d", len(deduped))
-        return deduped
-    filtered = [value for value in values if value]
-    logger.debug("Collapsed technology values count=%d", len(filtered))
-    return filtered
+    return result
 
 
-@router.get("/company_address/", response_model=List[str])
+@router.get("/company_address/", response_model=CursorPage[str])
 async def list_company_addresses(
+    request: Request,
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return company address text sourced from the text search column."""
-    return await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: Company.text_search,
-        "company_address",
+) -> CursorPage[str]:
+    """Return company address text sourced from the text search column.
+    
+    Response includes next and previous pagination URLs.
+    """
+    import time
+    start_time = time.time()
+    
+    request_url = str(request.url)
+    active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+    logger.info(
+        "Endpoint list_company_addresses called: limit=%s offset=%d distinct=%s search=%s filters=%s",
+        params.limit,
+        params.offset,
+        params.distinct,
+        bool(params.search),
+        active_filter_keys,
     )
+    
+    try:
+        service_start_time = time.time()
+        result = await service.list_company_addresses_paginated(
+            session,
+            filters,
+            params,
+            request_url,
+        )
+        service_time = time.time() - service_start_time
+        
+        total_time = time.time() - start_time
+        
+        logger.info(
+            "Listed company addresses: total_time=%.3fs service_time=%.3fs count=%d next=%s previous=%s limit=%s offset=%d distinct=%s next_url=%s",
+            total_time,
+            service_time,
+            len(result.results),
+            bool(result.next),
+            bool(result.previous),
+            params.limit,
+            params.offset,
+            params.distinct,
+            result.next,
+        )
+        
+        # Log warning for slow requests
+        if total_time > 5.0:
+            logger.warning(
+                "Slow company address endpoint: total_time=%.3fs service_time=%.3fs distinct=%s limit=%s offset=%d",
+                total_time,
+                service_time,
+                params.distinct,
+                params.limit,
+                params.offset,
+            )
+        
+        # Diagnostic logging for pagination issues
+        if params.limit is not None and params.offset == 0 and result.next is None:
+            logger.warning(
+                "Pagination diagnostic: limit=%d offset=0 returned %d items but next is None. This may indicate a pagination issue.",
+                params.limit,
+                len(result.results),
+            )
+        elif params.limit is not None and result.next is not None:
+            logger.debug(
+                "Pagination diagnostic: limit=%d offset=%d returned %d items, next URL generated successfully: %s",
+                params.limit,
+                params.offset,
+                len(result.results),
+                result.next,
+            )
+        
+        return result
+        
+    except Exception as e:
+        total_time = time.time() - start_time
+        logger.error(
+            "Error in list_company_addresses endpoint: error=%s error_type=%s total_time=%.3fs limit=%s offset=%d distinct=%s filters=%s",
+            str(e),
+            type(e).__name__,
+            total_time,
+            params.limit,
+            params.offset,
+            params.distinct,
+            active_filter_keys,
+            exc_info=True,
+        )
+        raise
 
 
-@router.get("/contact_address/", response_model=List[str])
+@router.get("/contact_address/", response_model=CursorPage[str])
 async def list_contact_addresses(
+    request: Request,
     filters: ContactFilterParams = Depends(resolve_contact_filters),
     params: AttributeListParams = Depends(resolve_attribute_params),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return contact address text sourced from the text search column."""
-    return await _attribute_endpoint(
+) -> CursorPage[str]:
+    """Return contact address text sourced from the text search column.
+    
+    Response includes next and previous pagination URLs.
+    """
+    request_url = str(request.url)
+    active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+    logger.info(
+        "Endpoint list_contact_addresses called: limit=%s offset=%d distinct=%s search=%s filters=%s request_url=%s",
+        params.limit,
+        params.offset,
+        params.distinct,
+        bool(params.search),
+        active_filter_keys,
+        request_url,
+    )
+    
+    result = await service.list_contact_addresses_paginated(
         session,
         filters,
         params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: Contact.text_search,
-        "contact_address",
+        request_url,
     )
-
-
-@router.get("/city/", response_model=List[str])
-async def list_contact_cities(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(resolve_attribute_params),
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return distinct contact city values."""
-    return await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: ContactMetadata.city,
-        "city",
+    
+    logger.info(
+        "Listed contact addresses: count=%d next=%s previous=%s limit=%s offset=%d distinct=%s next_url=%s",
+        len(result.results),
+        bool(result.next),
+        bool(result.previous),
+        params.limit,
+        params.offset,
+        params.distinct,
+        result.next,
     )
-
-
-@router.get("/state/", response_model=List[str])
-async def list_contact_states(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(resolve_attribute_params),
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return distinct contact state values."""
-    return await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: ContactMetadata.state,
-        "state",
-    )
-
-
-@router.get("/country/", response_model=List[str])
-async def list_contact_countries(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(resolve_attribute_params),
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return distinct contact country values."""
-    return await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: ContactMetadata.country,
-        "country",
-    )
-
-
-@router.get("/company_city/", response_model=List[str])
-async def list_company_cities(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(resolve_attribute_params),
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return distinct company city values."""
-    return await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: CompanyMetadata.city,
-        "company_city",
-    )
-
-
-@router.get("/company_state/", response_model=List[str])
-async def list_company_states(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(resolve_attribute_params),
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return distinct company state values."""
-    return await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: CompanyMetadata.state,
-        "company_state",
-    )
-
-
-@router.get("/company_country/", response_model=List[str])
-async def list_company_countries(
-    filters: ContactFilterParams = Depends(resolve_contact_filters),
-    params: AttributeListParams = Depends(resolve_attribute_params),
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> List[str]:
-    """Return distinct company country values."""
-    return await _attribute_endpoint(
-        session,
-        filters,
-        params,
-        lambda Contact, Company, ContactMetadata, CompanyMetadata: CompanyMetadata.country,
-        "company_country",
-    )
+    
+    # Diagnostic logging for pagination issues
+    if params.limit is not None and params.offset == 0 and result.next is None:
+        logger.warning(
+            "Pagination diagnostic: limit=%d offset=0 returned %d items but next is None. This may indicate a pagination issue.",
+            params.limit,
+            len(result.results),
+        )
+    elif params.limit is not None and result.next is not None:
+        logger.debug(
+            "Pagination diagnostic: limit=%d offset=%d returned %d items, next URL generated successfully: %s",
+            params.limit,
+            params.offset,
+            len(result.results),
+            result.next,
+        )
+    
+    return result
 
 
 @router.get("/{contact_uuid}/", response_model=ContactDetail)

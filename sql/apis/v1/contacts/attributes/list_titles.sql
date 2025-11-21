@@ -5,8 +5,7 @@
 -- ============================================================================
 --
 -- Parameters:
---   All ContactFilterParams are supported for filtering which contacts to consider.
---   Attribute list specific parameters:
+--   Query Parameters:
 --     distinct (boolean, default: true) - Return unique values
 --     limit (integer, default: 25) - Maximum number of results
 --     offset (integer, default: 0) - Offset applied before fetching values
@@ -14,35 +13,58 @@
 --     search (text, optional) - Optional case-insensitive search term
 --     company (text, optional) - Restrict results to a single company
 --
---   All other ContactFilterParams can be applied to filter the base contact set.
+--   All ContactFilterParams are supported for filtering which contacts to consider.
 --   See list_contacts.sql for complete filter parameter list.
 --
 -- Response Structure:
 --   Returns array of strings: ["Chief Technology Officer", "Software Engineer", ...]
+--
+-- Response Codes:
+--   200 OK: Titles retrieved successfully
+--   400 Bad Request: Invalid query parameters
+--   401 Unauthorized: Authentication required
+--   500 Internal Server Error: Error occurred while querying titles
+--
+-- Authentication:
+--   Required - Bearer token in Authorization header
+--
+-- Example Usage:
+--   GET /api/v1/contacts/title/
+--   GET /api/v1/contacts/title/?search=Chief&limit=50
+--   GET /api/v1/contacts/title/?company=Bandura&seniority=C suite
 -- ============================================================================
 
--- Query 1: Basic query - Get all distinct titles
+-- ORM Implementation Notes:
+--   The ContactsService.list_titles_paginated() uses list_attribute_values() with conditional JOINs:
+--   - Applies alphanumeric filter at SQL level (apply_title_alphanumeric_filter=True)
+--   - Filters out titles that don't contain at least one alphanumeric character
+--   - Only joins Company/ContactMetadata/CompanyMetadata when filters require them
+--   - Uses same conditional JOIN logic as list_contacts (see list_contacts.sql for details)
+--   - Column factory: lambda Contact, Company, ContactMetadata, CompanyMetadata: Contact.title
+
+-- Query 1: Basic query - Get all distinct titles (minimal - no joins)
 -- GET /api/v1/contacts/title/
+-- Note: When no filters require joins, queries only Contact table. Alphanumeric filter applied at SQL level.
+--       Joins added conditionally based on filters.
 SELECT DISTINCT c.title as value
 FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE c.title IS NOT NULL
-    AND c.title != ''
+    AND TRIM(c.title) != ''
+    AND EXISTS (SELECT 1 FROM regexp_split_to_table(c.title, '') AS char WHERE char ~ '[[:alnum:]]')
 ORDER BY c.title ASC
 LIMIT 25
 OFFSET 0;
 
--- Query 2: With distinct=true
--- GET /api/v1/contacts/title/?distinct=true
+-- Query 2: With company filter (requires Company join)
+-- GET /api/v1/contacts/title/?company=TechCorp
+-- Note: When company filters are present, Company join is added. Alphanumeric filter still applied.
 SELECT DISTINCT c.title as value
 FROM contacts c
 LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE c.title IS NOT NULL
-    AND c.title != ''
+    AND TRIM(c.title) != ''
+    AND EXISTS (SELECT 1 FROM regexp_split_to_table(c.title, '') AS char WHERE char ~ '[[:alnum:]]')
+    AND co.name ILIKE '%TechCorp%'
 ORDER BY c.title ASC
 LIMIT 25
 OFFSET 0;

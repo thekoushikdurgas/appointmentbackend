@@ -38,9 +38,11 @@ python -m pytest > test_results.txt
 
 python -m json.tool "postman/Appointment360 API.postman_collection.json"
 
-python scripts/test_apollo_apis.py --token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjQxOThmNy01OWM4LTQwMzktYTEzYy0zZWFlMGIwMTUxMmUiLCJleHAiOjE3NjM0MTg0OTEsInR5cGUiOiJhY2Nlc3MifQ.w1KXxtm3-HlXIr1V4X9RVJzqYSpaOM64Vh_Wsp6Er04" --csv "scripts/lead360data/instantlead.net Client A0560 - Sheet1.csv"
+python scripts/test_apollo_apis.py --token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjQxOThmNy01OWM4LTQwMzktYTEzYy0zZWFlMGIwMTUxMmUiLCJleHAiOjE3NjM2NTk2MzQsInR5cGUiOiJhY2Nlc3MifQ.FwiJiknjblIr3YGA6OwpT_X5lnTIhtooWmBXL9B52Bw"
 
 python -m pytest > test_results.txt
+
+python scripts/test_contact_attributes.py --token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjQxOThmNy01OWM4LTQwMzktYTEzYy0zZWFlMGIwMTUxMmUiLCJleHAiOjE3NjM2NTk2MzQsInR5cGUiOiJhY2Nlc3MifQ.FwiJiknjblIr3YGA6OwpT_X5lnTIhtooWmBXL9B52Bw"
 
 python -m scripts.data.clean_database
 

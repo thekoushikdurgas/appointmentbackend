@@ -53,7 +53,17 @@
 --   LIMIT 25;
 -- ============================================================================
 
+-- ORM Implementation Notes:
+--   The ContactRepository.list_attribute_values_by_company() always joins all tables:
+--   - Always joins Company, ContactMetadata, and CompanyMetadata (for filter support)
+--   - For array fields (department): Uses lateral unnest subquery
+--   - For scalar fields: Direct column selection with filters
+--   - Column mapping: first_name, last_name, title, seniority, email_status, department, city, state, country
+--   - Filters applied via _apply_company_contact_filters() which handles all CompanyContactFilterParams
+
 -- Query for scalar attributes (first_name, last_name, title, seniority, email_status)
+-- GET /api/v1/companies/company/{company_uuid}/contacts/title/
+-- Note: Always joins all tables to support all filter parameters.
 SELECT DISTINCT co.title as value
 FROM contacts co
 LEFT JOIN companies comp ON co.company_id = comp.uuid
@@ -61,14 +71,16 @@ LEFT JOIN contacts_metadata com ON co.uuid = com.uuid
 LEFT JOIN companies_metadata comp_meta ON comp.uuid = comp_meta.uuid
 WHERE co.company_id = $1
     AND co.title IS NOT NULL
-    AND co.title != ''
+    AND TRIM(co.title) != ''
     -- Add filter conditions here based on CompanyContactFilterParams
     -- Example: AND co.seniority = 'senior'
 ORDER BY value ASC
 LIMIT 25 OFFSET 0;
 
 -- Query for array attributes (department)
--- Uses PostgreSQL's unnest function to expand array values
+-- GET /api/v1/companies/company/{company_uuid}/contacts/department/
+-- Note: Uses lateral unnest subquery in ORM. This simplified version shows the concept.
+--       The ORM uses a more complex subquery structure for better performance.
 SELECT DISTINCT unnest(co.departments) as value
 FROM contacts co
 LEFT JOIN companies comp ON co.company_id = comp.uuid
@@ -76,6 +88,7 @@ LEFT JOIN contacts_metadata com ON co.uuid = com.uuid
 LEFT JOIN companies_metadata comp_meta ON comp.uuid = comp_meta.uuid
 WHERE co.company_id = $1
     AND co.departments IS NOT NULL
+    AND array_length(co.departments, 1) > 0
     -- Add filter conditions here based on CompanyContactFilterParams
 ORDER BY value ASC
 LIMIT 25 OFFSET 0;

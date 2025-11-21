@@ -1,179 +1,156 @@
--- ============================================================================
--- Query Optimization Indexes for Large Tables (50M Contacts, 5M Companies)
--- ============================================================================
--- This file contains indexes to optimize query performance for large datasets
--- Run these indexes after the base table creation
--- ============================================================================
+-- Enable pg_trgm extension for trigram-based text search (required for GIN indexes with gin_trgm_ops)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- ============================================================================
--- Phase 1: Composite Indexes for Common Filter Combinations
--- ============================================================================
-
--- Task 1.1: Composite indexes for contacts table
--- Optimize company contact queries with seniority and title filters
-CREATE INDEX IF NOT EXISTS idx_contacts_company_seniority_title 
-    ON public.contacts (company_id, seniority, title) 
+CREATE INDEX IF NOT EXISTS idx_contacts_company_seniority_title
+    ON public.contacts (company_id, seniority, title)
     WHERE company_id IS NOT NULL;
 
--- Optimize email filtering by company
-CREATE INDEX IF NOT EXISTS idx_contacts_company_email_status 
-    ON public.contacts (company_id, email_status) 
+CREATE INDEX IF NOT EXISTS idx_contacts_company_email_status
+    ON public.contacts (company_id, email_status)
     WHERE company_id IS NOT NULL AND email_status IS NOT NULL;
 
--- Optimize date-range queries with company filter
-CREATE INDEX IF NOT EXISTS idx_contacts_created_at_company 
-    ON public.contacts (created_at, company_id) 
+CREATE INDEX IF NOT EXISTS idx_contacts_created_at_company
+    ON public.contacts (created_at, company_id)
     WHERE company_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_contacts_updated_at_company 
-    ON public.contacts (updated_at, company_id) 
+CREATE INDEX IF NOT EXISTS idx_contacts_updated_at_company
+    ON public.contacts (updated_at, company_id)
     WHERE company_id IS NOT NULL;
 
--- Composite index for company + title filtering (common pattern)
-CREATE INDEX IF NOT EXISTS idx_contacts_company_title 
-    ON public.contacts (company_id, title) 
+CREATE INDEX IF NOT EXISTS idx_contacts_company_title
+    ON public.contacts (company_id, title)
     WHERE company_id IS NOT NULL AND title IS NOT NULL;
 
--- Composite index for email + email_status filtering
-CREATE INDEX IF NOT EXISTS idx_contacts_email_status_filter 
-    ON public.contacts (email, email_status) 
+CREATE INDEX IF NOT EXISTS idx_contacts_email_status_filter
+    ON public.contacts (email, email_status)
     WHERE email IS NOT NULL AND email_status IS NOT NULL;
 
--- ============================================================================
--- Task 1.2: Metadata Table Indexes
--- ============================================================================
-
--- Contacts metadata indexes
-CREATE INDEX IF NOT EXISTS idx_contacts_metadata_city 
-    ON public.contacts_metadata (city) 
+CREATE INDEX IF NOT EXISTS idx_contacts_metadata_city
+    ON public.contacts_metadata (city)
     WHERE city IS NOT NULL AND city != '_';
 
-CREATE INDEX IF NOT EXISTS idx_contacts_metadata_state 
-    ON public.contacts_metadata (state) 
+CREATE INDEX IF NOT EXISTS idx_contacts_metadata_state
+    ON public.contacts_metadata (state)
     WHERE state IS NOT NULL AND state != '_';
 
-CREATE INDEX IF NOT EXISTS idx_contacts_metadata_country 
-    ON public.contacts_metadata (country) 
+CREATE INDEX IF NOT EXISTS idx_contacts_metadata_country
+    ON public.contacts_metadata (country)
     WHERE country IS NOT NULL AND country != '_';
 
--- Composite index for location filtering
-CREATE INDEX IF NOT EXISTS idx_contacts_metadata_location 
-    ON public.contacts_metadata (city, state, country) 
+CREATE INDEX IF NOT EXISTS idx_contacts_metadata_location
+    ON public.contacts_metadata (city, state, country)
     WHERE city IS NOT NULL AND city != '_';
 
--- Companies metadata indexes
-CREATE INDEX IF NOT EXISTS idx_companies_metadata_city 
-    ON companies_metadata (city) 
+CREATE INDEX IF NOT EXISTS idx_companies_metadata_city
+    ON companies_metadata (city)
     WHERE city IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_companies_metadata_state 
-    ON companies_metadata (state) 
+CREATE INDEX IF NOT EXISTS idx_companies_metadata_state
+    ON companies_metadata (state)
     WHERE state IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_companies_metadata_country 
-    ON companies_metadata (country) 
+CREATE INDEX IF NOT EXISTS idx_companies_metadata_country
+    ON companies_metadata (country)
     WHERE country IS NOT NULL;
 
--- Index for website domain filtering (using expression for domain extraction)
-CREATE INDEX IF NOT EXISTS idx_companies_metadata_website 
-    ON companies_metadata (website) 
+CREATE INDEX IF NOT EXISTS idx_companies_metadata_website
+    ON companies_metadata (website)
     WHERE website IS NOT NULL;
 
--- Composite index for company location filtering
-CREATE INDEX IF NOT EXISTS idx_companies_metadata_location 
-    ON companies_metadata (city, state, country) 
+-- Critical index for email finder: normalized_domain lookup
+CREATE INDEX IF NOT EXISTS idx_companies_metadata_normalized_domain
+    ON companies_metadata (normalized_domain)
+    WHERE normalized_domain IS NOT NULL;
+
+-- Composite index for faster company lookup by domain (Step 1 optimization)
+CREATE INDEX IF NOT EXISTS idx_companies_metadata_normalized_domain_uuid
+    ON companies_metadata (normalized_domain, uuid)
+    WHERE normalized_domain IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_companies_metadata_location
+    ON companies_metadata (city, state, country)
     WHERE city IS NOT NULL;
 
--- Index for funding amount filtering
-CREATE INDEX IF NOT EXISTS idx_companies_metadata_funding_amount 
-    ON companies_metadata (latest_funding_amount) 
+CREATE INDEX IF NOT EXISTS idx_companies_metadata_funding_amount
+    ON companies_metadata (latest_funding_amount)
     WHERE latest_funding_amount IS NOT NULL;
 
--- ============================================================================
--- Task 1.3: Foreign Key Index Optimization
--- ============================================================================
+-- GIN index for contacts_metadata.linkedin_url (for ILIKE pattern matching with leading wildcards)
+CREATE INDEX IF NOT EXISTS idx_contacts_metadata_linkedin_url_gin
+    ON contacts_metadata USING gin (linkedin_url gin_trgm_ops)
+    WHERE linkedin_url IS NOT NULL AND linkedin_url != '_';
 
--- Verify company_id index exists (already exists, but ensure it's optimal)
--- The existing idx_contacts_company_id should be sufficient
--- Add partial index for non-null company_id (if beneficial)
-CREATE INDEX IF NOT EXISTS idx_contacts_company_id_not_null 
-    ON public.contacts (company_id) 
+-- GIN index for companies_metadata.linkedin_url (for ILIKE pattern matching with leading wildcards)
+CREATE INDEX IF NOT EXISTS idx_companies_metadata_linkedin_url_gin
+    ON companies_metadata USING gin (linkedin_url gin_trgm_ops)
+    WHERE linkedin_url IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_contacts_company_id_not_null
+    ON public.contacts (company_id)
     WHERE company_id IS NOT NULL;
 
--- ============================================================================
--- Task 1.4: Text Search Indexes
--- ============================================================================
-
--- Verify GIN indexes exist (already exist for text_search)
--- Add additional trigram indexes for commonly searched columns
-
--- Index for first_name + last_name search
-CREATE INDEX IF NOT EXISTS idx_contacts_name_search_trgm 
+CREATE INDEX IF NOT EXISTS idx_contacts_name_search_trgm
     ON public.contacts USING gin ((first_name || ' ' || COALESCE(last_name, '')) gin_trgm_ops);
 
--- Index for email search (if not already covered)
-CREATE INDEX IF NOT EXISTS idx_contacts_email_trgm 
-    ON public.contacts USING gin (email gin_trgm_ops) 
+-- Trigram indexes for individual name matching (for ILIKE queries with wildcards)
+CREATE INDEX IF NOT EXISTS idx_contacts_first_name_trgm
+    ON public.contacts USING gin (first_name gin_trgm_ops)
+    WHERE first_name IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_contacts_last_name_trgm
+    ON public.contacts USING gin (last_name gin_trgm_ops)
+    WHERE last_name IS NOT NULL;
+
+-- Composite index for email finder Step 3 optimization (company_id + names + email)
+CREATE INDEX IF NOT EXISTS idx_contacts_company_name_email
+    ON public.contacts (company_id, first_name, last_name, email)
+    WHERE company_id IS NOT NULL 
+        AND first_name IS NOT NULL 
+        AND last_name IS NOT NULL 
+        AND email IS NOT NULL 
+        AND email != '';
+
+CREATE INDEX IF NOT EXISTS idx_contacts_email_trgm
+    ON public.contacts USING gin (email gin_trgm_ops)
     WHERE email IS NOT NULL;
 
--- Index for company name search (already exists as idx_companies_name_trgm)
--- Add index for company address search
-CREATE INDEX IF NOT EXISTS idx_companies_address_trgm 
-    ON companies USING gin (address gin_trgm_ops) 
+CREATE INDEX IF NOT EXISTS idx_companies_address_trgm
+    ON companies USING gin (address gin_trgm_ops)
     WHERE address IS NOT NULL;
 
--- ============================================================================
--- Additional Performance Indexes
--- ============================================================================
-
--- Index for contacts by updated_at (for recent updates queries)
-CREATE INDEX IF NOT EXISTS idx_contacts_updated_at_desc 
-    ON public.contacts (updated_at DESC) 
+CREATE INDEX IF NOT EXISTS idx_contacts_updated_at_desc
+    ON public.contacts (updated_at DESC)
     WHERE updated_at IS NOT NULL;
 
--- Index for companies by updated_at
-CREATE INDEX IF NOT EXISTS idx_companies_updated_at_desc 
-    ON companies (updated_at DESC) 
+CREATE INDEX IF NOT EXISTS idx_companies_updated_at_desc
+    ON companies (updated_at DESC)
     WHERE updated_at IS NOT NULL;
 
--- Composite index for company filtering with employees count
-CREATE INDEX IF NOT EXISTS idx_companies_employees_created 
-    ON companies (employees_count, created_at) 
+CREATE INDEX IF NOT EXISTS idx_companies_employees_created
+    ON companies (employees_count, created_at)
     WHERE employees_count IS NOT NULL;
 
--- Index for company filtering with revenue
-CREATE INDEX IF NOT EXISTS idx_companies_revenue_created 
-    ON companies (annual_revenue, created_at) 
+CREATE INDEX IF NOT EXISTS idx_companies_revenue_created
+    ON companies (annual_revenue, created_at)
     WHERE annual_revenue IS NOT NULL;
 
--- ============================================================================
--- Phase 2: Performance Optimization Indexes (Added for Contacts Endpoint)
--- ============================================================================
-
--- Index for company name ordering (if Company join is needed for explicit ordering)
-CREATE INDEX IF NOT EXISTS idx_companies_name_asc 
-    ON companies (name ASC NULLS LAST) 
+CREATE INDEX IF NOT EXISTS idx_companies_name_asc
+    ON companies (name ASC NULLS LAST)
     WHERE name IS NOT NULL;
 
--- Composite index for default ordering pattern (created_at DESC, id DESC)
--- This is the optimized default ordering for contacts list endpoint
-CREATE INDEX IF NOT EXISTS idx_contacts_created_at_id_desc 
+CREATE INDEX IF NOT EXISTS idx_contacts_created_at_id_desc
     ON public.contacts (created_at DESC NULLS LAST, id DESC);
 
--- Index for company_id join performance with created_at ordering
--- Optimizes queries that join Company and order by created_at
-CREATE INDEX IF NOT EXISTS idx_contacts_company_id_created_at 
-    ON public.contacts (company_id, created_at DESC) 
+CREATE INDEX IF NOT EXISTS idx_contacts_company_id_created_at
+    ON public.contacts (company_id, created_at DESC)
     WHERE company_id IS NOT NULL;
 
--- ============================================================================
--- Index Maintenance Notes
--- ============================================================================
--- After creating these indexes:
--- 1. Run ANALYZE on all tables to update statistics
--- 2. Monitor index usage with: 
---    SELECT * FROM pg_stat_user_indexes WHERE schemaname = 'public';
--- 3. Consider REINDEX for GIN indexes periodically
--- 4. Monitor index size and bloat
--- ============================================================================
+-- Index for company text_search to optimize DISTINCT queries
+-- This partial index filters out NULL and empty values, making DISTINCT operations faster
+CREATE INDEX IF NOT EXISTS idx_companies_text_search_not_null
+    ON companies (text_search)
+    WHERE text_search IS NOT NULL AND text_search != '';
 
+CREATE INDEX IF NOT EXISTS idx_companies_name_technologies
+    ON companies (name)
+    WHERE technologies IS NOT NULL AND name IS NOT NULL;

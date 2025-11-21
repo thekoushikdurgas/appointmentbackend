@@ -9,6 +9,8 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
 
+from fastapi import HTTPException
+
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -98,6 +100,24 @@ def log_function_call(
 
             try:
                 result = await func(*args, **kwargs)  # type: ignore[misc]
+            except HTTPException as http_exc:
+                # HTTPException is a controlled, expected response in FastAPI
+                # Log at INFO level for client errors (4xx) and WARNING for server errors (5xx)
+                if 400 <= http_exc.status_code < 500:
+                    target_logger.info(
+                        "HTTPException in %s: status_code=%d detail=%s",
+                        qual_name,
+                        http_exc.status_code,
+                        http_exc.detail,
+                    )
+                else:
+                    target_logger.warning(
+                        "HTTPException in %s: status_code=%d detail=%s",
+                        qual_name,
+                        http_exc.status_code,
+                        http_exc.detail,
+                    )
+                raise
             except Exception:
                 target_logger.exception("Error in %s", qual_name)
                 raise
@@ -127,6 +147,24 @@ def log_function_call(
 
             try:
                 result = func(*args, **kwargs)
+            except HTTPException as http_exc:
+                # HTTPException is a controlled, expected response in FastAPI
+                # Log at INFO level for client errors (4xx) and WARNING for server errors (5xx)
+                if 400 <= http_exc.status_code < 500:
+                    target_logger.info(
+                        "HTTPException in %s: status_code=%d detail=%s",
+                        qual_name,
+                        http_exc.status_code,
+                        http_exc.detail,
+                    )
+                else:
+                    target_logger.warning(
+                        "HTTPException in %s: status_code=%d detail=%s",
+                        qual_name,
+                        http_exc.status_code,
+                        http_exc.detail,
+                    )
+                raise
             except Exception:
                 target_logger.exception("Error in %s", qual_name)
                 raise

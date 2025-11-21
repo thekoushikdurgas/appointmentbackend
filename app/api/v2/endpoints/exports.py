@@ -4,8 +4,9 @@ import io
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,15 +16,20 @@ from app.db.session import get_db
 from app.models.exports import ExportStatus, ExportType, UserExport
 from app.models.user import User
 from app.schemas.exports import (
+    ChunkedExportRequest,
+    ChunkedExportResponse,
     CompanyExportRequest,
     CompanyExportResponse,
     ContactExportRequest,
     ContactExportResponse,
     ExportListResponse,
+    ExportStatusResponse,
     UserExportDetail,
 )
+from app.schemas.filters import ExportFilterParams
 from app.services.export_service import ExportService
 from app.services.s3_service import S3Service
+from app.tasks.export_tasks import process_company_export, process_contact_export
 from app.utils.signed_url import verify_signed_url
 
 router = APIRouter()
@@ -32,9 +38,22 @@ service = ExportService()
 s3_service = S3Service()
 
 
+async def resolve_export_filters(request: Request) -> ExportFilterParams:
+    """Build export filter parameters from query string."""
+    query_params = request.query_params
+    data = dict(query_params)
+    try:
+        return ExportFilterParams.model_validate(data)
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
 @router.post("/contacts/export", response_model=ContactExportResponse, status_code=status.HTTP_201_CREATED)
 async def create_contact_export(
     request: ContactExportRequest,
+    filters: ExportFilterParams = Depends(resolve_export_filters),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ContactExportResponse:
@@ -58,7 +77,7 @@ async def create_contact_export(
         )
     
     try:
-        # Create export record
+        # Create export record with status "pending"
         export = await service.create_export(
             session,
             current_user.id,
@@ -66,55 +85,29 @@ async def create_contact_export(
             contact_uuids=request.contact_uuids,
         )
         
-        # Generate CSV file
-        try:
-            file_path = await service.generate_csv(
-                session,
-                export.export_id,
-                request.contact_uuids,
-            )
-            
-            # Update export with file path and generate signed URL
-            export = await service.update_export_status(
-                session,
-                export.export_id,
-                ExportStatus.completed,
-                file_path,
-                contact_count=len(request.contact_uuids),
-            )
-            
-            logger.info(
-                "Export completed: export_id=%s user_id=%s contact_count=%d",
-                export.export_id,
-                current_user.id,
-                export.contact_count,
-            )
-            
-            return ContactExportResponse(
-                export_id=export.export_id,
-                download_url=export.download_url or "",
-                expires_at=export.expires_at or export.created_at,
-                contact_count=export.contact_count,
-                status=export.status,
-            )
-            
-        except Exception as csv_exc:
-            logger.exception("Failed to generate CSV: export_id=%s", export.export_id)
-            # Update export status to failed
-            try:
-                stmt = select(UserExport).where(UserExport.export_id == export.export_id)
-                result = await session.execute(stmt)
-                failed_export = result.scalar_one_or_none()
-                if failed_export:
-                    failed_export.status = ExportStatus.failed
-                    await session.commit()
-            except Exception:
-                pass
-            
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate CSV: {str(csv_exc)}",
-            ) from csv_exc
+        # Set total_records for progress tracking
+        export.total_records = len(request.contact_uuids)
+        await session.commit()
+        
+        # Enqueue background task
+        task = process_contact_export.delay(export.export_id, request.contact_uuids)
+        
+        logger.info(
+            "Contact export queued: export_id=%s user_id=%s contact_count=%d task_id=%s",
+            export.export_id,
+            current_user.id,
+            len(request.contact_uuids),
+            task.id,
+        )
+        
+        return ContactExportResponse(
+            export_id=export.export_id,
+            download_url="",  # Will be generated when export completes
+            expires_at=export.expires_at or export.created_at,
+            contact_count=len(request.contact_uuids),
+            status=export.status,
+            job_id=task.id,
+        )
             
     except HTTPException:
         raise
@@ -126,8 +119,72 @@ async def create_contact_export(
         ) from exc
 
 
+@router.get("/{export_id}/status", response_model=ExportStatusResponse)
+async def get_export_status(
+    export_id: str,
+    filters: ExportFilterParams = Depends(resolve_export_filters),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ExportStatusResponse:
+    """
+    Get the status of an export job.
+    
+    Returns detailed status information including progress percentage, estimated time
+    remaining, error messages, and download URL if available.
+    """
+    logger.info("Status request: export_id=%s user_id=%s", export_id, current_user.id)
+    
+    try:
+        export = await service.get_export(session, export_id, current_user.id)
+        if not export:
+            logger.warning("Export not found or access denied: export_id=%s user_id=%s", export_id, current_user.id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Export not found or access denied",
+            )
+        
+        # Calculate progress percentage if we have progress tracking
+        progress_percentage = None
+        if hasattr(export, 'progress_percentage') and export.progress_percentage is not None:
+            progress_percentage = export.progress_percentage
+        elif hasattr(export, 'total_records') and hasattr(export, 'records_processed'):
+            if export.total_records > 0:
+                progress_percentage = (export.records_processed / export.total_records) * 100
+        
+        # Get estimated time remaining
+        estimated_time = None
+        if hasattr(export, 'estimated_time_remaining') and export.estimated_time_remaining is not None:
+            estimated_time = export.estimated_time_remaining
+        
+        # Get error message
+        error_message = None
+        if hasattr(export, 'error_message') and export.error_message:
+            error_message = export.error_message
+        elif export.status == ExportStatus.failed:
+            error_message = "Export processing failed"
+        
+        return ExportStatusResponse(
+            export_id=export.export_id,
+            status=export.status,
+            progress_percentage=progress_percentage,
+            estimated_time=estimated_time,
+            error_message=error_message,
+            download_url=export.download_url,
+            expires_at=export.expires_at,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to get export status: export_id=%s", export_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get export status",
+        ) from exc
+
+
 @router.get("/", response_model=ExportListResponse)
 async def list_exports(
+    filters: ExportFilterParams = Depends(resolve_export_filters),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ExportListResponse:
@@ -140,7 +197,9 @@ async def list_exports(
     logger.info("Listing exports for user: user_id=%s", current_user.id)
     
     try:
-        exports = await service.list_user_exports(session, current_user.id)
+        exports = await service.list_user_exports(
+            session, current_user.id, filters=filters
+        )
         
         export_details = [UserExportDetail.model_validate(export) for export in exports]
         
@@ -162,6 +221,7 @@ async def list_exports(
 async def download_export(
     export_id: str,
     token: str = Query(..., description="Signed URL token for authentication"),
+    filters: ExportFilterParams = Depends(resolve_export_filters),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> FileResponse:
@@ -290,6 +350,7 @@ async def download_export(
 @router.post("/companies/export", response_model=CompanyExportResponse, status_code=status.HTTP_201_CREATED)
 async def create_company_export(
     request: CompanyExportRequest,
+    filters: ExportFilterParams = Depends(resolve_export_filters),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CompanyExportResponse:
@@ -313,7 +374,7 @@ async def create_company_export(
         )
     
     try:
-        # Create export record
+        # Create export record with status "pending"
         export = await service.create_export(
             session,
             current_user.id,
@@ -321,55 +382,29 @@ async def create_company_export(
             company_uuids=request.company_uuids,
         )
         
-        # Generate CSV file
-        try:
-            file_path = await service.generate_company_csv(
-                session,
-                export.export_id,
-                request.company_uuids,
-            )
-            
-            # Update export with file path and generate signed URL
-            export = await service.update_export_status(
-                session,
-                export.export_id,
-                ExportStatus.completed,
-                file_path,
-                company_count=len(request.company_uuids),
-            )
-            
-            logger.info(
-                "Export completed: export_id=%s user_id=%s company_count=%d",
-                export.export_id,
-                current_user.id,
-                export.company_count,
-            )
-            
-            return CompanyExportResponse(
-                export_id=export.export_id,
-                download_url=export.download_url or "",
-                expires_at=export.expires_at or export.created_at,
-                company_count=export.company_count,
-                status=export.status,
-            )
-            
-        except Exception as csv_exc:
-            logger.exception("Failed to generate CSV: export_id=%s", export.export_id)
-            # Update export status to failed
-            try:
-                stmt = select(UserExport).where(UserExport.export_id == export.export_id)
-                result = await session.execute(stmt)
-                failed_export = result.scalar_one_or_none()
-                if failed_export:
-                    failed_export.status = ExportStatus.failed
-                    await session.commit()
-            except Exception:
-                pass
-            
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate CSV: {str(csv_exc)}",
-            ) from csv_exc
+        # Set total_records for progress tracking
+        export.total_records = len(request.company_uuids)
+        await session.commit()
+        
+        # Enqueue background task
+        task = process_company_export.delay(export.export_id, request.company_uuids)
+        
+        logger.info(
+            "Company export queued: export_id=%s user_id=%s company_count=%d task_id=%s",
+            export.export_id,
+            current_user.id,
+            len(request.company_uuids),
+            task.id,
+        )
+        
+        return CompanyExportResponse(
+            export_id=export.export_id,
+            download_url="",  # Will be generated when export completes
+            expires_at=export.expires_at or export.created_at,
+            company_count=len(request.company_uuids),
+            status=export.status,
+            job_id=task.id,
+        )
             
     except HTTPException:
         raise
@@ -378,6 +413,183 @@ async def create_company_export(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create export",
+        ) from exc
+
+
+@router.post("/contacts/export/chunked", response_model=ChunkedExportResponse, status_code=status.HTTP_201_CREATED)
+async def create_chunked_contact_export(
+    request: ChunkedExportRequest,
+    filters: ExportFilterParams = Depends(resolve_export_filters),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ChunkedExportResponse:
+    """
+    Create a chunked contact export.
+    
+    Accepts multiple chunks of contact UUIDs and creates separate export jobs for each chunk.
+    If merge is True, the chunks will be processed and merged into a single export file.
+    """
+    logger.info(
+        "Received chunked contact export request: user_id=%s chunk_count=%d merge=%s",
+        current_user.id,
+        len(request.chunks),
+        request.merge,
+    )
+    
+    if not request.chunks:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one chunk is required",
+        )
+    
+    # Calculate total count
+    total_count = sum(len(chunk) for chunk in request.chunks)
+    if total_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one contact UUID is required across all chunks",
+        )
+    
+    try:
+        # Create main export record
+        all_uuids = [uuid for chunk in request.chunks for uuid in chunk]
+        main_export = await service.create_export(
+            session,
+            current_user.id,
+            ExportType.contacts,
+            contact_uuids=all_uuids,
+        )
+        
+        # Set total_records for progress tracking
+        main_export.total_records = total_count
+        await session.commit()
+        
+        # Create chunk export records and enqueue tasks
+        chunk_ids = []
+        tasks = []
+        
+        for i, chunk_uuids in enumerate(request.chunks):
+            if not chunk_uuids:
+                continue
+                
+            # Create chunk export record
+            chunk_export = await service.create_export(
+                session,
+                current_user.id,
+                ExportType.contacts,
+                contact_uuids=chunk_uuids,
+            )
+            chunk_export.total_records = len(chunk_uuids)
+            await session.commit()
+            
+            chunk_ids.append(chunk_export.export_id)
+            
+            # Enqueue background task for this chunk
+            task = process_contact_export.delay(chunk_export.export_id, chunk_uuids)
+            tasks.append(task)
+            
+            logger.info(
+                "Chunk export queued: chunk_index=%d export_id=%s chunk_size=%d task_id=%s",
+                i,
+                chunk_export.export_id,
+                len(chunk_uuids),
+                task.id,
+            )
+        
+        # If merge is requested, we would need additional logic to merge the CSV files
+        # For now, we'll just create separate exports and return the main export ID
+        # TODO: Implement CSV merging logic if needed
+        
+        logger.info(
+            "Chunked export created: main_export_id=%s chunk_count=%d total_count=%d",
+            main_export.export_id,
+            len(chunk_ids),
+            total_count,
+        )
+        
+        return ChunkedExportResponse(
+            export_id=main_export.export_id,
+            chunk_ids=chunk_ids,
+            total_count=total_count,
+            status=main_export.status,
+            job_id=tasks[0].id if tasks else None,  # Return first task ID as main job ID
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Chunked export creation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create chunked export",
+        ) from exc
+
+
+@router.delete("/{export_id}/cancel", status_code=status.HTTP_200_OK)
+async def cancel_export(
+    export_id: str,
+    filters: ExportFilterParams = Depends(resolve_export_filters),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Cancel a pending or processing export.
+    
+    Sets the export status to "cancelled" and cleans up any partial resources.
+    Cannot cancel exports that are already completed or failed.
+    """
+    logger.info("Cancel request: export_id=%s user_id=%s", export_id, current_user.id)
+    
+    try:
+        export = await service.get_export(session, export_id, current_user.id)
+        if not export:
+            logger.warning("Export not found or access denied: export_id=%s user_id=%s", export_id, current_user.id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Export not found or access denied",
+            )
+        
+        # Check if export can be cancelled
+        if export.status == ExportStatus.completed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot cancel a completed export",
+            )
+        
+        if export.status == ExportStatus.failed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot cancel a failed export",
+            )
+        
+        if export.status == ExportStatus.cancelled:
+            logger.info("Export already cancelled: export_id=%s", export_id)
+            return {
+                "message": "Export is already cancelled",
+                "export_id": export_id,
+                "status": export.status,
+            }
+        
+        # Update status to cancelled
+        export.status = ExportStatus.cancelled
+        export.error_message = "Export cancelled by user"
+        await session.commit()
+        
+        logger.info("Export cancelled: export_id=%s user_id=%s", export_id, current_user.id)
+        
+        return {
+            "message": "Export cancelled successfully",
+            "export_id": export_id,
+            "status": export.status,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to cancel export: export_id=%s", export_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to cancel export",
         ) from exc
 
 

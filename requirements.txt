@@ -19,6 +19,8 @@ orjson
 email-validator
 boto3
 aioboto3
+beautifulsoup4
+lxml
 
 # Development dependencies (optional)
 # Uncomment the following lines for development:

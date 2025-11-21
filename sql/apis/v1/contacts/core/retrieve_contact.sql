@@ -1,24 +1,41 @@
 -- ============================================================================
--- Endpoint: GET /api/v1/contacts/{contact_id}/
+-- Endpoint: GET /api/v1/contacts/{contact_uuid}/
 -- API Version: v1
--- Description: Fetch details for a single contact by primary key.
+-- Description: Fetch details for a single contact by UUID with all related company and metadata information.
 -- ============================================================================
 --
 -- Parameters:
---   $1: contact_id (integer, required) - Contact primary key (id)
+--   Path Parameters:
+--     contact_uuid (text, required) - Contact UUID (not the integer ID)
 --
 -- Response Structure:
 --   Returns ContactDetail schema with nested company and metadata objects.
+--   All fields from contacts, companies, contacts_metadata, and companies_metadata tables.
+--
+-- Response Codes:
+--   200 OK: Contact retrieved successfully
+--   401 Unauthorized: Authentication required
+--   404 Not Found: Contact with specified UUID not found
+--   500 Internal Server Error: Error occurred while retrieving contact
+--
+-- Authentication:
+--   Required - Bearer token in Authorization header
 --
 -- Example Usage:
---   SELECT c.*, co.*, cm.*, com.*
---   FROM contacts c
---   LEFT JOIN companies co ON c.company_id = co.uuid
---   LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
---   LEFT JOIN companies_metadata com ON co.uuid = com.uuid
---   WHERE c.id = $1;
+--   GET /api/v1/contacts/550e8400-e29b-41d4-a716-446655440000/
 -- ============================================================================
 
+-- ORM Implementation Notes:
+--   The ContactRepository.get_contact_with_relations() always uses base_query_with_metadata():
+--   - Always joins all tables (Contact, Company, ContactMetadata, CompanyMetadata)
+--   - Uses LEFT JOINs so contact is returned even if company/metadata don't exist
+--   - Returns 4-tuple: (Contact, Company, ContactMetadata, CompanyMetadata)
+--   - Service layer (ContactsService.get_contact) builds ContactDetail from the 4-tuple
+--   - Unlike list_contacts, this endpoint always performs all joins (no conditional logic)
+
+-- Query: Retrieve contact by UUID with all relations
+-- GET /api/v1/contacts/{contact_uuid}/
+-- Note: Always uses all LEFT JOINs (unlike list_contacts which uses conditional JOINs)
 SELECT 
     c.id,
     c.uuid,
@@ -81,5 +98,5 @@ FROM contacts c
 LEFT JOIN companies co ON c.company_id = co.uuid
 LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
 LEFT JOIN companies_metadata com ON co.uuid = com.uuid
-WHERE c.id = $1;
+WHERE c.uuid = $1;
 

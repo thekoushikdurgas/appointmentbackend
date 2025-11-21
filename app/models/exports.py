@@ -5,7 +5,7 @@ from enum import Enum as PyEnum
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, Text
+from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, Float, ForeignKey, Index, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -21,8 +21,10 @@ class ExportStatus(str, PyEnum):
     """Enumerates the possible lifecycle states of an export job."""
 
     pending = "pending"
+    processing = "processing"
     completed = "completed"
     failed = "failed"
+    cancelled = "cancelled"
 
 
 class ExportType(str, PyEnum):
@@ -63,6 +65,11 @@ class UserExport(Base):
     contact_uuids: Mapped[Optional[list[str]]] = mapped_column(StringList())
     company_count: Mapped[int] = mapped_column(Integer, default=0)
     company_uuids: Mapped[Optional[list[str]]] = mapped_column(StringList())
+    linkedin_urls: Mapped[Optional[list[str]]] = mapped_column(
+        StringList(), 
+        default=None,
+        comment="LinkedIn URLs used for LinkedIn exports. Only populated for exports created via POST /api/v2/linkedin/export."
+    )
     status: Mapped[ExportStatus] = mapped_column(
         SQLEnum(ExportStatus, name="export_status"),
         default=ExportStatus.pending,
@@ -72,6 +79,12 @@ class UserExport(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     download_url: Mapped[Optional[str]] = mapped_column(Text)
     download_token: Mapped[Optional[str]] = mapped_column(Text)
+    # Progress tracking fields
+    records_processed: Mapped[int] = mapped_column(Integer, default=0)
+    total_records: Mapped[int] = mapped_column(Integer, default=0)
+    progress_percentage: Mapped[Optional[float]] = mapped_column(Float, default=None)
+    estimated_time_remaining: Mapped[Optional[int]] = mapped_column(Integer, default=None)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, default=None)
 
     __table_args__ = (
         Index("idx_user_exports_user_id", "user_id"),

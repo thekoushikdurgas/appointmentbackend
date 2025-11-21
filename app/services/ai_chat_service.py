@@ -5,6 +5,8 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from typing import Optional
+
 from app.core.logging import get_logger
 from app.repositories.ai_chat import AIChatRepository
 from app.schemas.ai_chat import (
@@ -15,6 +17,7 @@ from app.schemas.ai_chat import (
     Message,
     PaginatedAIChatResponse,
 )
+from app.schemas.filters import AIChatFilterParams
 from app.utils.pagination import build_pagination_link
 
 logger = get_logger(__name__)
@@ -142,6 +145,7 @@ class AIChatService:
         self,
         session: AsyncSession,
         user_id: str,
+        filters: Optional[AIChatFilterParams] = None,
         *,
         limit: int = 25,
         offset: int = 0,
@@ -167,11 +171,12 @@ class AIChatService:
         chats = await self.repository.list_by_user_id(
             session,
             user_id,
+            filters=filters,
             limit=limit,
             offset=offset,
             ordering=ordering,
         )
-        total_count = await self.repository.count_by_user_id(session, user_id)
+        total_count = await self.repository.count_by_user_id(session, user_id, filters=filters)
 
         # Build pagination links
         next_link = None

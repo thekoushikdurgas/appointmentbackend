@@ -1,7 +1,11 @@
-create table companies_metadata
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS companies_metadata CASCADE;
+
+-- Create table
+CREATE TABLE companies_metadata
 (
     id                      bigserial
-        primary key,
+        PRIMARY KEY,
     uuid                    text,
     linkedin_url            text,
     facebook_url            text,
@@ -17,9 +21,11 @@ create table companies_metadata
     country                 text
 );
 
-alter table companies_metadata
-    owner to postgres;
+-- Set table owner
+ALTER TABLE companies_metadata
+    OWNER TO postgres;
 
-create unique index idx_companies_metadata_uuid_unique
-    on companies_metadata (uuid);
+-- Create indexes
+CREATE UNIQUE INDEX idx_companies_metadata_uuid_unique
+    ON companies_metadata (uuid);
 

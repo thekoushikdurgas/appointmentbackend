@@ -42,16 +42,21 @@
 --   }
 -- ============================================================================
 
--- Query 1: Count contacts matching Apollo URL filters
+-- ORM Implementation Notes:
+--   The ApolloContactsService.count_contacts() uses ContactRepository.count_contacts():
+--   - Uses the SAME conditional JOIN logic as count_contacts (see count_contacts.sql for details)
+--   - Apollo URL parameters are parsed and converted to ContactFilterParams in application layer
+--   - Uses COUNT(DISTINCT c.id) when joins present, COUNT(c.id) when no joins
+--   - Uses EXISTS subqueries when no company join needed
+
+-- Query 1: Count contacts matching Apollo URL filters (minimal - no joins)
 -- POST /api/v2/apollo/contacts/count
--- The Apollo URL is parsed and converted to ContactFilterParams in the application layer.
--- The actual query uses the same structure as count_contacts.sql with the converted filters.
+-- Note: The Apollo URL is parsed and converted to ContactFilterParams in the application layer.
+--       The actual query uses the same conditional JOIN logic as count_contacts.sql.
+--       This example shows minimal query when no filters require joins.
 SELECT 
     COUNT(c.id) as count
 FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE 1=1
     -- Apply converted Apollo filter conditions here
     -- See search_contacts.sql for parameter mapping details

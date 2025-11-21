@@ -26,7 +26,7 @@ from app.schemas.apollo import (
 )
 from app.schemas.common import CountResponse, UuidListResponse
 from app.schemas.contacts import ContactListItem, ContactSimpleItem
-from app.schemas.filters import ContactFilterParams
+from app.schemas.filters import ApolloFilterParams
 from app.services.apollo_analysis_service import ApolloAnalysisService
 from app.services.contacts_service import ContactsService
 from app.utils.cursor import decode_offset_cursor
@@ -143,7 +143,7 @@ def _normalize_list_query_param(param_value: Optional[list[str]]) -> Optional[li
     return normalized if normalized else None
 
 
-def _resolve_pagination(filters: ContactFilterParams, limit: Optional[int]) -> Optional[int]:
+def _resolve_pagination(filters: ApolloFilterParams, limit: Optional[int]) -> Optional[int]:
     """Choose the most appropriate page size within configured bounds."""
     if limit is not None:
         logger.debug("Resolved pagination: explicit limit=%d (no cap applied)", limit)
@@ -356,9 +356,9 @@ async def _handle_search_contacts_action(websocket: WebSocket, request: ApolloWe
                 if normalized is not None:
                     filter_dict["exclude_domain_list"] = normalized
             
-            # Step 3: Validate and construct ContactFilterParams
+            # Step 3: Validate and construct ApolloFilterParams
             try:
-                filters = ContactFilterParams.model_validate(filter_dict)
+                filters = ApolloFilterParams.model_validate(filter_dict)
             except ValidationError as exc:
                 await _send_error_response(
                     websocket,
@@ -526,9 +526,9 @@ async def _handle_count_contacts_action(websocket: WebSocket, request: ApolloWeb
                 if normalized is not None:
                     filter_dict["exclude_domain_list"] = normalized
             
-            # Step 3: Validate and construct ContactFilterParams
+            # Step 3: Validate and construct ApolloFilterParams
             try:
-                filters = ContactFilterParams.model_validate(filter_dict)
+                filters = ApolloFilterParams.model_validate(filter_dict)
             except ValidationError as exc:
                 await _send_error_response(
                     websocket,
@@ -594,9 +594,9 @@ async def _handle_get_uuids_action(websocket: WebSocket, request: ApolloWebSocke
                 if normalized is not None:
                     filter_dict["exclude_domain_list"] = normalized
             
-            # Step 3: Validate and construct ContactFilterParams
+            # Step 3: Validate and construct ApolloFilterParams
             try:
-                filters = ContactFilterParams.model_validate(filter_dict)
+                filters = ApolloFilterParams.model_validate(filter_dict)
             except ValidationError as exc:
                 await _send_error_response(
                     websocket,

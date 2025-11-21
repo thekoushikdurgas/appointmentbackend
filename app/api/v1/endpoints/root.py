@@ -1,18 +1,32 @@
 """Root endpoints that expose API metadata."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_function_call
+from app.schemas.filters import RootFilterParams
 
 
 router = APIRouter()
 logger = get_logger(__name__)
 
 
+async def resolve_root_filters(request: Request) -> RootFilterParams:
+    """Build root filter parameters from query string."""
+    query_params = request.query_params
+    data = dict(query_params)
+    try:
+        return RootFilterParams.model_validate(data)
+    except Exception:
+        # Root filters are minimal, return empty params on validation error
+        return RootFilterParams()
+
+
 @router.get("/")
 @log_function_call(logger=logger, log_result=True)
-async def root() -> dict[str, str]:
+async def root(
+    filters: RootFilterParams = Depends(resolve_root_filters),
+) -> dict[str, str]:
     """Return a lightweight descriptor for the API."""
     settings = get_settings()
     logger.info("Root endpoint requested: project=%s version=%s", settings.PROJECT_NAME, settings.VERSION)
@@ -27,7 +41,9 @@ async def root() -> dict[str, str]:
 
 @router.get("/health/")
 @log_function_call(logger=logger, log_result=True)
-async def health() -> dict[str, str]:
+async def health(
+    filters: RootFilterParams = Depends(resolve_root_filters),
+) -> dict[str, str]:
     """Return a lightweight health payload for the versioned API."""
     settings = get_settings()
     payload = {"status": "healthy", "environment": settings.ENVIRONMENT}

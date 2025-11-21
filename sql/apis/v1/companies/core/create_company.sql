@@ -34,12 +34,44 @@
 --
 -- Response Structure:
 --   Returns CompanyDetail schema with nested metadata object.
+--   All fields from companies and companies_metadata tables.
+--
+-- Response Codes:
+--   201 Created: Company created successfully
+--   400 Bad Request: Invalid request data
+--   401 Unauthorized: Authentication required
+--   403 Forbidden: Admin access and X-Companies-Write-Key header required
+--   500 Internal Server Error: Error occurred while creating company
 --
 -- Authentication:
---   Requires admin authentication and X-Companies-Write-Key header.
+--   Required - Bearer token (admin) and X-Companies-Write-Key header
+--
+-- Example Usage:
+--   POST /api/v1/companies/
+--   Content-Type: application/json
+--   Authorization: Bearer <admin_token>
+--   X-Companies-Write-Key: <write_key>
+--   
+--   {
+--     "name": "TechCorp",
+--     "employees_count": 100,
+--     "industries": ["Technology", "Software"]
+--   }
 -- ============================================================================
 
--- Step 1: Insert into companies table
+-- ORM Implementation Notes:
+--   The CompanyRepository.create_company() only creates the Company record:
+--   - Uses SQLAlchemy ORM: company = Company(**data)
+--   - SQLite special handling: Manually calculates next ID if SQLite dialect
+--   - session.add(company) then flush() and refresh()
+--   - Returns Company object (not CompanyDetail with metadata)
+--   - Metadata is created separately if needed (not part of this operation)
+--   
+--   Note: This SQL shows both Company and CompanyMetadata inserts for completeness,
+--         but the ORM only performs the Company insert in create_company().
+
+-- Step 1: Insert into companies table (PostgreSQL)
+-- Note: The ORM uses SQLAlchemy which handles parameter binding. This shows the equivalent SQL.
 INSERT INTO companies (
     uuid,
     name,

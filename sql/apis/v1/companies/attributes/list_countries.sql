@@ -17,14 +17,22 @@
 --   See list_companies.sql for complete filter parameter list.
 -- ============================================================================
 
+-- ORM Implementation Notes:
+--   The CompanyRepository.list_attribute_values() always joins CompanyMetadata:
+--   - Always uses LEFT JOIN to CompanyMetadata (unlike list_companies which uses conditional JOINs)
+--   - This allows applying all CompanyFilterParams including metadata filters
+--   - Column factory: lambda Company, CompanyMetadata: CompanyMetadata.country
+--   - Filters applied via apply_filters() which handles both Company and CompanyMetadata filters
+--   - Note: The COUNT(*) in GROUP BY queries is for ordering by count only, not returned by ORM
+
 -- Query 1: Basic query with distinct=true
 -- GET /api/v1/companies/country/
-SELECT DISTINCT com.country as value, COUNT(*) as count
+-- Note: Always joins CompanyMetadata to support all filter parameters. COUNT(*) is for ordering only.
+SELECT DISTINCT com.country as value
 FROM companies co
 LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE com.country IS NOT NULL
-    AND com.country != ''
-GROUP BY com.country
+    AND TRIM(com.country) != ''
 ORDER BY com.country ASC
 LIMIT 25
 OFFSET 0;

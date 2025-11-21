@@ -268,11 +268,13 @@ class CompaniesService:
         session: AsyncSession,
         filters: CompanyFilterParams,
         limit: Optional[int] = None,
+        offset: int = 0,
     ) -> list[str]:
         """Return company UUIDs that match the supplied filters."""
         active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
         self.logger.info(
-            "Service getting company UUIDs: limit=%s filters=%s",
+            "Service getting company UUIDs: offset=%d limit=%s filters=%s",
+            offset,
             limit,
             active_filter_keys,
         )
@@ -281,7 +283,7 @@ class CompaniesService:
                 "Unlimited UUID query requested - this may return a large dataset. filters=%s",
                 active_filter_keys,
             )
-        uuids = await self.repository.get_uuids_by_filters(session, filters, limit)
+        uuids = await self.repository.get_uuids_by_filters(session, filters, limit, offset)
         # self.logger.info("Service retrieved %d company UUIDs", len(uuids))
         return uuids
 

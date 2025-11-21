@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.models.imports import ContactImportError, ContactImportJob, ImportJobStatus
 from app.repositories.imports import ImportErrorRepository, ImportJobRepository
+from app.schemas.filters import ImportFilterParams
 from app.schemas.imports import ImportErrorRecord, ImportJobDetail, ImportJobWithErrors
 
 
@@ -158,13 +159,29 @@ class ImportService:
     async def list_jobs(
         self,
         session: AsyncSession,
+        filters: Optional[ImportFilterParams] = None,
         *,
         limit: int = 20,
         offset: int = 0,
     ) -> list[ImportJobDetail]:
-        """List import jobs using pagination."""
-        self.logger.debug("Listing import jobs: limit=%d offset=%d", limit, offset)
-        jobs = await self.job_repository.list_jobs(session, limit=limit, offset=offset)
+        """List import jobs using pagination and optional filters."""
+        self.logger.debug(
+            "Listing import jobs: limit=%d offset=%d filters=%s",
+            limit,
+            offset,
+            filters.model_dump(exclude_none=True) if filters else None,
+        )
+        
+        # Use filters for pagination if provided
+        if filters:
+            if filters.page_size is not None:
+                limit = filters.page_size
+            if filters.page is not None:
+                offset = (filters.page - 1) * (limit or 20)
+        
+        jobs = await self.job_repository.list_jobs(
+            session, filters=filters, limit=limit, offset=offset
+        )
         results = [ImportJobDetail.model_validate(job) for job in jobs]
         self.logger.debug(
             "Exiting ImportService.list_jobs result_count=%d", len(results)

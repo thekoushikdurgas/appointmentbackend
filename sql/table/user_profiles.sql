@@ -1,34 +1,40 @@
-create table public.user_profiles
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS public.user_profiles CASCADE;
+
+-- Create table
+CREATE TABLE public.user_profiles
 (
     id            bigserial
-        primary key,
-    user_id       text         not null,
+        PRIMARY KEY,
+    user_id       text         NOT NULL,
     job_title     varchar(255),
     bio           text,
     timezone      varchar(100),
     avatar_url    text,
     notifications jsonb,
-    role          varchar(50)  default 'Member',
-    created_at    timestamp with time zone not null default now(),
+    role          varchar(50)  DEFAULT 'Member',
+    created_at    timestamp with time zone NOT NULL DEFAULT now(),
     updated_at    timestamp with time zone,
-    constraint fk_user_profiles_user_id
-        foreign key (user_id)
-            references public.users (id)
-            on delete cascade
+    CONSTRAINT fk_user_profiles_user_id
+        FOREIGN KEY (user_id)
+            REFERENCES public.users (id)
+            ON DELETE CASCADE
 );
 
-alter table public.user_profiles
-    owner to postgres;
+-- Set table owner
+ALTER TABLE public.user_profiles
+    OWNER TO postgres;
 
-create unique index idx_user_profiles_user_id_unique
-    on public.user_profiles (user_id);
+-- Create indexes
+CREATE UNIQUE INDEX idx_user_profiles_user_id_unique
+    ON public.user_profiles (user_id);
 
-create index idx_user_profiles_user_id
-    on public.user_profiles (user_id);
+CREATE INDEX idx_user_profiles_user_id
+    ON public.user_profiles (user_id);
 
-create index idx_user_profiles_role
-    on public.user_profiles (role);
+CREATE INDEX idx_user_profiles_role
+    ON public.user_profiles (role);
 
-create index idx_user_profiles_created_at
-    on public.user_profiles (created_at);
+CREATE INDEX idx_user_profiles_created_at
+    ON public.user_profiles (created_at);
 

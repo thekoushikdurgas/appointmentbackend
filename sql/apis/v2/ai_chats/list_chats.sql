@@ -36,6 +36,13 @@
 --   Authorization: Bearer <access_token>
 -- ============================================================================
 
+-- ORM Implementation Notes:
+--   The AIChatRepository.list_by_user_id() uses simple queries:
+--   - No conditional JOINs (single table query)
+--   - Filters by user_id for ownership verification
+--   - Default ordering: created_at DESC (newest first)
+--   - Supports optional filters via AIChatFilterParams
+
 -- Query 1: List chats with default pagination (limit=25, offset=0, ordering=-created_at)
 -- GET /api/v2/ai-chats/
 SELECT 

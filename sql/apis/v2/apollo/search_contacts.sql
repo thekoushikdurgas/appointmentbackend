@@ -65,10 +65,19 @@
 --   }
 -- ============================================================================
 
--- Query 1: Basic search with Apollo URL (converted to filters)
+-- ORM Implementation Notes:
+--   The ApolloContactsService.search_contacts() uses ContactRepository.list_contacts():
+--   - Uses the SAME conditional JOIN logic as list_contacts (see list_contacts.sql for details)
+--   - Apollo URL parameters are parsed and converted to ContactFilterParams in application layer
+--   - Only joins tables when filters require them (optimized for performance)
+--   - Default ordering: created_at DESC NULLS LAST, id DESC
+--   - Returns normalized 4-tuple: (Contact, Company, ContactMetadata, CompanyMetadata)
+
+-- Query 1: Basic search with Apollo URL (converted to filters, minimal - no joins)
 -- POST /api/v2/apollo/contacts?limit=25&offset=0
--- The Apollo URL is parsed and converted to ContactFilterParams in the application layer.
--- The actual query uses the same structure as list_contacts.sql with the converted filters.
+-- Note: The Apollo URL is parsed and converted to ContactFilterParams in the application layer.
+--       The actual query uses the same conditional JOIN logic as list_contacts.sql.
+--       This example shows minimal query when no filters require joins.
 SELECT 
     c.id,
     c.uuid,

@@ -2,6 +2,8 @@
 -- Endpoint: GET /api/v1/companies/
 -- API Version: v1
 -- Description: Return a paginated list of companies using every supported filter parameter.
+--              The ORM implementation uses conditional JOINs - only joining CompanyMetadata when filters require it.
+--              This optimizes query performance by avoiding unnecessary joins.
 -- ============================================================================
 --
 -- Parameters (All optional):
@@ -60,10 +62,71 @@
 --
 -- Response Structure:
 --   Returns CursorPage with results array containing CompanyListItem objects.
+--   Each result includes company data and optionally metadata data based on JOINs performed.
+--
+-- Response Codes:
+--   200 OK: Companies retrieved successfully
+--   400 Bad Request: Invalid query parameters
+--   401 Unauthorized: Authentication required
+--   500 Internal Server Error: Error occurred while querying companies
+--
+-- Authentication:
+--   Required - Bearer token in Authorization header
+--
+-- ORM Implementation Notes:
+--   The CompanyRepository.list_companies() uses conditional JOINs based on filters and ordering:
+--   
+--   JOIN Decision Logic:
+--   1. Minimal query (base_query_minimal): Only companies table
+--      - Used when: No metadata filters, no metadata ordering, no metadata search
+--      - Returns: (Company, None) - normalized to 2-tuple format
+--   
+--   2. Metadata join (base_query_with_metadata): Company + CompanyMetadata (LEFT JOIN)
+--      - Used when: Metadata filters present OR metadata ordering OR metadata search
+--      - Returns: (Company, CompanyMetadata) - normalized to 2-tuple format
+--   
+--   Filter Application:
+--   - When metadata join present: Filters applied directly to joined tables
+--   - When no metadata join: Uses EXISTS subqueries for metadata filters (optimized for count queries)
+--   
+--   Default Ordering:
+--   - created_at DESC NULLS LAST (no join required, uses indexed field)
+--   - Unlike contacts, companies don't have id DESC fallback (Company.id is not used for ordering)
+--   
+--   Result Format:
+--   - Returns normalized 2-tuple: (Company, CompanyMetadata)
+--   - Service layer builds CompanyListItem from the 2-tuple
+--
+-- Example Usage:
+--   GET /api/v1/companies/?limit=25&offset=0
+--   GET /api/v1/companies/?name=TechCorp&employees_min=50&ordering=-annual_revenue
+--   GET /api/v1/companies/?search=technology&city=San Francisco&limit=50
 -- ============================================================================
 
--- Query 1: Basic query - Get all companies (default pagination)
+-- Query 1: Basic query - Get all companies (default pagination, minimal query - no metadata join)
 -- GET /api/v1/companies/
+-- Note: The ORM uses conditional JOINs. This example shows the minimal query when no metadata filters require joins.
+SELECT 
+    co.id,
+    co.uuid,
+    co.name,
+    co.employees_count,
+    co.annual_revenue,
+    co.total_funding,
+    co.industries,
+    co.keywords,
+    co.technologies,
+    co.address,
+    co.text_search,
+    co.created_at,
+    co.updated_at
+FROM companies co
+ORDER BY co.created_at DESC NULLS LAST
+LIMIT 25
+OFFSET 0;
+
+-- Query 1b: With metadata join (when metadata filters or ordering require it)
+-- GET /api/v1/companies/?city=San Francisco
 SELECT 
     co.id,
     co.uuid,

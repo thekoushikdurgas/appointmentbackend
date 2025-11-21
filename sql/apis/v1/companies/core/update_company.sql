@@ -34,16 +34,29 @@
 --
 -- Response Structure:
 --   Returns CompanyDetail schema with nested metadata object.
+--   All fields from companies and companies_metadata tables.
 --
 -- Response Codes:
 --   200 OK: Company updated successfully
 --   400 Bad Request: Invalid request data
 --   401 Unauthorized: Authentication required
---   403 Forbidden: Admin access or write key required
+--   403 Forbidden: Admin access and X-Companies-Write-Key header required
 --   404 Not Found: Company not found
+--   500 Internal Server Error: Error occurred while updating company
 --
 -- Authentication:
---   Requires admin authentication and X-Companies-Write-Key header.
+--   Required - Bearer token (admin) and X-Companies-Write-Key header
+--
+-- Example Usage:
+--   PUT /api/v1/companies/{company_uuid}/
+--   Content-Type: application/json
+--   Authorization: Bearer <admin_token>
+--   X-Companies-Write-Key: <write_key>
+--   
+--   {
+--     "name": "Updated Company Name",
+--     "employees_count": 150
+--   }
 -- ============================================================================
 
 -- Step 1: Update companies table (only non-NULL values are updated)

@@ -1,6 +1,7 @@
 """Authentication API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -8,6 +9,7 @@ from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse
+from app.schemas.filters import AuthFilterParams
 from app.schemas.user import (
     LogoutRequest,
     LogoutResponse,
@@ -26,10 +28,23 @@ logger = get_logger(__name__)
 service = UserService()
 
 
+async def resolve_auth_filters(request: Request) -> AuthFilterParams:
+    """Build auth filter parameters from query string and request body."""
+    query_params = request.query_params
+    data = dict(query_params)
+    try:
+        return AuthFilterParams.model_validate(data)
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        message = first_error.get("msg", "Invalid query parameters")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
 @router.post("/register/", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def register(
     register_data: UserRegister,
+    filters: AuthFilterParams = Depends(resolve_auth_filters),
     session: AsyncSession = Depends(get_db),
 ) -> RegisterResponse:
     """
@@ -64,6 +79,7 @@ async def register(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def login(
     login_data: UserLogin,
+    filters: AuthFilterParams = Depends(resolve_auth_filters),
     session: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     """
@@ -97,6 +113,7 @@ async def login(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def logout(
     logout_data: LogoutRequest,
+    filters: AuthFilterParams = Depends(resolve_auth_filters),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> LogoutResponse:
@@ -120,6 +137,7 @@ async def logout(
 @router.get("/session/", response_model=SessionResponse)
 @log_function_call(logger=logger, log_result=True)
 async def get_session(
+    filters: AuthFilterParams = Depends(resolve_auth_filters),
     current_user: User = Depends(get_current_user),
 ) -> SessionResponse:
     """
@@ -141,6 +159,7 @@ async def get_session(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def refresh_token(
     refresh_data: RefreshTokenRequest,
+    filters: AuthFilterParams = Depends(resolve_auth_filters),
     session: AsyncSession = Depends(get_db),
 ) -> RefreshTokenResponse:
     """

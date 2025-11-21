@@ -14,8 +14,11 @@ Complete API documentation for contact and company export endpoints, including C
 - [CORS Testing](#cors-testing)
 - [Export Endpoints](#export-endpoints)
   - [POST /api/v2/exports/contacts/export](#post-apiv2exportscontactsexport---create-contact-export)
+  - [GET /api/v2/exports/{export_id}/status](#get-apiv2exportsexport_idstatus---get-export-status)
   - [GET /api/v2/exports/{export_id}/download](#get-apiv2exportsexport_iddownload---download-export)
   - [POST /api/v2/exports/companies/export](#post-apiv2exportscompaniesexport---create-company-export)
+  - [POST /api/v2/exports/contacts/export/chunked](#post-apiv2exportscontactsexportchunked---create-chunked-contact-export)
+  - [DELETE /api/v2/exports/{export_id}/cancel](#delete-apiv2exportsexport_idcancel---cancel-export)
   - [GET /api/v2/exports/](#get-apiv2exports---list-exports)
   - [DELETE /api/v2/exports/files](#delete-apiv2exportsfiles---delete-all-csv-files-admin-only)
 - [Export Type Values](#export-type-values)
@@ -74,7 +77,7 @@ All endpoints support CORS (Cross-Origin Resource Sharing) for browser-based req
 
 ### POST /api/v2/exports/contacts/export - Create Contact Export
 
-Create a CSV export of selected contacts. Accepts a list of contact UUIDs and generates a CSV file containing all contact, company, contact metadata, and company metadata fields. Returns a signed temporary download URL that expires after 24 hours.
+Create a CSV export of selected contacts. Accepts a list of contact UUIDs and generates a CSV file containing all contact, company, contact metadata, and company metadata fields. The export is processed asynchronously in the background using Celery. Returns immediately with an export ID and job ID for tracking.
 
 **Headers:**
 
@@ -103,20 +106,22 @@ Create a CSV export of selected contacts. Accepts a list of contact UUIDs and ge
 ```json
 {
   "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
-  "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "download_url": "",
   "expires_at": "2024-12-20T10:30:00Z",
   "contact_count": 2,
-  "status": "completed"
+  "status": "pending",
+  "job_id": "abc123-def456-ghi789"
 }
 ```
 
 **Response Fields:**
 
 - `export_id` (string, UUID): Unique identifier for the export
-- `download_url` (string): Signed temporary download URL that expires after 24 hours. Includes the token as a query parameter.
+- `download_url` (string): Will be generated when export completes (empty initially)
 - `expires_at` (datetime, ISO 8601): Timestamp when the download URL expires (24 hours from creation)
 - `contact_count` (integer): Number of contacts included in the export
-- `status` (string): Export status. Possible values: `pending`, `processing`, `completed`, `failed`
+- `status` (string): Export status. Possible values: `pending`, `processing`, `completed`, `failed`, `cancelled`
+- `job_id` (string, optional): Celery task ID for tracking the background job
 
 **Error (400 Bad Request) - No Contact UUIDs:**
 
@@ -216,12 +221,88 @@ The generated CSV file includes the following fields:
 
 **Notes:**
 
-- The export is processed synchronously and returns immediately with a download URL
+- The export is processed asynchronously in the background using Celery
+- Returns immediately with status `pending` and `job_id`
+- Use the Get Export Status endpoint to poll for completion
+- The download URL will be available when status becomes `completed`
 - The download URL expires after 24 hours from creation
 - If a contact UUID doesn't exist, it will be skipped (not cause the entire export to fail)
 - Array fields (departments, industries, keywords, technologies) are formatted as comma-separated values in the CSV
 - All timestamps are in ISO 8601 format (UTC)
 - Missing or null values are represented as empty strings in the CSV
+
+---
+
+### GET /api/v2/exports/{export_id}/status - Get Export Status
+
+Get the status of an export job. Returns detailed status information including progress percentage, estimated time remaining, error messages, and download URL if available.
+
+**Headers:**
+
+- `Authorization: Bearer <access_token>` (required)
+
+**Path Parameters:**
+
+- `export_id` (string, UUID, required): Export ID
+
+**Response:**
+
+**Success (200 OK):**
+
+```json
+{
+  "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
+  "status": "processing",
+  "progress_percentage": 45.5,
+  "estimated_time": 120,
+  "error_message": null,
+  "download_url": null,
+  "expires_at": null
+}
+```
+
+**Response Fields:**
+
+- `export_id` (string, UUID): Unique identifier for the export
+- `status` (string): Export status. Possible values: `pending`, `processing`, `completed`, `failed`, `cancelled`
+- `progress_percentage` (float, optional): Progress percentage (0-100). Calculated based on records_processed / total_records
+- `estimated_time` (integer, optional): Estimated time remaining in seconds. Calculated based on processing rate
+- `error_message` (string, optional): Error message if export failed
+- `download_url` (string, optional): Download URL if export is completed
+- `expires_at` (datetime, optional): Expiration time of the download URL
+
+**Error (401 Unauthorized) - Missing Authentication:**
+
+```json
+{
+  "detail": "Not authenticated"
+}
+```
+
+**Error (404 Not Found) - Export Not Found:**
+
+```json
+{
+  "detail": "Export not found or access denied"
+}
+```
+
+**Error (500 Internal Server Error) - Failed to Get Status:**
+
+```json
+{
+  "detail": "Failed to get export status"
+}
+```
+
+**Notes:**
+
+- Use this endpoint to poll for export status instead of listing all exports
+- Progress percentage is calculated based on `records_processed / total_records`
+- Estimated time is calculated based on processing rate
+- Status can be: `pending`, `processing`, `completed`, `failed`, or `cancelled`
+- Poll this endpoint periodically (e.g., every 2-5 seconds) to track export progress
+- When status becomes `completed`, the `download_url` will be available
 
 ---
 
@@ -330,7 +411,7 @@ The response body contains the CSV file content.
 
 ### POST /api/v2/exports/companies/export - Create Company Export
 
-Create a CSV export of selected companies. Accepts a list of company UUIDs and generates a CSV file containing all company and company metadata fields. Returns a signed temporary download URL that expires after 24 hours.
+Create a CSV export of selected companies. Accepts a list of company UUIDs and generates a CSV file containing all company and company metadata fields. The export is processed asynchronously in the background using Celery. Returns immediately with an export ID and job ID for tracking.
 
 **Headers:**
 
@@ -359,20 +440,22 @@ Create a CSV export of selected companies. Accepts a list of company UUIDs and g
 ```json
 {
   "export_id": "f4b8c3f5-2222-4f9b-bbbb-123456789abc",
-  "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "download_url": "",
   "expires_at": "2024-12-20T10:30:00Z",
   "company_count": 2,
-  "status": "completed"
+  "status": "pending",
+  "job_id": "abc123-def456-ghi789"
 }
 ```
 
 **Response Fields:**
 
 - `export_id` (string, UUID): Unique identifier for the export
-- `download_url` (string): Signed temporary download URL that expires after 24 hours. Includes the token as a query parameter.
+- `download_url` (string): Will be generated when export completes (empty initially)
 - `expires_at` (datetime, ISO 8601): Timestamp when the download URL expires (24 hours from creation)
 - `company_count` (integer): Number of companies included in the export
-- `status` (string): Export status. Possible values: `pending`, `processing`, `completed`, `failed`
+- `status` (string): Export status. Possible values: `pending`, `processing`, `completed`, `failed`, `cancelled`
+- `job_id` (string, optional): Celery task ID for tracking the background job
 
 **Error (400 Bad Request) - No Company UUIDs:**
 
@@ -434,12 +517,189 @@ The generated CSV file includes the following fields:
 
 **Notes:**
 
-- The export is processed synchronously and returns immediately with a download URL
+- The export is processed asynchronously in the background using Celery
+- Returns immediately with status `pending` and `job_id`
+- Use the Get Export Status endpoint to poll for completion
+- The download URL will be available when status becomes `completed`
 - The download URL expires after 24 hours from creation
 - If a company UUID doesn't exist, it will be skipped (not cause the entire export to fail)
 - Array fields (industries, keywords, technologies) are formatted as comma-separated values in the CSV
 - All timestamps are in ISO 8601 format (UTC)
 - Missing or null values are represented as empty strings in the CSV
+
+---
+
+### POST /api/v2/exports/contacts/export/chunked - Create Chunked Contact Export
+
+Create a chunked contact export. Accepts multiple chunks of contact UUIDs and creates separate export jobs for each chunk. If merge is True, the chunks will be processed and merged into a single export file.
+
+**Headers:**
+
+- `Authorization: Bearer <access_token>` (required)
+- `Content-Type: application/json`
+
+**Request Body:**
+
+```json
+{
+  "chunks": [
+    ["abc123-def456-ghi789", "xyz789-uvw456-rst123"],
+    ["def456-ghi789-jkl012", "mno345-pqr678-stu901"]
+  ],
+  "merge": true
+}
+```
+
+**Request Body Fields:**
+
+- `chunks` (array[array[string]], required, min: 1): List of UUID chunks to export. Each chunk is an array of contact UUIDs.
+- `merge` (boolean, optional, default: true): Whether to merge chunks into a single export file
+
+**Response:**
+
+**Success (201 Created):**
+
+```json
+{
+  "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
+  "chunk_ids": [
+    "chunk-1-export-id",
+    "chunk-2-export-id"
+  ],
+  "total_count": 4,
+  "status": "pending",
+  "job_id": "abc123-def456-ghi789"
+}
+```
+
+**Response Fields:**
+
+- `export_id` (string, UUID): Main export ID
+- `chunk_ids` (array[string]): List of chunk export IDs
+- `total_count` (integer): Total number of records across all chunks
+- `status` (string): Export status - `pending`, `processing`, `completed`, `failed`, or `cancelled`
+- `job_id` (string, optional): Celery task ID for tracking the background job (first task ID)
+
+**Error (400 Bad Request) - No Chunks:**
+
+```json
+{
+  "detail": "At least one chunk is required"
+}
+```
+
+**Error (400 Bad Request) - No Contact UUIDs:**
+
+```json
+{
+  "detail": "At least one contact UUID is required across all chunks"
+}
+```
+
+**Error (401 Unauthorized) - Missing Authentication:**
+
+```json
+{
+  "detail": "Not authenticated"
+}
+```
+
+**Error (500 Internal Server Error) - Export Creation Failed:**
+
+```json
+{
+  "detail": "Failed to create chunked export"
+}
+```
+
+**Notes:**
+
+- Each chunk is processed as a separate export job
+- The main `export_id` can be used to track overall progress
+- Individual `chunk_ids` can be used to track each chunk's progress
+- If merge is true, chunks will be processed and merged into a single export file (implementation pending)
+- All chunks are processed in parallel for better performance
+- Use the Get Export Status endpoint to poll for completion of individual chunks
+
+---
+
+### DELETE /api/v2/exports/{export_id}/cancel - Cancel Export
+
+Cancel a pending or processing export. Sets the export status to "cancelled" and cleans up any partial resources. Cannot cancel exports that are already completed or failed.
+
+**Headers:**
+
+- `Authorization: Bearer <access_token>` (required)
+
+**Path Parameters:**
+
+- `export_id` (string, UUID, required): Export ID
+
+**Response:**
+
+**Success (200 OK):**
+
+```json
+{
+  "message": "Export cancelled successfully",
+  "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
+  "status": "cancelled"
+}
+```
+
+**Response Fields:**
+
+- `message` (string): Success or status message
+- `export_id` (string, UUID): Export ID
+- `status` (string): Export status after cancellation (cancelled)
+
+**Error (400 Bad Request) - Cannot Cancel Completed:**
+
+```json
+{
+  "detail": "Cannot cancel a completed export"
+}
+```
+
+**Error (400 Bad Request) - Cannot Cancel Failed:**
+
+```json
+{
+  "detail": "Cannot cancel a failed export"
+}
+```
+
+**Error (401 Unauthorized) - Missing Authentication:**
+
+```json
+{
+  "detail": "Not authenticated"
+}
+```
+
+**Error (404 Not Found) - Export Not Found:**
+
+```json
+{
+  "detail": "Export not found or access denied"
+}
+```
+
+**Error (500 Internal Server Error) - Failed to Cancel:**
+
+```json
+{
+  "detail": "Failed to cancel export"
+}
+```
+
+**Notes:**
+
+- Can only cancel exports with status `pending` or `processing`
+- Cannot cancel exports that are already `completed` or `failed`
+- If export is already cancelled, returns success message
+- Background tasks will check for cancellation status and stop processing
+- Partial resources (CSV files) may be cleaned up on cancellation
 
 ---
 
@@ -464,6 +724,10 @@ List all exports for the current user. Returns all exports created by the authen
       "export_type": "contacts",
       "file_path": "/path/to/export.csv",
       "file_name": "export_f4b8c3f5-1111-4f9b-aaaa-123456789abc.csv",
+      "linkedin_urls": [
+        "https://www.linkedin.com/in/john-doe",
+        "https://www.linkedin.com/company/tech-corp"
+      ],
       "contact_count": 2,
       "contact_uuids": ["abc123-def456-ghi789", "xyz789-uvw456-rst123"],
       "company_count": 0,
@@ -483,6 +747,7 @@ List all exports for the current user. Returns all exports created by the authen
       "contact_uuids": null,
       "company_count": 3,
       "company_uuids": ["def456-ghi789-jkl012", "mno345-pqr678-stu901"],
+      "linkedin_urls": null,
       "status": "completed",
       "created_at": "2024-12-18T15:20:00Z",
       "expires_at": "2024-12-19T15:20:00Z",
@@ -509,7 +774,8 @@ List all exports for the current user. Returns all exports created by the authen
 - `contact_uuids` (array[string], optional): List of contact UUIDs (null for company exports)
 - `company_count` (integer): Number of companies in the export (0 for contact exports)
 - `company_uuids` (array[string], optional): List of company UUIDs (null for contact exports)
-- `status` (string): Export status - `pending`, `completed`, or `failed`
+- `linkedin_urls` (array[string], optional): List of LinkedIn URLs used for LinkedIn exports. Only populated for exports created via POST /api/v2/linkedin/export. Null for regular contact/company exports.
+- `status` (string): Export status - `pending`, `processing`, `completed`, `failed`, or `cancelled`
 - `created_at` (datetime, ISO 8601): When the export was created
 - `expires_at` (datetime, ISO 8601, optional): When the download URL expires
 - `download_url` (string, optional): Signed download URL (null if export is not completed)
@@ -608,9 +874,11 @@ The export type field can have the following values:
 
 The export status field can have the following values:
 
-- `pending`: Export is queued but not yet started
+- `pending`: Export is queued but not yet started processing
+- `processing`: Export is currently being processed in the background
 - `completed`: Export is ready for download
 - `failed`: Export generation failed
+- `cancelled`: Export was cancelled by the user
 
 ---
 
@@ -649,14 +917,50 @@ curl -X POST "http://54.87.173.234:8000/api/v2/exports/contacts/export" \
 ```json
 {
   "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
-  "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "download_url": "",
   "expires_at": "2024-12-20T10:30:00Z",
   "contact_count": 2,
-  "status": "completed"
+  "status": "pending",
+  "job_id": "abc123-def456-ghi789"
 }
 ```
 
-**Step 2: Download Export**
+**Step 2: Poll for Status**
+
+```bash
+curl -X GET "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/status" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**Response (while processing):**
+
+```json
+{
+  "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
+  "status": "processing",
+  "progress_percentage": 45.5,
+  "estimated_time": 120,
+  "error_message": null,
+  "download_url": null,
+  "expires_at": null
+}
+```
+
+**Response (when completed):**
+
+```json
+{
+  "export_id": "f4b8c3f5-1111-4f9b-aaaa-123456789abc",
+  "status": "completed",
+  "progress_percentage": 100.0,
+  "estimated_time": 0,
+  "error_message": null,
+  "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_at": "2024-12-20T10:30:00Z"
+}
+```
+
+**Step 3: Download Export**
 
 ```bash
 curl -X GET "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
@@ -688,14 +992,22 @@ curl -X POST "http://54.87.173.234:8000/api/v2/exports/companies/export" \
 ```json
 {
   "export_id": "f4b8c3f5-2222-4f9b-bbbb-123456789abc",
-  "download_url": "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "download_url": "",
   "expires_at": "2024-12-20T10:30:00Z",
   "company_count": 2,
-  "status": "completed"
+  "status": "pending",
+  "job_id": "abc123-def456-ghi789"
 }
 ```
 
-**Step 2: Download Export**
+**Step 2: Poll for Status**
+
+```bash
+curl -X GET "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/status" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**Step 3: Download Export**
 
 ```bash
 curl -X GET "http://54.87.173.234:8000/api/v2/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
@@ -724,6 +1036,7 @@ curl -X GET "http://54.87.173.234:8000/api/v2/exports/" \
       "export_type": "contacts",
       "contact_count": 2,
       "company_count": 0,
+      "linkedin_urls": null,
       "status": "completed",
       "created_at": "2024-12-19T10:30:00Z",
       "expires_at": "2024-12-20T10:30:00Z",
@@ -761,18 +1074,24 @@ Error responses follow this format:
 
 ## Rate Limiting
 
-Currently, there are no rate limits on export endpoints. However, exports are processed synchronously, so large exports may take longer to complete. Consider implementing client-side rate limiting for production use.
+Currently, there are no rate limits on export endpoints. Exports are processed asynchronously in the background, so large exports will not block the API. Consider implementing client-side rate limiting for production use.
 
 ---
 
 ## Best Practices
 
-1. **Store Download URLs**: Save the `download_url` from the create response immediately, as it cannot be regenerated without creating a new export.
+1. **Poll for Status**: After creating an export, use the Get Export Status endpoint to poll for completion. Poll every 2-5 seconds until status becomes `completed` or `failed`.
 
-2. **Handle Expiration**: Check the `expires_at` timestamp and download the file before it expires. If expired, create a new export.
+2. **Store Export IDs**: Save the `export_id` and `job_id` from the create response immediately for tracking purposes.
 
-3. **Error Handling**: Implement proper error handling for failed exports. Check the `status` field and handle `failed` status appropriately.
+3. **Handle Expiration**: Check the `expires_at` timestamp and download the file before it expires. If expired, create a new export.
 
-4. **Large Exports**: For large numbers of contacts, consider batching exports or implementing pagination on the client side.
+4. **Error Handling**: Implement proper error handling for failed exports. Check the `status` field and handle `failed` status appropriately. Use `error_message` for detailed error information.
 
-5. **File Storage**: Downloaded CSV files should be stored securely on the client side if needed for later use, as the download URL expires after 24 hours.
+5. **Progress Tracking**: Use the `progress_percentage` and `estimated_time` fields from the status endpoint to show progress to users.
+
+6. **Large Exports**: For large numbers of contacts, consider using chunked exports or implementing pagination on the client side.
+
+7. **Cancellation**: Allow users to cancel long-running exports using the Cancel Export endpoint.
+
+8. **File Storage**: Downloaded CSV files should be stored securely on the client side if needed for later use, as the download URL expires after 24 hours.

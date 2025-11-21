@@ -1,27 +1,33 @@
-create table public.ai_chats
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS public.ai_chats CASCADE;
+
+-- Create table
+CREATE TABLE public.ai_chats
 (
     id         text
-        primary key,
-    user_id    text                     not null,
-    title      varchar(255) default ''::character varying,
-    messages   jsonb        default '[]'::jsonb,
-    created_at timestamp with time zone not null default now(),
+        PRIMARY KEY,
+    user_id    text                     NOT NULL,
+    title      varchar(255) DEFAULT ''::character varying,
+    messages   jsonb        DEFAULT '[]'::jsonb,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone,
-    constraint fk_ai_chats_user_id
-        foreign key (user_id)
-            references public.users (id)
-            on delete cascade
+    CONSTRAINT fk_ai_chats_user_id
+        FOREIGN KEY (user_id)
+            REFERENCES public.users (id)
+            ON DELETE CASCADE
 );
 
-alter table public.ai_chats
-    owner to postgres;
+-- Set table owner
+ALTER TABLE public.ai_chats
+    OWNER TO postgres;
 
-create index idx_ai_chats_user_id
-    on public.ai_chats (user_id);
+-- Create indexes
+CREATE INDEX idx_ai_chats_user_id
+    ON public.ai_chats (user_id);
 
-create index idx_ai_chats_created_at
-    on public.ai_chats (created_at);
+CREATE INDEX idx_ai_chats_created_at
+    ON public.ai_chats (created_at);
 
-create index idx_ai_chats_updated_at
-    on public.ai_chats (updated_at);
+CREATE INDEX idx_ai_chats_updated_at
+    ON public.ai_chats (updated_at);
 

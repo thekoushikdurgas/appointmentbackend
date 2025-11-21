@@ -283,77 +283,6 @@ Base URL: `/api/v1/contacts`
 
 **Response**: `List[str]`
 
-#### GET `/city/`
-
-**Description**: List contact cities
-
-**Headers**:
-
-- `Authorization: Bearer <token>` (required)
-
-**Query Parameters**: ContactFilterParams and AttributeListParams fields
-
-**Response**: `List[str]`
-
-#### GET `/state/`
-
-**Description**: List contact states
-
-**Headers**:
-
-- `Authorization: Bearer <token>` (required)
-
-**Query Parameters**: ContactFilterParams and AttributeListParams fields
-
-**Response**: `List[str]`
-
-#### GET `/country/`
-
-**Description**: List contact countries
-
-**Headers**:
-
-- `Authorization: Bearer <token>` (required)
-
-**Query Parameters**: ContactFilterParams and AttributeListParams fields
-
-**Response**: `List[str]`
-
-#### GET `/company_city/`
-
-**Description**: List company cities
-
-**Headers**:
-
-- `Authorization: Bearer <token>` (required)
-
-**Query Parameters**: ContactFilterParams and AttributeListParams fields
-
-**Response**: `List[str]`
-
-#### GET `/company_state/`
-
-**Description**: List company states
-
-**Headers**:
-
-- `Authorization: Bearer <token>` (required)
-
-**Query Parameters**: ContactFilterParams and AttributeListParams fields
-
-**Response**: `List[str]`
-
-#### GET `/company_country/`
-
-**Description**: List company countries
-
-**Headers**:
-
-- `Authorization: Bearer <token>` (required)
-
-**Query Parameters**: ContactFilterParams and AttributeListParams fields
-
-**Response**: `List[str]`
 
 ---
 
@@ -1404,19 +1333,13 @@ Base URL: `ws://host:port/api/v1/contacts/ws`
 10. **get_technologies** - List technologies
 11. **get_company_addresses** - List company addresses
 12. **get_contact_addresses** - List contact addresses
-13. **get_cities** - List contact cities
-14. **get_states** - List contact states
-15. **get_countries** - List contact countries
-16. **get_company_cities** - List company cities
-17. **get_company_states** - List company states
-18. **get_company_countries** - List company countries
 
 #### Import Operations (4):
 
-19. **get_import_info** - Get import information
-20. **upload_contacts_csv** - Upload CSV for import (admin only)
-21. **get_import_status** - Get import job status
-22. **get_import_errors** - Get import errors
+13. **get_import_info** - Get import information
+14. **upload_contacts_csv** - Upload CSV for import (admin only)
+15. **get_import_status** - Get import job status
+16. **get_import_errors** - Get import errors
 
 **Request Format**:
 

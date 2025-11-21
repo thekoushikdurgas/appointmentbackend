@@ -1,0 +1,713 @@
+SQL Runner - Query Results
+================================================================================
+Execution started: 2025-11-20 02:10:08
+SQL file: D:\code\ayan\appointmentbackend\sql\sql.txt
+================================================================================
+
+================================================================================
+Query #1
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+ORDER BY value ASC
+LIMIT 26
+OFFSET 50
+Execution Time: 7.6965 seconds
+--------------------------------------------------------------------------------
+Query Plan (49 lines):
+
+Limit  (cost=2973748.12..2973748.18 rows=26 width=32) (actual time=3686.609..3686.692 rows=26 loops=1)
+  Output: (unnest(technologies))
+  Buffers: shared hit=504779
+  ->  Sort  (cost=2973747.99..2976343.39 rows=1038160 width=32) (actual time=3686.603..3686.686 rows=76 loops=1)
+        Output: (unnest(technologies))
+        Sort Key: (unnest(companies.technologies))
+        Sort Method: top-N heapsort  Memory: 28kB
+        Buffers: shared hit=504779
+        ->  HashAggregate  (cost=2894761.26..2936125.45 rows=1038160 width=32) (actual time=3685.639..3686.083 rows=1964 loops=1)
+              Output: (unnest(technologies))
+              Group Key: (unnest(companies.technologies))
+              Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+              Buffers: shared hit=504776
+              ->  Gather  (cost=2231915.10..2734495.31 rows=2076320 width=32) (actual time=3683.891..3684.636 rows=5625 loops=1)
+                    Output: (unnest(technologies))
+                    Workers Planned: 2
+                    Workers Launched: 2
+                    Buffers: shared hit=504776
+                    ->  HashAggregate  (cost=2230915.10..2525863.31 rows=1038160 width=32) (actual time=3681.527..3681.885 rows=1875 loops=3)
+                          Output: (unnest(technologies))
+                          Group Key: unnest(companies.technologies)
+                          Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+                          Buffers: shared hit=504776
+                          Worker 0:  actual time=3680.471..3680.817 rows=1886 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=169283
+                          Worker 1:  actual time=3680.559..3680.919 rows=1870 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=167882
+                          ->  ProjectSet  (cost=0.00..638986.21 rows=20624180 width=32) (actual time=0.007..1647.174 rows=16488669 loops=3)
+                                Output: unnest(technologies)
+                                Buffers: shared hit=504776
+                                Worker 0:  actual time=0.007..1651.342 rows=16561939 loops=1
+                                  Buffers: shared hit=169283
+                                Worker 1:  actual time=0.006..1648.239 rows=16503112 loops=1
+                                  Buffers: shared hit=167882
+                                ->  Parallel Seq Scan on public.companies  (cost=0.00..520397.17 rows=2062418 width=189) (actual time=0.004..544.485 rows=1648522 loops=3)
+                                      Output: technologies
+                                      Filter: (companies.technologies IS NOT NULL)
+                                      Buffers: shared hit=499773
+                                      Worker 0:  actual time=0.005..543.891 rows=1656070 loops=1
+                                        Buffers: shared hit=167564
+                                      Worker 1:  actual time=0.004..543.337 rows=1647792 loops=1
+                                        Buffers: shared hit=166239
+Query Identifier: -1185321184570192201
+Planning:
+  Buffers: shared hit=271
+Planning Time: 0.510 ms
+Execution Time: 3688.175 ms
+
+================================================================================
+Query #2
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+  AND array_length(technologies, 1) > 0
+ORDER BY value ASC
+LIMIT 25
+OFFSET 0
+Execution Time: 3.6881 seconds
+--------------------------------------------------------------------------------
+Query Plan (37 lines):
+
+Limit  (cost=765238.58..765241.50 rows=25 width=32) (actual time=3027.838..3028.908 rows=25 loops=1)
+  Output: (unnest(technologies))
+  Buffers: shared hit=509727
+  ->  Gather Merge  (cost=765238.58..2369451.92 rows=13749440 width=32) (actual time=3027.836..3028.905 rows=25 loops=1)
+        Output: (unnest(technologies))
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=509727
+        ->  Sort  (cost=764238.56..781425.36 rows=6874720 width=32) (actual time=3026.067..3026.069 rows=25 loops=3)
+              Output: (unnest(technologies))
+              Sort Key: (unnest(companies.technologies))
+              Sort Method: top-N heapsort  Memory: 25kB
+              Buffers: shared hit=509727
+              Worker 0:  actual time=3025.223..3025.225 rows=25 loops=1
+                Sort Method: top-N heapsort  Memory: 25kB
+                Buffers: shared hit=169593
+              Worker 1:  actual time=3025.365..3025.366 rows=25 loops=1
+                Sort Method: top-N heapsort  Memory: 25kB
+                Buffers: shared hit=168575
+              ->  ProjectSet  (cost=0.00..570238.90 rows=6874720 width=32) (actual time=0.005..1675.682 rows=16488669 loops=3)
+                    Output: unnest(technologies)
+                    Buffers: shared hit=509653
+                    Worker 0:  actual time=0.004..1669.068 rows=16519666 loops=1
+                      Buffers: shared hit=169556
+                    Worker 1:  actual time=0.005..1686.622 rows=16295681 loops=1
+                      Buffers: shared hit=168538
+                    ->  Parallel Seq Scan on public.companies  (cost=0.00..530709.26 rows=687472 width=189) (actual time=0.004..597.691 rows=1648522 loops=3)
+                          Output: technologies
+                          Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0))
+                          Buffers: shared hit=504753
+                          Worker 0:  actual time=0.003..586.903 rows=1647522 loops=1
+                            Buffers: shared hit=168021
+                          Worker 1:  actual time=0.004..597.104 rows=1637186 loops=1
+                            Buffers: shared hit=166885
+Query Identifier: -116487898891247115
+Planning Time: 0.097 ms
+Execution Time: 3028.937 ms
+
+================================================================================
+Query #3
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+  AND array_length(technologies, 1) > 0
+ORDER BY value ASC
+LIMIT 25
+OFFSET 0
+Execution Time: 4.3946 seconds
+--------------------------------------------------------------------------------
+Query Plan (47 lines):
+
+Limit  (cost=1647406.93..1647406.99 rows=25 width=32) (actual time=3730.964..3731.046 rows=25 loops=1)
+  Output: (unnest(technologies))
+  Buffers: shared hit=509653
+  ->  Sort  (cost=1647406.93..1650002.33 rows=1038160 width=32) (actual time=3730.962..3731.042 rows=25 loops=1)
+        Output: (unnest(technologies))
+        Sort Key: (unnest(companies.technologies))
+        Sort Method: top-N heapsort  Memory: 25kB
+        Buffers: shared hit=509653
+        ->  HashAggregate  (cost=1576746.61..1618110.80 rows=1038160 width=32) (actual time=3730.303..3730.707 rows=1964 loops=1)
+              Output: (unnest(technologies))
+              Group Key: (unnest(companies.technologies))
+              Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+              Buffers: shared hit=509653
+              ->  Gather  (cost=1101881.35..1416480.66 rows=2076320 width=32) (actual time=3728.608..3729.345 rows=5620 loops=1)
+                    Output: (unnest(technologies))
+                    Workers Planned: 2
+                    Workers Launched: 2
+                    Buffers: shared hit=509653
+                    ->  HashAggregate  (cost=1100881.35..1207848.66 rows=1038160 width=32) (actual time=3726.335..3726.684 rows=1873 loops=3)
+                          Output: (unnest(technologies))
+                          Group Key: unnest(companies.technologies)
+                          Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+                          Buffers: shared hit=509653
+                          Worker 0:  actual time=3725.259..3725.619 rows=1877 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=170388
+                          Worker 1:  actual time=3725.356..3725.688 rows=1869 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=170527
+                          ->  ProjectSet  (cost=0.00..570238.90 rows=6874720 width=32) (actual time=0.007..1703.564 rows=16488669 loops=3)
+                                Output: unnest(technologies)
+                                Buffers: shared hit=509653
+                                Worker 0:  actual time=0.006..1703.949 rows=16504119 loops=1
+                                  Buffers: shared hit=170388
+                                Worker 1:  actual time=0.006..1703.018 rows=16503603 loops=1
+                                  Buffers: shared hit=170527
+                                ->  Parallel Seq Scan on public.companies  (cost=0.00..530709.26 rows=687472 width=189) (actual time=0.005..614.883 rows=1648522 loops=3)
+                                      Output: technologies
+                                      Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0))
+                                      Buffers: shared hit=504753
+                                      Worker 0:  actual time=0.004..614.537 rows=1652622 loops=1
+                                        Buffers: shared hit=168761
+                                      Worker 1:  actual time=0.004..611.605 rows=1652543 loops=1
+                                        Buffers: shared hit=168877
+Query Identifier: -7335283394545845510
+Planning Time: 0.129 ms
+Execution Time: 3732.301 ms
+
+================================================================================
+Query #4
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+  AND array_length(technologies, 1) > 0
+ORDER BY value ASC
+LIMIT 25
+OFFSET 50
+Execution Time: 4.4265 seconds
+--------------------------------------------------------------------------------
+Query Plan (47 lines):
+
+Limit  (cost=1655634.28..1655634.34 rows=25 width=32) (actual time=3739.788..3739.850 rows=25 loops=1)
+  Output: (unnest(technologies))
+  Buffers: shared hit=509653
+  ->  Sort  (cost=1655634.15..1658229.55 rows=1038160 width=32) (actual time=3739.783..3739.845 rows=75 loops=1)
+        Output: (unnest(technologies))
+        Sort Key: (unnest(companies.technologies))
+        Sort Method: top-N heapsort  Memory: 28kB
+        Buffers: shared hit=509653
+        ->  HashAggregate  (cost=1576746.61..1618110.80 rows=1038160 width=32) (actual time=3738.909..3739.303 rows=1964 loops=1)
+              Output: (unnest(technologies))
+              Group Key: (unnest(companies.technologies))
+              Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+              Buffers: shared hit=509653
+              ->  Gather  (cost=1101881.35..1416480.66 rows=2076320 width=32) (actual time=3737.225..3737.960 rows=5628 loops=1)
+                    Output: (unnest(technologies))
+                    Workers Planned: 2
+                    Workers Launched: 2
+                    Buffers: shared hit=509653
+                    ->  HashAggregate  (cost=1100881.35..1207848.66 rows=1038160 width=32) (actual time=3734.940..3735.285 rows=1876 loops=3)
+                          Output: (unnest(technologies))
+                          Group Key: unnest(companies.technologies)
+                          Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+                          Buffers: shared hit=509653
+                          Worker 0:  actual time=3733.865..3734.196 rows=1874 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=170118
+                          Worker 1:  actual time=3733.967..3734.305 rows=1880 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=169880
+                          ->  ProjectSet  (cost=0.00..570238.90 rows=6874720 width=32) (actual time=0.008..1709.212 rows=16488669 loops=3)
+                                Output: unnest(technologies)
+                                Buffers: shared hit=509653
+                                Worker 0:  actual time=0.007..1709.323 rows=16532844 loops=1
+                                  Buffers: shared hit=170118
+                                Worker 1:  actual time=0.007..1707.776 rows=16501789 loops=1
+                                  Buffers: shared hit=169880
+                                ->  Parallel Seq Scan on public.companies  (cost=0.00..530709.26 rows=687472 width=189) (actual time=0.006..618.871 rows=1648522 loops=3)
+                                      Output: technologies
+                                      Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0))
+                                      Buffers: shared hit=504753
+                                      Worker 0:  actual time=0.005..617.116 rows=1652248 loops=1
+                                        Buffers: shared hit=168481
+                                      Worker 1:  actual time=0.005..613.961 rows=1652069 loops=1
+                                        Buffers: shared hit=168324
+Query Identifier: -7335283394545845510
+Planning Time: 0.109 ms
+Execution Time: 3741.119 ms
+
+================================================================================
+Query #5
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+  AND array_length(technologies, 1) > 0
+ORDER BY value ASC
+LIMIT 25
+OFFSET 100
+Execution Time: 4.4172 seconds
+--------------------------------------------------------------------------------
+Query Plan (47 lines):
+
+Limit  (cost=1659459.85..1659459.91 rows=25 width=32) (actual time=3754.007..3754.075 rows=25 loops=1)
+  Output: (unnest(technologies))
+  Buffers: shared hit=509653
+  ->  Sort  (cost=1659459.60..1662055.00 rows=1038160 width=32) (actual time=3753.998..3754.068 rows=125 loops=1)
+        Output: (unnest(technologies))
+        Sort Key: (unnest(companies.technologies))
+        Sort Method: top-N heapsort  Memory: 30kB
+        Buffers: shared hit=509653
+        ->  HashAggregate  (cost=1576746.61..1618110.80 rows=1038160 width=32) (actual time=3752.915..3753.324 rows=1964 loops=1)
+              Output: (unnest(technologies))
+              Group Key: (unnest(companies.technologies))
+              Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+              Buffers: shared hit=509653
+              ->  Gather  (cost=1101881.35..1416480.66 rows=2076320 width=32) (actual time=3751.208..3751.936 rows=5633 loops=1)
+                    Output: (unnest(technologies))
+                    Workers Planned: 2
+                    Workers Launched: 2
+                    Buffers: shared hit=509653
+                    ->  HashAggregate  (cost=1100881.35..1207848.66 rows=1038160 width=32) (actual time=3748.964..3749.314 rows=1878 loops=3)
+                          Output: (unnest(technologies))
+                          Group Key: unnest(companies.technologies)
+                          Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+                          Buffers: shared hit=509653
+                          Worker 0:  actual time=3747.881..3748.215 rows=1870 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=170464
+                          Worker 1:  actual time=3748.021..3748.370 rows=1884 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=169552
+                          ->  ProjectSet  (cost=0.00..570238.90 rows=6874720 width=32) (actual time=0.007..1714.698 rows=16488669 loops=3)
+                                Output: unnest(technologies)
+                                Buffers: shared hit=509653
+                                Worker 0:  actual time=0.006..1715.213 rows=16570832 loops=1
+                                  Buffers: shared hit=170464
+                                Worker 1:  actual time=0.007..1717.690 rows=16544048 loops=1
+                                  Buffers: shared hit=169552
+                                ->  Parallel Seq Scan on public.companies  (cost=0.00..530709.26 rows=687472 width=189) (actual time=0.005..623.457 rows=1648522 loops=3)
+                                      Output: technologies
+                                      Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0))
+                                      Buffers: shared hit=504753
+                                      Worker 0:  actual time=0.004..619.614 rows=1653054 loops=1
+                                        Buffers: shared hit=168730
+                                      Worker 1:  actual time=0.005..623.483 rows=1649848 loops=1
+                                        Buffers: shared hit=167953
+Query Identifier: -7335283394545845510
+Planning Time: 0.134 ms
+Execution Time: 3755.297 ms
+
+================================================================================
+Query #6
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+  AND array_length(technologies, 1) > 0
+ORDER BY value ASC
+LIMIT 25
+OFFSET 500
+Execution Time: 4.4122 seconds
+--------------------------------------------------------------------------------
+Query Plan (47 lines):
+
+Limit  (cost=1670207.82..1670207.88 rows=25 width=32) (actual time=3748.112..3748.172 rows=25 loops=1)
+  Output: (unnest(technologies))
+  Buffers: shared hit=509653
+  ->  Sort  (cost=1670206.57..1672801.97 rows=1038160 width=32) (actual time=3748.070..3748.155 rows=525 loops=1)
+        Output: (unnest(technologies))
+        Sort Key: (unnest(companies.technologies))
+        Sort Method: top-N heapsort  Memory: 70kB
+        Buffers: shared hit=509653
+        ->  HashAggregate  (cost=1576746.61..1618110.80 rows=1038160 width=32) (actual time=3745.967..3746.360 rows=1964 loops=1)
+              Output: (unnest(technologies))
+              Group Key: (unnest(companies.technologies))
+              Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+              Buffers: shared hit=509653
+              ->  Gather  (cost=1101881.35..1416480.66 rows=2076320 width=32) (actual time=3744.287..3744.999 rows=5629 loops=1)
+                    Output: (unnest(technologies))
+                    Workers Planned: 2
+                    Workers Launched: 2
+                    Buffers: shared hit=509653
+                    ->  HashAggregate  (cost=1100881.35..1207848.66 rows=1038160 width=32) (actual time=3741.990..3742.338 rows=1876 loops=3)
+                          Output: (unnest(technologies))
+                          Group Key: unnest(companies.technologies)
+                          Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+                          Buffers: shared hit=509653
+                          Worker 0:  actual time=3740.927..3741.260 rows=1885 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=170046
+                          Worker 1:  actual time=3741.023..3741.372 rows=1870 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=170921
+                          ->  ProjectSet  (cost=0.00..570238.90 rows=6874720 width=32) (actual time=0.008..1705.325 rows=16488669 loops=3)
+                                Output: unnest(technologies)
+                                Buffers: shared hit=509653
+                                Worker 0:  actual time=0.007..1713.265 rows=16520174 loops=1
+                                  Buffers: shared hit=170046
+                                Worker 1:  actual time=0.006..1709.474 rows=16595100 loops=1
+                                  Buffers: shared hit=170921
+                                ->  Parallel Seq Scan on public.companies  (cost=0.00..530709.26 rows=687472 width=189) (actual time=0.006..616.117 rows=1648522 loops=3)
+                                      Output: technologies
+                                      Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0))
+                                      Buffers: shared hit=504753
+                                      Worker 0:  actual time=0.005..620.798 rows=1653021 loops=1
+                                        Buffers: shared hit=168407
+                                      Worker 1:  actual time=0.004..613.605 rows=1655825 loops=1
+                                        Buffers: shared hit=169277
+Query Identifier: -7335283394545845510
+Planning Time: 0.116 ms
+Execution Time: 3749.419 ms
+
+================================================================================
+Query #7
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+  AND array_length(technologies, 1) > 0
+  AND EXISTS (
+      SELECT 1 FROM unnest(technologies) AS technology 
+      WHERE technology ILIKE '%Python%'
+  )
+ORDER BY value ASC
+LIMIT 25
+OFFSET 50
+Execution Time: 28.6762 seconds
+--------------------------------------------------------------------------------
+Query Plan (30 lines):
+
+Limit  (cost=2052607.46..2052607.52 rows=25 width=32) (actual time=28019.651..28019.655 rows=25 loops=1)
+  Output: (unnest(companies.technologies))
+  Buffers: shared hit=510308
+  ->  Sort  (cost=2052607.33..2055202.31 rows=1037990 width=32) (actual time=28019.646..28019.650 rows=75 loops=1)
+        Output: (unnest(companies.technologies))
+        Sort Key: (unnest(companies.technologies))
+        Sort Method: top-N heapsort  Memory: 28kB
+        Buffers: shared hit=510308
+        ->  HashAggregate  (cost=1889326.79..2015090.12 rows=1037990 width=32) (actual time=28018.825..28019.168 rows=1655 loops=1)
+              Output: (unnest(companies.technologies))
+              Group Key: unnest(companies.technologies)
+              Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+              Buffers: shared hit=510308
+              ->  ProjectSet  (cost=0.00..1252555.39 rows=8249670 width=32) (actual time=2.217..27134.522 rows=6532036 loops=1)
+                    Output: unnest(companies.technologies)
+                    Buffers: shared hit=510308
+                    ->  Seq Scan on public.companies  (cost=0.00..1205119.79 rows=824967 width=189) (actual time=2.216..26734.068 rows=362110 loops=1)
+                          Output: companies.technologies
+                          Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0) AND (SubPlan 1))
+                          Rows Removed by Filter: 4583456
+                          Buffers: shared hit=509573
+                          SubPlan 1
+                            ->  Function Scan on pg_catalog.unnest technology  (cost=0.00..0.13 rows=1 width=0) (actual time=0.005..0.005 rows=0 loops=4945566)
+                                  Function Call: unnest(companies.technologies)
+                                  Filter: (technology.technology ~~* '%Python%'::text)
+                                  Rows Removed by Filter: 10
+                                  Buffers: shared hit=4900
+Query Identifier: 6459859526200768994
+Planning Time: 0.127 ms
+Execution Time: 28020.273 ms
+
+================================================================================
+Query #8
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+  AND array_length(technologies, 1) > 0
+  AND name IN ('Company1', 'Company2')  -- Replace with actual company names
+ORDER BY value ASC
+LIMIT 25
+OFFSET 50
+Execution Time: 0.6560 seconds
+--------------------------------------------------------------------------------
+Query Plan (29 lines):
+
+Limit  (cost=17.18..17.19 rows=1 width=32) (actual time=1.344..1.345 rows=0 loops=1)
+  Output: (unnest(technologies))
+  Buffers: shared hit=7 read=2
+  I/O Timings: shared read=1.287
+  ->  Unique  (cost=17.13..17.18 rows=10 width=32) (actual time=1.343..1.344 rows=0 loops=1)
+        Output: (unnest(technologies))
+        Buffers: shared hit=7 read=2
+        I/O Timings: shared read=1.287
+        ->  Sort  (cost=17.13..17.16 rows=10 width=32) (actual time=1.343..1.344 rows=0 loops=1)
+              Output: (unnest(technologies))
+              Sort Key: (unnest(companies.technologies))
+              Sort Method: quicksort  Memory: 25kB
+              Buffers: shared hit=7 read=2
+              I/O Timings: shared read=1.287
+              ->  ProjectSet  (cost=0.43..16.97 rows=10 width=32) (actual time=1.339..1.339 rows=0 loops=1)
+                    Output: unnest(technologies)
+                    Buffers: shared hit=7 read=2
+                    I/O Timings: shared read=1.287
+                    ->  Index Scan using idx_companies_name on public.companies  (cost=0.43..16.91 rows=1 width=189) (actual time=1.338..1.339 rows=0 loops=1)
+                          Output: technologies
+                          Index Cond: (companies.name = ANY ('{Company1,Company2}'::text[]))
+                          Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0))
+                          Buffers: shared hit=7 read=2
+                          I/O Timings: shared read=1.287
+Query Identifier: -5698489317921391302
+Planning:
+  Buffers: shared hit=13 dirtied=1
+Planning Time: 0.529 ms
+Execution Time: 1.381 ms
+
+================================================================================
+Query #9
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+  AND array_length(technologies, 1) > 0
+ORDER BY value DESC
+LIMIT 25
+OFFSET 50
+Execution Time: 4.4248 seconds
+--------------------------------------------------------------------------------
+Query Plan (49 lines):
+
+Limit  (cost=1655634.28..1655634.34 rows=25 width=32) (actual time=3764.971..3765.037 rows=25 loops=1)
+  Output: (unnest(technologies))
+  Buffers: shared hit=509653
+  ->  Sort  (cost=1655634.15..1658229.55 rows=1038160 width=32) (actual time=3764.967..3765.032 rows=75 loops=1)
+        Output: (unnest(technologies))
+        Sort Key: (unnest(companies.technologies)) DESC
+        Sort Method: top-N heapsort  Memory: 27kB
+        Buffers: shared hit=509653
+        ->  HashAggregate  (cost=1576746.61..1618110.80 rows=1038160 width=32) (actual time=3764.142..3764.534 rows=1964 loops=1)
+              Output: (unnest(technologies))
+              Group Key: (unnest(companies.technologies))
+              Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+              Buffers: shared hit=509653
+              ->  Gather  (cost=1101881.35..1416480.66 rows=2076320 width=32) (actual time=3762.455..3763.188 rows=5622 loops=1)
+                    Output: (unnest(technologies))
+                    Workers Planned: 2
+                    Workers Launched: 2
+                    Buffers: shared hit=509653
+                    ->  HashAggregate  (cost=1100881.35..1207848.66 rows=1038160 width=32) (actual time=3759.855..3760.197 rows=1874 loops=3)
+                          Output: (unnest(technologies))
+                          Group Key: unnest(companies.technologies)
+                          Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+                          Buffers: shared hit=509653
+                          Worker 0:  actual time=3758.676..3759.010 rows=1875 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=170525
+                          Worker 1:  actual time=3758.685..3759.021 rows=1863 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=169843
+                          ->  ProjectSet  (cost=0.00..570238.90 rows=6874720 width=32) (actual time=0.008..1714.713 rows=16488669 loops=3)
+                                Output: unnest(technologies)
+                                Buffers: shared hit=509653
+                                Worker 0:  actual time=0.007..1721.087 rows=16541435 loops=1
+                                  Buffers: shared hit=170525
+                                Worker 1:  actual time=0.007..1725.243 rows=16573855 loops=1
+                                  Buffers: shared hit=169843
+                                ->  Parallel Seq Scan on public.companies  (cost=0.00..530709.26 rows=687472 width=189) (actual time=0.006..623.427 rows=1648522 loops=3)
+                                      Output: technologies
+                                      Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0))
+                                      Buffers: shared hit=504753
+                                      Worker 0:  actual time=0.005..622.337 rows=1653055 loops=1
+                                        Buffers: shared hit=168822
+                                      Worker 1:  actual time=0.005..628.778 rows=1656960 loops=1
+                                        Buffers: shared hit=168223
+Query Identifier: 5619463556074045407
+Planning:
+  Buffers: shared hit=5
+Planning Time: 0.128 ms
+Execution Time: 3765.788 ms
+
+================================================================================
+Query #11
+Query Type: SELECT
+================================================================================
+SQL: SELECT 
+    n_distinct,
+    correlation,
+    most_common_vals
+FROM pg_stats
+WHERE tablename = 'companies'
+  AND attname = 'technologies'
+Execution Time: 0.6611 seconds
+--------------------------------------------------------------------------------
+Rows returned: 1
+
++--------------+---------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   n_distinct |   correlation | most_common_vals                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
++==============+===============+===========================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================+
+|       103816 |    -0.0603243 | {"{\"\"}","{Remote}","{\"Amazon AWS\"}","{Outlook,\"Microsoft Office 365\"}","{Gmail,\"Google Apps\"}","{Outlook}","{Apache}","{\"Mobile Friendly\"}","{\"Google Cloud Hosting\"}","{\"Cloudflare DNS\",\"CloudFlare Hosting\"}","{\"Amazon AWS\",Remote}","{Outlook,\"Amazon AWS\",\"Mobile Friendly\"}","{Gmail,\"Google Apps\",\"Google Cloud Hosting\"}","{Outlook,\"Amazon AWS\"}","{Outlook,\"Microsoft Office 365\",Remote}","{\"Amazon AWS\",\"Mobile Friendly\"}","{Apache,\"Mobile Friendly\"}","{Outlook,Remote}","{Outlook,\"Google Cloud Hosting\"}","{Gmail,\"Google Apps\",\"Google Cloud Hosting\",Varnish,Wix,\"Mobile Friendly\"}","{\"Mobile Friendly\",Apache}","{Outlook,\"Microsoft Office 365\",\"Google Cloud Hosting\"}","{Gmail,\"Google Apps\",Remote}","{AI}","{\"Cloudflare DNS\",Outlook,\"Microsoft Office 365\",\"CloudFlare Hosting\"}","{Gmail,\"Google Apps\",\"Amazon AWS\"}","{Nginx}","{Nginx,\"Mobile Friendly\"}","{Apache,Remote}","{Gmail,\"Google Apps\",\"Google Cloud Hosting\",\"Mobile Friendly\",Varnish,Wix}","{Gmail,\"Google Apps\",\"Mobile Friendly\"}","{\"Amazon AWS\",\"Google AdSense\",\"Mobile Friendly\"}","{Gmail,\"Google Apps\",\"Google Cloud Hosting\",Wix,\"Mobile Friendly\",Varnish}","{\"Google Cloud Hosting\",Varnish,Wix,\"Mobile Friendly\"}","{Gmail,\"Google Apps\",\"Google Cloud Hosting\",Remote}","{\"Microsoft Office 365\"}","{Outlook,\"Mobile Friendly\"}","{Basis}","{\"Cloudflare DNS\",Gmail,\"Google Apps\",\"CloudFlare Hosting\"}","{Gmail,\"Google Apps\",\"Amazon AWS\",\"Mobile Friendly\"}","{Gmail,\"Google Apps\",\"Google Cloud Hosting\",Wix,Varnish,\"Mobile Friendly\"}","{\"Google Cloud Hosting\",Wix,\"Mobile Friendly\",Varnish}","{Outlook,\"Microsoft Office 365\",\"Amazon AWS\"}","{\"Google Cloud Hosting\",\"Mobile Friendly\",Varnish,Wix}","{\"Google Cloud Hosting\",Wix,Varnish,\"Mobile Friendly\"}","{\"Mobile Friendly\",Nginx}","{Outlook,\"Microsoft Office 365\",Apache}","{\"Amazon AWS\",\"Mobile Friendly\",Remote}","{\"Cloudflare DNS\",\"CloudFlare Hosting\",\"Mobile Friendly\"}","{Gmail,\"Google Apps\",\"Google Cloud Hosting\",Varnish,\"Mobile Friendly\",Wix}","{\"Google Cloud Hosting\",Remote}","{\"Mobile Friendly\",Remote}","{Outlook,\"Microsoft Office 365\",\"Amazon AWS\",\"Mobile Friendly\"}","{Render}","{\"Cloudflare DNS\",\"CloudFlare Hosting\",Remote}","{Outlook,\"Google Cloud Hosting\",Varnish,Wix,\"Mobile Friendly\"}","{Outlook,\"Microsoft Office 365\",\"Google Cloud Hosting\",\"Mobile Friendly\",Wix,Varnish}","{WordPress.org,Apache,\"Mobile Friendly\"}","{Apache,\"Mobile Friendly\",WordPress.org}","{\"Cloudflare DNS\",Outlook,\"CloudFlare Hosting\"}","{\"Google Cloud Hosting\",Varnish,\"Mobile Friendly\",Wix}","{NSOne,Gmail,\"Google Apps\",\"Squarespace ECommerce\",Typekit,\"Mobile Friendly\"}","{Outlook,\"Microsoft Office 365\",\"Google Cloud Hosting\",Wix,Varnish,\"Mobile Friendly\"}","{WordPress.org,\"Google Font API\",\"Mobile Friendly\"}","{Android}","{Circle}","{\"Cloudflare DNS\"}","{Gmail,\"Google Apps\",Apache,\"Mobile Friendly\"}","{\"Google Analytics\",Nginx}","{Outlook,\"Amazon AWS\",\"Google AdSense\",\"Mobile Friendly\"}","{Outlook,\"Amazon AWS\",Remote}","{Outlook,\"GoDaddy Hosting\"}","{Outlook,\"Google Cloud Hosting\",Wix,\"Mobile Friendly\",Varnish}","{Remote,Circle}","{\"Route 53\",\"Amazon AWS\"}","{\"Amazon AWS\",\"Mobile Friendly\",\"Google AdSense\"}","{Apache,WordPress.org,\"Google Font API\",\"Mobile Friendly\"}","{\"Blue Host\"}","{Outlook,Apache,\"Mobile Friendly\"}","{Outlook,\"Google Cloud Hosting\",\"Mobile Friendly\",Varnish,Wix}","{Outlook,\"Microsoft Office 365\",\"Amazon AWS\",Remote}","{Outlook,\"Microsoft Office 365\",\"Google Cloud Hosting\",Varnish,Wix,\"Mobile Friendly\"}","{Outlook,\"Microsoft Office 365\",\"Mobile Friendly\",Apache}","{Remote,AI}","{SAP,Remote}","{\"Cloudflare DNS\",Gmail,\"Google Apps\",\"CloudFlare Hosting\",Remote}","{\"Cloudflare DNS\",Outlook}","{\"CloudFlare Hosting\"}","{Gmail,\"Google Apps\",\"Amazon AWS\",\"Google AdSense\",\"Mobile Friendly\"}","{Gmail,\"Google Apps\",\"Amazon AWS\",\"Mobile Friendly\",Remote}","{\"Google Cloud Hosting\",\"Mobile Friendly\",Wix,Varnish}","{Microsoft-IIS,ASP.NET}","{\"Microsoft Office 365\",Remote}","{Nginx,Remote}","{Outlook,AI}","{Outlook,\"Amazon AWS\",\"Mobile Friendly\",\"Google AdSense\"}","{Outlook,\"Amazon AWS\",\"Mobile Friendly\",Remote}","{Outlook,\"Google Cloud Hosting\",Varnish,\"Mobile Friendly\",Wix}","{Outlook,\"Microsoft Office 365\",Apache,WordPress.org,\"Mobile Friendly\"}","{Outlook,\"Microsoft Office 365\",\"Microsoft Azure Hosting\"}"} |
++--------------+---------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+================================================================================
+Query #12
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT value
+FROM (
+    SELECT unnest(technologies) as value
+    FROM companies
+    WHERE technologies IS NOT NULL
+      AND array_length(technologies, 1) > 0
+    GROUP BY unnest(technologies)
+) AS distinct_values
+ORDER BY value ASC
+LIMIT 25
+OFFSET 50
+Execution Time: 4.4156 seconds
+--------------------------------------------------------------------------------
+Query Plan (52 lines):
+
+Limit  (cost=1337441.47..1337447.49 rows=25 width=32) (actual time=3752.794..3753.940 rows=25 loops=1)
+  Output: (unnest(companies.technologies))
+  Buffers: shared hit=509669
+  ->  Group  (cost=1337429.43..1587469.87 rows=1038160 width=32) (actual time=3752.749..3753.935 rows=75 loops=1)
+        Output: (unnest(companies.technologies))
+        Group Key: (unnest(companies.technologies))
+        Buffers: shared hit=509669
+        ->  Gather Merge  (cost=1337429.43..1579683.67 rows=2076320 width=32) (actual time=3752.748..3753.913 rows=212 loops=1)
+              Output: (unnest(companies.technologies))
+              Workers Planned: 2
+              Workers Launched: 2
+              Buffers: shared hit=509669
+              ->  Sort  (cost=1336429.40..1339024.80 rows=1038160 width=32) (actual time=3750.274..3750.302 rows=767 loops=3)
+                    Output: (unnest(companies.technologies))
+                    Sort Key: (unnest(companies.technologies))
+                    Sort Method: quicksort  Memory: 90kB
+                    Buffers: shared hit=509669
+                    Worker 0:  actual time=3749.206..3749.241 rows=984 loops=1
+                      Sort Method: quicksort  Memory: 90kB
+                      Buffers: shared hit=169919
+                    Worker 1:  actual time=3749.268..3749.312 rows=1244 loops=1
+                      Sort Method: quicksort  Memory: 90kB
+                      Buffers: shared hit=169785
+                    ->  Partial HashAggregate  (cost=1100881.35..1207848.66 rows=1038160 width=32) (actual time=3747.935..3748.284 rows=1875 loops=3)
+                          Output: (unnest(companies.technologies))
+                          Group Key: unnest(companies.technologies)
+                          Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+                          Buffers: shared hit=509653
+                          Worker 0:  actual time=3746.824..3747.169 rows=1872 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=169911
+                          Worker 1:  actual time=3746.903..3747.254 rows=1875 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=169777
+                          ->  ProjectSet  (cost=0.00..570238.90 rows=6874720 width=32) (actual time=0.007..1711.222 rows=16488669 loops=3)
+                                Output: unnest(companies.technologies)
+                                Buffers: shared hit=509653
+                                Worker 0:  actual time=0.006..1718.909 rows=16499884 loops=1
+                                  Buffers: shared hit=169911
+                                Worker 1:  actual time=0.006..1713.159 rows=16535252 loops=1
+                                  Buffers: shared hit=169777
+                                ->  Parallel Seq Scan on public.companies  (cost=0.00..530709.26 rows=687472 width=189) (actual time=0.005..618.868 rows=1648522 loops=3)
+                                      Output: companies.technologies
+                                      Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0))
+                                      Buffers: shared hit=504753
+                                      Worker 0:  actual time=0.004..625.880 rows=1648286 loops=1
+                                        Buffers: shared hit=168247
+                                      Worker 1:  actual time=0.005..617.997 rows=1650879 loops=1
+                                        Buffers: shared hit=168150
+Query Identifier: -8897217627845558620
+Planning Time: 0.116 ms
+Execution Time: 3754.127 ms
+
+================================================================================
+Query #13
+Query Type: EXPLAIN
+================================================================================
+SQL: EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+SELECT DISTINCT unnest(technologies) as value
+FROM companies
+WHERE technologies IS NOT NULL
+  AND array_length(technologies, 1) > 0
+ORDER BY value ASC
+LIMIT 25
+OFFSET 50
+Execution Time: 4.4307 seconds
+--------------------------------------------------------------------------------
+Query Plan (47 lines):
+
+Limit  (cost=1655634.28..1655634.34 rows=25 width=32) (actual time=3754.641..3754.695 rows=25 loops=1)
+  Output: (unnest(technologies))
+  Buffers: shared hit=509653
+  ->  Sort  (cost=1655634.15..1658229.55 rows=1038160 width=32) (actual time=3754.636..3754.690 rows=75 loops=1)
+        Output: (unnest(technologies))
+        Sort Key: (unnest(companies.technologies))
+        Sort Method: top-N heapsort  Memory: 28kB
+        Buffers: shared hit=509653
+        ->  HashAggregate  (cost=1576746.61..1618110.80 rows=1038160 width=32) (actual time=3753.735..3754.127 rows=1964 loops=1)
+              Output: (unnest(technologies))
+              Group Key: (unnest(companies.technologies))
+              Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+              Buffers: shared hit=509653
+              ->  Gather  (cost=1101881.35..1416480.66 rows=2076320 width=32) (actual time=3751.919..3752.699 rows=5632 loops=1)
+                    Output: (unnest(technologies))
+                    Workers Planned: 2
+                    Workers Launched: 2
+                    Buffers: shared hit=509653
+                    ->  HashAggregate  (cost=1100881.35..1207848.66 rows=1038160 width=32) (actual time=3749.539..3749.901 rows=1877 loops=3)
+                          Output: (unnest(technologies))
+                          Group Key: unnest(companies.technologies)
+                          Planned Partitions: 32  Batches: 1  Memory Usage: 1681kB
+                          Buffers: shared hit=509653
+                          Worker 0:  actual time=3748.422..3748.787 rows=1878 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=170049
+                          Worker 1:  actual time=3748.493..3748.832 rows=1881 loops=1
+                            Batches: 1  Memory Usage: 1681kB
+                            Buffers: shared hit=171115
+                          ->  ProjectSet  (cost=0.00..570238.90 rows=6874720 width=32) (actual time=0.007..1719.175 rows=16488669 loops=3)
+                                Output: unnest(technologies)
+                                Buffers: shared hit=509653
+                                Worker 0:  actual time=0.006..1723.754 rows=16454488 loops=1
+                                  Buffers: shared hit=170049
+                                Worker 1:  actual time=0.007..1719.054 rows=16531092 loops=1
+                                  Buffers: shared hit=171115
+                                ->  Parallel Seq Scan on public.companies  (cost=0.00..530709.26 rows=687472 width=189) (actual time=0.005..627.133 rows=1648522 loops=3)
+                                      Output: technologies
+                                      Filter: ((companies.technologies IS NOT NULL) AND (array_length(companies.technologies, 1) > 0))
+                                      Buffers: shared hit=504753
+                                      Worker 0:  actual time=0.004..631.645 rows=1645905 loops=1
+                                        Buffers: shared hit=168483
+                                      Worker 1:  actual time=0.005..624.749 rows=1653400 loops=1
+                                        Buffers: shared hit=169394
+Query Identifier: -7335283394545845510
+Planning Time: 0.103 ms
+Execution Time: 3755.429 ms
+
+
+================================================================================
+EXECUTION SUMMARY
+================================================================================
+Total queries: 13
+Successful: 12
+Failed: 1
+Total execution time: 73.1790 seconds
+Average execution time: 5.6292 seconds
+Execution completed: 2025-11-20 02:11:27

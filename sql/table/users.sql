@@ -1,31 +1,37 @@
-create table public.users
+-- Drop existing table if it exists
+DROP TABLE IF EXISTS public.users CASCADE;
+
+-- Create table
+CREATE TABLE public.users
 (
     id              text
-        primary key,
-    email           varchar(255) not null,
-    hashed_password text         not null,
+        PRIMARY KEY,
+    email           varchar(255) NOT NULL,
+    hashed_password text         NOT NULL,
     name            varchar(255),
-    is_active       boolean      not null default true,
+    is_active       boolean      NOT NULL DEFAULT true,
     last_sign_in_at timestamp with time zone,
-    created_at      timestamp with time zone not null default now(),
+    created_at      timestamp with time zone NOT NULL DEFAULT now(),
     updated_at      timestamp with time zone
 );
 
-alter table public.users
-    owner to postgres;
+-- Set table owner
+ALTER TABLE public.users
+    OWNER TO postgres;
 
-create unique index idx_users_email_unique
-    on public.users (email);
+-- Create indexes
+CREATE UNIQUE INDEX idx_users_email_unique
+    ON public.users (email);
 
-create index idx_users_email
-    on public.users (email);
+CREATE INDEX idx_users_email
+    ON public.users (email);
 
-create index idx_users_id
-    on public.users (id);
+CREATE INDEX idx_users_id
+    ON public.users (id);
 
-create index idx_users_is_active
-    on public.users (is_active);
+CREATE INDEX idx_users_is_active
+    ON public.users (is_active);
 
-create index idx_users_created_at
-    on public.users (created_at);
+CREATE INDEX idx_users_created_at
+    ON public.users (created_at);
 

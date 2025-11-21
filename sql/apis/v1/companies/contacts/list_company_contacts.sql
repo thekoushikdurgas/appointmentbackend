@@ -59,19 +59,17 @@
 -- Response Structure:
 --   Returns CursorPage[ContactListItem] with nested company and metadata objects.
 --
--- Example Usage:
---   SELECT co.*, comp.*, com.*, comp_meta.*
---   FROM contacts co
---   LEFT JOIN companies comp ON co.company_id = comp.uuid
---   LEFT JOIN contacts_metadata com ON co.uuid = com.uuid
---   LEFT JOIN companies_metadata comp_meta ON comp.uuid = comp_meta.uuid
---   WHERE co.company_id = $1
---     AND co.title ILIKE '%engineer%'
---     AND co.seniority = 'senior'
---   ORDER BY co.created_at DESC
---   LIMIT 25 OFFSET 0;
--- ============================================================================
+-- ORM Implementation Notes:
+--   The ContactRepository.list_contacts_by_company() uses conditional JOINs:
+--   - Always joins Company (required for company filtering and response)
+--   - Conditionally joins ContactMetadata when metadata filters or ordering require it
+--   - Conditionally joins CompanyMetadata when company metadata filters require it
+--   - Returns normalized 4-tuple: (Contact, Company, ContactMetadata, CompanyMetadata)
+--   - Default ordering: created_at DESC NULLS LAST, id DESC
 
+-- Query 1: List contacts for company (minimal - no metadata joins)
+-- GET /api/v1/companies/company/{company_uuid}/contacts/
+-- Note: Always joins Company, but only joins ContactMetadata when filters require it.
 SELECT 
     co.id,
     co.uuid,

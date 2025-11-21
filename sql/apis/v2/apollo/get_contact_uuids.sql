@@ -44,16 +44,21 @@
 --   }
 -- ============================================================================
 
--- Query 1: Get all matching contact UUIDs (no limit)
+-- ORM Implementation Notes:
+--   The ApolloContactsService.get_contact_uuids() uses ContactRepository.get_uuids_by_filters():
+--   - Uses the SAME conditional JOIN logic as get_contact_uuids (see get_contact_uuids.sql for details)
+--   - Apollo URL parameters are parsed and converted to ContactFilterParams in application layer
+--   - Returns list[str] of UUIDs (not array_agg in SQL)
+--   - Service layer builds response with count and uuids list
+
+-- Query 1: Get all matching contact UUIDs (no limit, minimal - no joins)
 -- POST /api/v2/apollo/contacts/count/uuids
--- The Apollo URL is parsed and converted to ContactFilterParams in the application layer.
+-- Note: The Apollo URL is parsed and converted to ContactFilterParams in the application layer.
+--       The actual query uses the same conditional JOIN logic as get_contact_uuids.sql.
+--       Returns list of UUIDs, not array_agg.
 SELECT 
-    COUNT(c.uuid) as count,
-    array_agg(c.uuid ORDER BY c.created_at DESC) as uuids
+    c.uuid
 FROM contacts c
-LEFT JOIN companies co ON c.company_id = co.uuid
-LEFT JOIN contacts_metadata cm ON c.uuid = cm.uuid
-LEFT JOIN companies_metadata com ON co.uuid = com.uuid
 WHERE 1=1
     -- Apply converted Apollo filter conditions here
     -- See search_contacts.sql for parameter mapping details

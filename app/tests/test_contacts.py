@@ -1329,7 +1329,7 @@ async def test_list_industries_collapsed_filters_empty(async_client, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_list_technologies_separated_returns_sorted_unique(async_client, monkeypatch):
+async def test_list_technologies_returns_sorted_unique(async_client, monkeypatch):
     class DummyService:
         async def list_attribute_values(
             self,
@@ -1345,13 +1345,13 @@ async def test_list_technologies_separated_returns_sorted_unique(async_client, m
             return [" Python", "AWS", "Python", "", None]
 
     monkeypatch.setattr(contacts_endpoints, "service", DummyService())
-    response = await async_client.get("/api/v1/contacts/technologies/", params={"separated": "true"})
+    response = await async_client.get("/api/v1/contacts/technologies/")
     assert response.status_code == 200
     assert response.json() == ["AWS", "Python"]
 
 
 @pytest.mark.asyncio
-async def test_list_technologies_separated_returns_unique_up_to_limit(async_client, db_session):
+async def test_list_technologies_returns_unique_up_to_limit(async_client, db_session):
     company_alpha = await create_company(
         db_session,
         technologies=["Outlook", "Remote"],
@@ -1377,7 +1377,7 @@ async def test_list_technologies_separated_returns_unique_up_to_limit(async_clie
 
     response = await async_client.get(
         "/api/v1/contacts/technologies/",
-        params={"separated": "true", "limit": "2", "ordering": "value"},
+        params={"limit": "2", "ordering": "value"},
     )
     assert response.status_code == 200
     payload = response.json()
@@ -1385,7 +1385,88 @@ async def test_list_technologies_separated_returns_unique_up_to_limit(async_clie
 
 
 @pytest.mark.asyncio
-async def test_list_technologies_collapsed_filters_empty(async_client, monkeypatch):
+async def test_list_technologies_separated_false_no_duplicates(async_client, db_session):
+    """Test that separated=false returns unique comma-separated strings without duplicates."""
+    # Create multiple companies with the same technology set
+    company1 = await create_company(
+        db_session,
+        technologies=["Python", "Django", "PostgreSQL"],
+        name="Company 1",
+    )
+    company2 = await create_company(
+        db_session,
+        technologies=["Python", "Django", "PostgreSQL"],  # Same technologies
+        name="Company 2",
+    )
+    company3 = await create_company(
+        db_session,
+        technologies=["JavaScript", "React", "Node.js"],
+        name="Company 3",
+    )
+    await create_contact(db_session, company=company1, first_name="Person1", email="p1@example.com")
+    await create_contact(db_session, company=company2, first_name="Person2", email="p2@example.com")
+    await create_contact(db_session, company=company3, first_name="Person3", email="p3@example.com")
+
+    response = await async_client.get(
+        "/api/v1/contacts/technologies/",
+        params={"separated": "false", "limit": "10"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    results = payload["results"]
+    
+    # Should return unique comma-separated strings (no duplicates)
+    # Even though company1 and company2 have the same technologies
+    unique_results = set(results)
+    assert len(results) == len(unique_results), "Found duplicate comma-separated strings"
+    # Should have at most 2 unique technology strings (one for Python/Django/PostgreSQL, one for JS/React/Node)
+    assert len(unique_results) <= 2
+
+
+@pytest.mark.asyncio
+async def test_list_technologies_separated_true_returns_multiple_values(async_client, db_session):
+    """Test that separated=true returns correct number of individual technology values."""
+    # Create companies with different technologies
+    company1 = await create_company(
+        db_session,
+        technologies=["Python", "Django"],
+        name="Company 1",
+    )
+    company2 = await create_company(
+        db_session,
+        technologies=["JavaScript", "React"],
+        name="Company 2",
+    )
+    company3 = await create_company(
+        db_session,
+        technologies=["Python", "PostgreSQL"],  # Python appears in multiple companies
+        name="Company 3",
+    )
+    await create_contact(db_session, company=company1, first_name="Person1", email="p1@example.com")
+    await create_contact(db_session, company=company2, first_name="Person2", email="p2@example.com")
+    await create_contact(db_session, company=company3, first_name="Person3", email="p3@example.com")
+
+    response = await async_client.get(
+        "/api/v1/contacts/technologies/",
+        params={"separated": "true", "limit": "25", "offset": "0"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    results = payload["results"]
+    
+    # Should return multiple individual technology values (not just 1)
+    assert len(results) > 1, f"Expected multiple values but got only {len(results)}: {results}"
+    # Should return unique individual values (Python, Django, JavaScript, React, PostgreSQL)
+    # Python appears in multiple companies but should only appear once in results
+    unique_results = set(results)
+    assert len(results) == len(unique_results), "Found duplicate individual values"
+    # Should have at least 4 unique technologies (Python, Django, JavaScript, React, PostgreSQL)
+    assert len(unique_results) >= 4, f"Expected at least 4 unique technologies, got {len(unique_results)}: {unique_results}"
+
+
+@pytest.mark.asyncio
+async def test_list_technologies_filters_empty(async_client, monkeypatch):
+    """Test that technologies endpoint filters out empty values."""
     class DummyService:
         async def list_attribute_values(
             self,
@@ -1396,13 +1477,13 @@ async def test_list_technologies_collapsed_filters_empty(async_client, monkeypat
             column_factory,
             array_mode: bool = False,
         ):
-            assert array_mode is False
-            return ["Python,AWS", "", None]
+            assert array_mode is True
+            return ["Python", "AWS", "", None]
 
     monkeypatch.setattr(contacts_endpoints, "service", DummyService())
     response = await async_client.get("/api/v1/contacts/technologies/")
     assert response.status_code == 200
-    assert response.json() == ["Python,AWS"]
+    assert response.json() == ["AWS", "Python"]
 
 
 @pytest.mark.asyncio
@@ -1577,7 +1658,13 @@ async def test_list_company_address_returns_text_search(async_client, db_session
     )
     response = await async_client.get("/api/v1/contacts/company_address/")
     assert response.status_code == 200
-    assert response.json() == ["123 Example St, Austin, TX"]
+    data = response.json()
+    assert "results" in data
+    assert "next" in data
+    assert "previous" in data
+    assert data["results"] == ["123 Example St, Austin, TX"]
+    assert data["next"] is None
+    assert data["previous"] is None
 
 
 @pytest.mark.asyncio
@@ -1590,7 +1677,256 @@ async def test_list_contact_address_returns_text_search(async_client, db_session
     )
     response = await async_client.get("/api/v1/contacts/contact_address/")
     assert response.status_code == 200
-    assert response.json() == ["456 Sample Ave, Denver, CO"]
+    data = response.json()
+    assert "results" in data
+    assert "next" in data
+    assert "previous" in data
+    assert data["results"] == ["456 Sample Ave, Denver, CO"]
+    assert data["next"] is None
+    assert data["previous"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_company_address_pagination_urls(async_client, db_session):
+    """Test that company address endpoint returns pagination URLs."""
+    # Create multiple companies with addresses
+    for i in range(30):
+        company = await create_company(
+            db_session,
+            name=f"Company {i}",
+            text_search=f"{i} Main St, City {i}",
+        )
+        await create_contact(
+            db_session,
+            company=company,
+            first_name=f"Person {i}",
+            email=f"person{i}@example.com",
+        )
+    
+    # Test first page - should have next link
+    response = await async_client.get(
+        "/api/v1/contacts/company_address/",
+        params={"limit": 10, "offset": 0, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "results" in data
+    assert "next" in data
+    assert "previous" in data
+    assert len(data["results"]) == 10
+    assert data["next"] is not None
+    assert "limit=10" in data["next"]
+    assert "offset=10" in data["next"]
+    assert data["previous"] is None
+    
+    # Test second page - should have both next and previous
+    response = await async_client.get(
+        "/api/v1/contacts/company_address/",
+        params={"limit": 10, "offset": 10, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["next"] is not None
+    assert data["previous"] is not None
+    assert "offset=20" in data["next"]
+    assert "offset=0" in data["previous"]
+
+
+@pytest.mark.asyncio
+async def test_list_contact_address_pagination_urls(async_client, db_session):
+    """Test that contact address endpoint returns pagination URLs."""
+    # Create multiple contacts with addresses
+    for i in range(30):
+        await create_contact(
+            db_session,
+            first_name=f"Person {i}",
+            email=f"person{i}@example.com",
+            text_search=f"{i} Sample Ave, City {i}",
+        )
+    
+    # Test first page - should have next link
+    response = await async_client.get(
+        "/api/v1/contacts/contact_address/",
+        params={"limit": 10, "offset": 0, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "results" in data
+    assert "next" in data
+    assert "previous" in data
+    assert len(data["results"]) == 10
+    assert data["next"] is not None
+    assert "limit=10" in data["next"]
+    assert "offset=10" in data["next"]
+    assert data["previous"] is None
+    
+    # Test second page - should have both next and previous
+    response = await async_client.get(
+        "/api/v1/contacts/contact_address/",
+        params={"limit": 10, "offset": 10, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["next"] is not None
+    assert data["previous"] is not None
+    assert "offset=20" in data["next"]
+    assert "offset=0" in data["previous"]
+
+
+@pytest.mark.asyncio
+async def test_list_company_address_pagination_exactly_limit_results(async_client, db_session):
+    """Test pagination when there are exactly limit results (should not have next)."""
+    # Create exactly 25 companies with addresses
+    for i in range(25):
+        company = await create_company(
+            db_session,
+            name=f"Company {i}",
+            text_search=f"{i} Main St, City {i}",
+        )
+        await create_contact(
+            db_session,
+            company=company,
+            first_name=f"Person {i}",
+            email=f"person{i}@example.com",
+        )
+    
+    # Request limit=25, should get 25 results and no next link
+    response = await async_client.get(
+        "/api/v1/contacts/company_address/",
+        params={"limit": 25, "offset": 0, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["results"]) == 25
+    assert data["next"] is None  # Exactly limit results, no more
+    assert data["previous"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_company_address_pagination_limit_plus_one_results(async_client, db_session):
+    """Test pagination when there are limit+1 results (should have next)."""
+    # Create exactly 26 companies with addresses (limit+1)
+    for i in range(26):
+        company = await create_company(
+            db_session,
+            name=f"Company {i}",
+            text_search=f"{i} Main St, City {i}",
+        )
+        await create_contact(
+            db_session,
+            company=company,
+            first_name=f"Person {i}",
+            email=f"person{i}@example.com",
+        )
+    
+    # Request limit=25, should get 25 results and have next link
+    response = await async_client.get(
+        "/api/v1/contacts/company_address/",
+        params={"limit": 25, "offset": 0, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["results"]) == 25
+    assert data["next"] is not None  # There's one more result
+    assert "offset=25" in data["next"]
+    assert data["previous"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_contact_address_pagination_exactly_limit_results(async_client, db_session):
+    """Test pagination when there are exactly limit results (should not have next)."""
+    # Create exactly 25 contacts with addresses
+    for i in range(25):
+        await create_contact(
+            db_session,
+            first_name=f"Person {i}",
+            email=f"person{i}@example.com",
+            text_search=f"{i} Sample Ave, City {i}",
+        )
+    
+    # Request limit=25, should get 25 results and no next link
+    response = await async_client.get(
+        "/api/v1/contacts/contact_address/",
+        params={"limit": 25, "offset": 0, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["results"]) == 25
+    assert data["next"] is None  # Exactly limit results, no more
+    assert data["previous"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_contact_address_pagination_limit_plus_one_results(async_client, db_session):
+    """Test pagination when there are limit+1 results (should have next)."""
+    # Create exactly 26 contacts with addresses (limit+1)
+    for i in range(26):
+        await create_contact(
+            db_session,
+            first_name=f"Person {i}",
+            email=f"person{i}@example.com",
+            text_search=f"{i} Sample Ave, City {i}",
+        )
+    
+    # Request limit=25, should get 25 results and have next link
+    response = await async_client.get(
+        "/api/v1/contacts/contact_address/",
+        params={"limit": 25, "offset": 0, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["results"]) == 25
+    assert data["next"] is not None  # There's one more result
+    assert "offset=25" in data["next"]
+    assert data["previous"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_company_address_pagination_previous_url_at_various_offsets(async_client, db_session):
+    """Test previous URL generation at various offsets."""
+    # Create 100 companies with addresses
+    for i in range(100):
+        company = await create_company(
+            db_session,
+            name=f"Company {i}",
+            text_search=f"{i} Main St, City {i}",
+        )
+        await create_contact(
+            db_session,
+            company=company,
+            first_name=f"Person {i}",
+            email=f"person{i}@example.com",
+        )
+    
+    # Test at offset=25 (second page)
+    response = await async_client.get(
+        "/api/v1/contacts/company_address/",
+        params={"limit": 25, "offset": 25, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["previous"] is not None
+    assert "offset=0" in data["previous"]
+    
+    # Test at offset=50 (third page)
+    response = await async_client.get(
+        "/api/v1/contacts/company_address/",
+        params={"limit": 25, "offset": 50, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["previous"] is not None
+    assert "offset=25" in data["previous"]
+    
+    # Test at offset=75 (fourth page)
+    response = await async_client.get(
+        "/api/v1/contacts/company_address/",
+        params={"limit": 25, "offset": 75, "distinct": "true"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["previous"] is not None
+    assert "offset=50" in data["previous"]
 
 
 @pytest.mark.asyncio
@@ -1662,12 +1998,6 @@ ALL_ATTRIBUTE_ENDPOINTS = [
     "technologies",
     "company_address",
     "contact_address",
-    "city",
-    "state",
-    "country",
-    "company_city",
-    "company_state",
-    "company_country",
 ]
 
 
@@ -1753,37 +2083,6 @@ async def test_attribute_endpoints_distinct_comparison(async_client, db_session,
                 first_name=f"Contact{i}",
                 email=f"contact{i}@example.com",
                 text_search="456 Oak Ave, Denver, CO",
-            )
-    elif endpoint in ["city", "state", "country"]:
-        # Create contacts with same location metadata
-        for i in range(3):
-            await create_contact(
-                db_session,
-                first_name=f"City{i}",
-                email=f"city{i}@example.com",
-                metadata_overrides={
-                    "city": "San Francisco" if endpoint == "city" else None,
-                    "state": "CA" if endpoint == "state" else None,
-                    "country": "USA" if endpoint == "country" else None,
-                },
-            )
-    elif endpoint in ["company_city", "company_state", "company_country"]:
-        # Create companies with same location metadata
-        company = await create_company(
-            db_session,
-            name="Location Test Co",
-            metadata_overrides={
-                "city": "New York" if endpoint == "company_city" else None,
-                "state": "NY" if endpoint == "company_state" else None,
-                "country": "USA" if endpoint == "company_country" else None,
-            },
-        )
-        for i in range(3):
-            await create_contact(
-                db_session,
-                company=company,
-                first_name=f"Loc{i}",
-                email=f"loc{i}@example.com",
             )
 
     await db_session.commit()

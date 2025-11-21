@@ -195,12 +195,6 @@ async def create_contact(self, session: AsyncSession, data: dict[str, Any]) -> C
 5. `GET /api/v1/contacts/technologies/`
 6. `GET /api/v1/contacts/company_address/`
 7. `GET /api/v1/contacts/contact_address/`
-8. `GET /api/v1/contacts/city/`
-9. `GET /api/v1/contacts/state/`
-10. `GET /api/v1/contacts/country/`
-11. `GET /api/v1/contacts/company_city/`
-12. `GET /api/v1/contacts/company_state/`
-13. `GET /api/v1/contacts/company_country/`
 
 **Implementation:**
 - Endpoints: `app/api/v1/endpoints/contacts.py` (lines 383-667)
@@ -249,7 +243,7 @@ For array columns (industries, keywords, technologies) with `separated=true`:
 - Applies search and ordering to individual array elements
 
 **Notes:**
-- All 13 endpoints use the same `list_attribute_values()` method
+- All 7 endpoints use the same `list_attribute_values()` method
 - Each endpoint provides a different `column_factory` lambda to select the specific column
 - Supports `distinct`, `search`, `limit`, `offset`, and `ordering` parameters
 - Array endpoints (industry, keywords, technologies) support `separated=true` for expansion
@@ -294,7 +288,7 @@ For array columns (industries, keywords, technologies) with `separated=true`:
 | `GET /contacts/count/` | ✅ Full | ⚠️ COUNT | ⚠️ Scalar result | Same filtering, count output |
 | `GET /contacts/count/uuids/` | ✅ Full | ⚠️ SELECT uuid | ⚠️ UUID list | Same filtering, UUID output |
 | `POST /contacts/` | ❌ None | ❌ None | ❌ None | Write operation |
-| Field endpoints (13) | ✅ Full | ⚠️ Column ordering | ⚠️ Value list | Same filtering, attribute output |
+| Field endpoints (7) | ✅ Full | ⚠️ Column ordering | ⚠️ Value list | Same filtering, attribute output |
 | Import endpoints (4) | ❌ None | ❌ None | ❌ None | File/job management |
 
 ---
@@ -305,7 +299,7 @@ For array columns (industries, keywords, technologies) with `separated=true`:
 1. ✅ `GET /api/v1/contacts/` - Full implementation
 2. ✅ `GET /api/v1/contacts/count/` - Steps 1-6, COUNT in Step 7
 3. ✅ `GET /api/v1/contacts/count/uuids/` - Steps 1-6, UUID SELECT in Step 7
-4. ✅ All 13 field-specific endpoints - Steps 1-6, column SELECT in Step 7
+4. ✅ All 7 field-specific endpoints - Steps 1-6, column SELECT in Step 7
 
 ### Endpoints Using Simplified Process
 1. ⚠️ `GET /api/v1/contacts/{contact_uuid}/` - Only Step 2 (base query) and Step 8 (execute)
