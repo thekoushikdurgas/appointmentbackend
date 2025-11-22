@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Appointment360 FastAPI backend follows a layered architecture with clear separation of concerns. This document analyzes the core application structure, including FastAPI setup, middleware, configuration, and database layer.
+The Contact360 FastAPI backend follows a layered architecture with clear separation of concerns. This document analyzes the core application structure, including FastAPI setup, middleware, configuration, and database layer.
 
 ## 1. FastAPI Application Setup (`app/main.py`)
 
@@ -10,9 +10,9 @@ The Appointment360 FastAPI backend follows a layered architecture with clear sep
 
 The FastAPI application is configured with:
 
-- **Title**: "Appointment360 API"
+- **Title**: "Contact360 API"
 - **Version**: "0.1.0"
-- **Description**: "Async FastAPI backend for Appointment360 data APIs"
+- **Description**: "Async FastAPI backend for Contact360 - Contact Management System"
 - **Lifespan Management**: Uses `@asynccontextmanager` for startup/shutdown hooks
 
 ### Lifespan Management
@@ -102,7 +102,7 @@ The `Settings` class uses Pydantic's `BaseSettings` with:
 
 #### Project Settings
 
-- `PROJECT_NAME`: "Appointment360 API"
+- `PROJECT_NAME`: "Contact360 API"
 - `VERSION`: "0.1.0"
 - `ENVIRONMENT`: development | staging | production
 - `DEBUG`: Boolean flag (normalized from string)

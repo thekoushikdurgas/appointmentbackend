@@ -9,7 +9,7 @@ settings = get_settings()
 logger = get_logger(__name__)
 
 celery_app = Celery(
-    "appointment360",
+    "contact360",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
 )

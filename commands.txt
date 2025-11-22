@@ -1,146 +1,259 @@
-# Check database connectivity from host
-psql "postgresql://$POSTGRES_USER:$POSTGRES_PASS@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB" -c '\dt'
-
-
 # ========================================
-# DEVELOPMENT WORKFLOW (LOCAL)
+# BACKEND - FASTAPI COMMANDS REFERENCE
 # ========================================
-
-# === Environment Setup ===
+#
+# Contact360 FastAPI Backend - Development Commands
+# For root-level commands, see: ../commands.txt
+#
+# ========================================
+# QUICK START
+# ========================================
+#
+# 1. Environment Setup:
+#    python -m venv venv
+#    venv\Scripts\activate          # Windows
+#    source venv/bin/activate       # Linux/Mac
+#    pip install --upgrade pip setuptools wheel
+#    pip install -r requirements.txt
+#    pip install -e ".[dev]"
+#
+# 2. Environment Configuration:
+#    copy .env.example .env         # Windows
+#    cp .env.example .env           # Linux/Mac
+#    # Edit .env with your configuration
+#
+# 3. Start Services:
+#    uvicorn app.main:app --reload
+#    celery -A app.tasks.celery_app worker --loglevel=info
+#
+# ========================================
+# ENVIRONMENT SETUP
+# ========================================
+#
+# Create virtual environment:
 python -m venv venv
-venv\Scripts\activate      # Windows
-source venv/bin/activate   # Linux/Mac
 
+# Activate virtual environment:
+venv\Scripts\activate              # Windows
+source venv/bin/activate            # Linux/Mac
+
+# Upgrade pip and install dependencies:
 pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
-pip install -e ".[dev]"
+pip install -e ".[dev]"            # Install with dev dependencies
 
+# Copy environment template:
+copy .env.example .env              # Windows
+cp .env.example .env               # Linux/Mac
 
-
-
-# Copy environment template
-copy .env.example .env      # Windows
-cp .env.example .env        # Linux/Mac
-
-# === Start Services ===
+# ========================================
+# DEVELOPMENT
+# ========================================
+#
+# Start API server (development):
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-
-python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
 python -m uvicorn app.main:app --reload
 
+# Start API server (production):
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+# Start with custom config:
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > test.txt
 
-python -m pytest > test_results.txt
-
-python -m json.tool "postman/Appointment360 API.postman_collection.json"
-
-python scripts/test_apollo_apis.py --token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjQxOThmNy01OWM4LTQwMzktYTEzYy0zZWFlMGIwMTUxMmUiLCJleHAiOjE3NjM2NTk2MzQsInR5cGUiOiJhY2Nlc3MifQ.FwiJiknjblIr3YGA6OwpT_X5lnTIhtooWmBXL9B52Bw"
-
-python -m pytest > test_results.txt
-
-python scripts/test_contact_attributes.py --token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjQxOThmNy01OWM4LTQwMzktYTEzYy0zZWFlMGIwMTUxMmUiLCJleHAiOjE3NjM2NTk2MzQsInR5cGUiOiJhY2Nlc3MifQ.FwiJiknjblIr3YGA6OwpT_X5lnTIhtooWmBXL9B52Bw"
-
-python -m scripts.data.clean_database
-
+# ========================================
+# CELERY BACKGROUND TASKS
+# ========================================
+#
+# Start Celery worker:
 celery -A app.tasks.celery_app worker --loglevel=info
+celery -A app.tasks.celery_app worker --loglevel=debug
+
+# Start Celery beat (scheduler):
 celery -A app.tasks.celery_app beat --loglevel=info
 
-# === Code Quality ===
-# Clean Python cache files (Windows)
-python -Bc "import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]"
-python -Bc "import pathlib; [p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')]"
-
-# Docker Compose workflow
-docker compose up --build
-docker compose logs -f api
-docker compose logs -f worker
-
-# Run background tasks monitor (Flower)
+# Start Flower (Celery monitor):
 celery -A app.tasks.celery_app flower --port=5555
+# Access at: http://localhost:5555
 
-# === Formatting & Static Analysis ===
-ruff check app
-ruff format app
-mypy app
+# Check Celery status:
+celery -A app.tasks.celery_app inspect active
+celery -A app.tasks.celery_app inspect stats
 
-# === Tests ===
+# ========================================
+# TESTING
+# ========================================
+#
+# Run all tests:
 pytest
-pytest app/tests/test_contacts.py -vv
+python -m pytest
+
+# Run tests with coverage:
 pytest --cov=app --cov-report=term-missing
+pytest --cov=app --cov-report=html
+
+# Run specific test file:
+pytest app/tests/test_contacts.py -vv
+pytest app/tests/integration/test_api_endpoints.py -vv
+
+# Run integration tests:
 pytest app/tests/integration/test_api_endpoints.py --api-base-url http://0.0.0.0:8000
 pytest app/tests/integration/test_api_endpoints.py --api-base-url http://0.0.0.0:8000 --api-admin-username admin --api-admin-password secret
 
-# === Data Import Utilities ===
+# Run tests with output to file:
+python -m pytest > test_results.txt
+
+# Run tests with specific markers:
+pytest -m "not slow"
+pytest -m "integration"
+
+# ========================================
+# CODE QUALITY
+# ========================================
+#
+# Linting with Ruff:
+ruff check app
+ruff check app --fix
+ruff format app
+
+# Type checking with mypy:
+mypy app
+mypy app --strict
+
+# Format with Black (if installed):
+black app
+black app --check
+
+# Clean Python cache files (Windows):
+python -Bc "import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]"
+python -Bc "import pathlib; [p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')]"
+
+# Clean Python cache files (Linux/Mac):
+find . -type d -name __pycache__ -exec rm -r {} +
+find . -type f -name "*.pyc" -delete
+find . -type f -name "*.pyo" -delete
+
+# ========================================
+# DATABASE
+# ========================================
+#
+# Check database connectivity:
+psql "postgresql://$POSTGRES_USER:$POSTGRES_PASS@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB" -c '\dt'
+
+# Connect to database:
+psql "postgresql://$POSTGRES_USER:$POSTGRES_PASS@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB"
+
+# List all tables:
+psql "postgresql://$POSTGRES_USER:$POSTGRES_PASS@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB" -c '\dt'
+
+# Run SQL scripts:
+cd ../sql
+python sql_runner.py
+
+# Database migrations (if Alembic is used):
+# alembic upgrade head
+# alembic revision --autogenerate -m "description"
+# alembic downgrade -1
+
+# ========================================
+# DATA IMPORT/EXPORT
+# ========================================
+#
+# Run data import:
 python -m app.tasks.import_tasks --help
 python -m app.tasks.import_tasks run --file data/data.csv
 
-
+# Clean database:
+python -m scripts.data.clean_database
 
 # ========================================
-# GIT COMMANDS
+# DOCKER
 # ========================================
+#
+# Build and start services:
+docker compose up --build
+docker compose up -d --build              # Detached mode
 
-git init
-git add .
-git commit -m "05-11-2025"
-git remote add origin https://github.com/thekoushikdurgas/appointmentbackend.git
-git branch -M main
-git push -u origin main -f
+# View logs:
+docker compose logs -f api
+docker compose logs -f worker
+docker compose logs -f redis
+docker compose logs -f                    # All services
 
+# Stop services:
+docker compose down
+docker compose down -v                    # Remove volumes
 
-# Initialize git repository
-git init
+# Restart specific service:
+docker compose restart api
+docker compose restart worker
 
+# Execute command in container:
+docker compose exec api bash
+docker compose exec worker bash
 
-git stash
+# ========================================
+# API TESTING
+# ========================================
+#
+# Test Apollo APIs:
+python scripts/test_apollo_apis.py --token "YOUR_TOKEN"
 
+# Test contact attributes:
+python scripts/test_contact_attributes.py --token "YOUR_TOKEN"
 
-# Add remote repository
-git remote add origin https://github.com/thekoushikdurgas/appointmentbackend.git
+# Format Postman collection:
+python -m json.tool "postman/Contact360 API.postman_collection.json"
 
-# Set branch to main
-git branch -M main
+# Test API endpoints with curl:
+curl http://localhost:8000/health
+curl http://localhost:8000/api/v1/ -H "Authorization: Bearer YOUR_TOKEN"
 
-# Configure git user
-git config --global user.email "koushik.btech.cse.19@nitap.ac.in"
-git config --global user.name "thekoushikdurgas"
+# ========================================
+# LOGGING
+# ========================================
+#
+# View application logs:
+tail -f logs/app.log                      # Linux/Mac
+type logs\app.log                          # Windows (view)
+Get-Content logs\app.log -Wait             # Windows (tail)
 
-# Add all files
-git add .
+# View Celery logs:
+celery -A app.tasks.celery_app worker --loglevel=debug
 
-# Commit changes
-git commit -m "Your commit message here"
+# ========================================
+# DEPLOYMENT
+# ========================================
+#
+# Production server with Gunicorn:
+gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 
-# Push to remote (force if needed)
-git push -u origin main -f
-
-# Pull latest changes
-git pull origin main
-
-# Check git status
-git status
+# Systemd service management:
+sudo systemctl restart appointmentbackend-api.service
+sudo systemctl status appointmentbackend-api.service
+sudo systemctl stop appointmentbackend-api.service
+sudo journalctl -u appointmentbackend-api.service -f
 
 # ========================================
 # QUICK REFERENCE
 # ========================================
-
+#
 # Application Entrypoints:
 # - API:        uvicorn app.main:app
 # - Worker:     celery -A app.tasks.celery_app worker --loglevel=info
 # - Scheduler:  celery -A app.tasks.celery_app beat --loglevel=info
-
+# - Monitor:    celery -A app.tasks.celery_app flower --port=5555
+#
 # Service URLs:
 # - Docs:       http://localhost:8000/docs
 # - ReDoc:      http://localhost:8000/redoc
 # - Health:     http://localhost:8000/health
 # - API v1:     http://localhost:8000/api/v1
-
+# - API v2:     http://localhost:8000/api/v2
+# - Flower:     http://localhost:5555
+#
 # Project Structure:
-# - app/api          # FastAPI routers
+# - app/api          # FastAPI routers (v1, v2)
 # - app/core         # Settings, logging, middleware
 # - app/db           # Database session & base model setup
 # - app/models       # SQLAlchemy models
@@ -148,15 +261,68 @@ git status
 # - app/services     # Domain/business logic
 # - app/tasks        # Celery configuration & background jobs
 # - app/tests        # Pytest suite
+# - app/utils        # Utility functions
 # - scripts/         # Helper shell scripts
 # - docker-compose.yml / Dockerfile
-
+#
 # Common Workflow:
 # 1. Activate virtualenv (venv\Scripts\activate)
 # 2. Export environment variables (see .env.example)
 # 3. Run uvicorn / celery locally
 # 4. Execute pytest before pushing
+# 5. Run ruff check and format
 # 6. Deploy via git pull + systemctl restart appointmentbackend-api.service
-
-
-
+#
+# ========================================
+# TROUBLESHOOTING
+# ========================================
+#
+# API won't start:
+# - Check Python version: python --version (should be 3.11+)
+# - Verify virtual environment is activated
+# - Check .env file exists and has correct values
+# - Verify all dependencies installed: pip list
+#
+# Database connection issues:
+# - Verify PostgreSQL is running
+# - Check connection string in .env
+# - Test connection: psql command above
+# - Check network/firewall settings
+#
+# Celery worker issues:
+# - Check Redis is running: redis-cli ping
+# - Verify Celery configuration in app/tasks/celery_app.py
+# - Check Redis connection in .env
+# - View worker logs: celery -A app.tasks.celery_app worker --loglevel=debug
+#
+# Import errors:
+# - Ensure virtual environment is activated
+# - Reinstall dependencies: pip install -r requirements.txt
+# - Check PYTHONPATH if needed
+#
+# Test failures:
+# - Check database connection for integration tests
+# - Verify test data setup
+# - Run with -vv for verbose output
+# - Check test coverage report
+#
+# ========================================
+# ENVIRONMENT VARIABLES
+# ========================================
+#
+# Required variables (see .env.example):
+# - DATABASE_URL or individual POSTGRES_* variables
+# - REDIS_URL (for Celery)
+# - SECRET_KEY (for JWT tokens)
+# - API keys for external services (Apollo, etc.)
+#
+# ========================================
+# NOTES
+# ========================================
+#
+# - Windows users: Use backslashes (\) in paths
+# - Linux/Mac users: Use forward slashes (/) in paths
+# - Always activate virtual environment before running commands
+# - Check logs/app.log for application logs
+# - Use --reload flag only in development
+# - For production, use Gunicorn with multiple workers

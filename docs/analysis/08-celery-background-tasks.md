@@ -11,7 +11,7 @@ The application uses Celery for asynchronous background task processing, primari
 **Celery App:**
 ```python
 celery_app = Celery(
-    "appointment360",
+    "contact360",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
 )

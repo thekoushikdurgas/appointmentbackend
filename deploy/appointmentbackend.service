@@ -1,14 +1,14 @@
 [Unit]
-Description=Gunicorn service for Appointment360 FastAPI
+Description=Gunicorn service for Contact360 API
 After=network.target
 
 [Service]
 User=ubuntu
 Group=www-data
-WorkingDirectory=/home/ubuntu/appointmentbackend
-EnvironmentFile=/home/ubuntu/appointmentbackend/.env
-ExecStart=/home/ubuntu/appointmentbackend/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000
-RuntimeDirectory=appointmentbackend
+WorkingDirectory=/home/ubuntu/contact360-backend
+EnvironmentFile=/home/ubuntu/contact360-backend/.env
+ExecStart=/home/ubuntu/contact360-backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+RuntimeDirectory=contact360-api
 RuntimeDirectoryMode=0755
 Restart=always
 RestartSec=5

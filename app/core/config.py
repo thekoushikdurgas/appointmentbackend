@@ -16,9 +16,9 @@ logger = get_logger(__name__)
 class Settings(BaseSettings):
     """Runtime configuration sourced from environment and defaults."""
     # Project
-    PROJECT_NAME: str = "Appointment360 API"
+    PROJECT_NAME: str = "Contact360 API"
     VERSION: str = "0.1.0"
-    DESCRIPTION: str = "Async FastAPI backend for Appointment360 data APIs"
+    DESCRIPTION: str = "Async FastAPI backend for Contact360 - Contact Management System"
     ENVIRONMENT: str = "development"  # development | staging | production
     DEBUG: bool = True
 
