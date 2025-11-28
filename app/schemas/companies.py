@@ -114,29 +114,3 @@ class CompanyDetail(CompanyListItem):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-
-class CompanyWebSocketRequest(BaseModel):
-    """Schema for WebSocket request messages for company operations."""
-
-    action: str = Field(
-        ...,
-        description="Action to perform: list_companies, get_company, count_companies, get_company_uuids, "
-        "create_company, update_company, delete_company, list_company_names, list_industries, "
-        "list_keywords, list_technologies, list_company_cities, list_company_states, "
-        "list_company_countries, list_company_addresses, list_company_contacts, "
-        "count_company_contacts, get_company_contact_uuids, list_company_contact_first_names, "
-        "list_company_contact_last_names, list_company_contact_titles, list_company_contact_seniorities, "
-        "list_company_contact_departments, list_company_contact_email_statuses",
-    )
-    request_id: str = Field(..., description="Client-generated request ID for tracking responses")
-    data: dict[str, Any] = Field(..., description="Request payload matching REST API structure")
-
-
-class CompanyWebSocketResponse(BaseModel):
-    """Schema for WebSocket response messages for company operations."""
-
-    request_id: str = Field(..., description="Echo of client's request_id")
-    action: str = Field(..., description="Echo of action from request")
-    status: str = Field(..., description="Response status: success or error")
-    data: Optional[dict[str, Any]] = Field(None, description="Response payload (present when status=success)")
-    error: Optional[dict[str, Any]] = Field(None, description="Error details (present when status=error)")

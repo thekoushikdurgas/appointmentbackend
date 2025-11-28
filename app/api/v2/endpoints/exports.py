@@ -1,10 +1,10 @@
 """Endpoints supporting contact and company export workflows."""
 
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -52,6 +52,7 @@ async def resolve_export_filters(request: Request) -> ExportFilterParams:
 
 @router.post("/contacts/export", response_model=ContactExportResponse, status_code=status.HTTP_201_CREATED)
 async def create_contact_export(
+    background_tasks: BackgroundTasks,
     request: ContactExportRequest,
     filters: ExportFilterParams = Depends(resolve_export_filters),
     session: AsyncSession = Depends(get_db),
@@ -90,23 +91,24 @@ async def create_contact_export(
         await session.commit()
         
         # Enqueue background task
-        task = process_contact_export.delay(export.export_id, request.contact_uuids)
+        background_tasks.add_task(process_contact_export, export.export_id, request.contact_uuids)
         
         logger.info(
-            "Contact export queued: export_id=%s user_id=%s contact_count=%d task_id=%s",
+            "Contact export queued: export_id=%s user_id=%s contact_count=%d",
             export.export_id,
             current_user.id,
             len(request.contact_uuids),
-            task.id,
         )
+        
+        # Set expiration to 24 hours from creation
+        expires_at = export.created_at + timedelta(hours=24)
         
         return ContactExportResponse(
             export_id=export.export_id,
             download_url="",  # Will be generated when export completes
-            expires_at=export.expires_at or export.created_at,
+            expires_at=expires_at,
             contact_count=len(request.contact_uuids),
             status=export.status,
-            job_id=task.id,
         )
             
     except HTTPException:
@@ -349,6 +351,7 @@ async def download_export(
 
 @router.post("/companies/export", response_model=CompanyExportResponse, status_code=status.HTTP_201_CREATED)
 async def create_company_export(
+    background_tasks: BackgroundTasks,
     request: CompanyExportRequest,
     filters: ExportFilterParams = Depends(resolve_export_filters),
     session: AsyncSession = Depends(get_db),
@@ -387,23 +390,24 @@ async def create_company_export(
         await session.commit()
         
         # Enqueue background task
-        task = process_company_export.delay(export.export_id, request.company_uuids)
+        background_tasks.add_task(process_company_export, export.export_id, request.company_uuids)
         
         logger.info(
-            "Company export queued: export_id=%s user_id=%s company_count=%d task_id=%s",
+            "Company export queued: export_id=%s user_id=%s company_count=%d",
             export.export_id,
             current_user.id,
             len(request.company_uuids),
-            task.id,
         )
+        
+        # Set expiration to 24 hours from creation
+        expires_at = export.created_at + timedelta(hours=24)
         
         return CompanyExportResponse(
             export_id=export.export_id,
             download_url="",  # Will be generated when export completes
-            expires_at=export.expires_at or export.created_at,
+            expires_at=expires_at,
             company_count=len(request.company_uuids),
             status=export.status,
-            job_id=task.id,
         )
             
     except HTTPException:
@@ -418,6 +422,7 @@ async def create_company_export(
 
 @router.post("/contacts/export/chunked", response_model=ChunkedExportResponse, status_code=status.HTTP_201_CREATED)
 async def create_chunked_contact_export(
+    background_tasks: BackgroundTasks,
     request: ChunkedExportRequest,
     filters: ExportFilterParams = Depends(resolve_export_filters),
     session: AsyncSession = Depends(get_db),
@@ -466,7 +471,6 @@ async def create_chunked_contact_export(
         
         # Create chunk export records and enqueue tasks
         chunk_ids = []
-        tasks = []
         
         for i, chunk_uuids in enumerate(request.chunks):
             if not chunk_uuids:
@@ -485,15 +489,13 @@ async def create_chunked_contact_export(
             chunk_ids.append(chunk_export.export_id)
             
             # Enqueue background task for this chunk
-            task = process_contact_export.delay(chunk_export.export_id, chunk_uuids)
-            tasks.append(task)
+            background_tasks.add_task(process_contact_export, chunk_export.export_id, chunk_uuids)
             
             logger.info(
-                "Chunk export queued: chunk_index=%d export_id=%s chunk_size=%d task_id=%s",
+                "Chunk export queued: chunk_index=%d export_id=%s chunk_size=%d",
                 i,
                 chunk_export.export_id,
                 len(chunk_uuids),
-                task.id,
             )
         
         # If merge is requested, we would need additional logic to merge the CSV files
@@ -512,7 +514,6 @@ async def create_chunked_contact_export(
             chunk_ids=chunk_ids,
             total_count=total_count,
             status=main_export.status,
-            job_id=tasks[0].id if tasks else None,  # Return first task ID as main job ID
         )
         
     except HTTPException:

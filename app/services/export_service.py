@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Sequence
 
+import aiofiles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,6 +75,10 @@ class ExportService:
                 status=ExportStatus.pending,
             )
         
+        # Set expiration to 24 hours from creation
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+        export.expires_at = expires_at
+        
         session.add(export)
         await session.flush()
         await session.refresh(export)
@@ -96,8 +101,11 @@ class ExportService:
         """
         logger.info("Generating CSV: export_id=%s contact_count=%d", export_id, len(contact_uuids))
         
-        # Generate CSV in memory
-        csv_buffer = io.StringIO()
+        # Use streaming CSV generation for large exports
+        # Create temporary file for streaming write
+        exports_dir = Path(settings.UPLOAD_DIR) / "exports"
+        exports_dir.mkdir(parents=True, exist_ok=True)
+        temp_file_path = exports_dir / f"{export_id}_temp.csv"
         
         # Define CSV fieldnames (all fields from contact, company, and metadata)
         fieldnames = [
@@ -155,144 +163,167 @@ class ExportService:
             "company_metadata_country",
         ]
         
-        # Fetch contacts and write to CSV
-        writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
-        writer.writeheader()
+        # Stream CSV generation to file
+        row_count = 0
+        async with aiofiles.open(temp_file_path, "w", encoding="utf-8", newline="") as async_file:
+            # Write header
+            header_line = ",".join(fieldnames) + "\n"
+            await async_file.write(header_line)
+            
+            # Process contacts in batches for better performance
+            batch_size = 100
+            for i in range(0, len(contact_uuids), batch_size):
+                batch_uuids = contact_uuids[i:i + batch_size]
+                
+                for contact_uuid in batch_uuids:
+                    try:
+                        result = await self.contact_repo.get_contact_with_relations(
+                            session, contact_uuid
+                        )
+                        
+                        if not result:
+                            logger.warning("Contact not found: contact_uuid=%s", contact_uuid)
+                            continue
+                        
+                        contact, company, contact_meta, company_meta = result
+                        
+                        # Helper function to format array fields
+                        def format_array(value):
+                            if value is None:
+                                return ""
+                            if isinstance(value, list):
+                                return ",".join(str(v) for v in value if v)
+                            return str(value) if value else ""
+                        
+                        # Helper function to format datetime
+                        def format_datetime(value):
+                            if value is None:
+                                return ""
+                            if isinstance(value, datetime):
+                                return value.isoformat()
+                            return str(value) if value else ""
+                        
+                        # Helper function to get value or empty string
+                        def get_value(value, default=""):
+                            if value is None:
+                                return default
+                            if value == "_":  # Default placeholder in metadata
+                                return ""
+                            return str(value)
+                        
+                        row = {
+                            # Contact fields
+                            "contact_uuid": contact.uuid or "",
+                            "contact_first_name": contact.first_name or "",
+                            "contact_last_name": contact.last_name or "",
+                            "contact_company_id": contact.company_id or "",
+                            "contact_email": contact.email or "",
+                            "contact_title": contact.title or "",
+                            "contact_departments": format_array(contact.departments),
+                            "contact_mobile_phone": contact.mobile_phone or "",
+                            "contact_email_status": contact.email_status or "",
+                            "contact_text_search": contact.text_search or "",
+                            "contact_seniority": contact.seniority or "",
+                            "contact_created_at": format_datetime(contact.created_at),
+                            "contact_updated_at": format_datetime(contact.updated_at),
+                            # Contact Metadata fields
+                            "contact_metadata_linkedin_url": get_value(contact_meta.linkedin_url if contact_meta else None),
+                            "contact_metadata_facebook_url": get_value(contact_meta.facebook_url if contact_meta else None),
+                            "contact_metadata_twitter_url": get_value(contact_meta.twitter_url if contact_meta else None),
+                            "contact_metadata_website": get_value(contact_meta.website if contact_meta else None),
+                            "contact_metadata_work_direct_phone": get_value(contact_meta.work_direct_phone if contact_meta else None),
+                            "contact_metadata_home_phone": get_value(contact_meta.home_phone if contact_meta else None),
+                            "contact_metadata_city": get_value(contact_meta.city if contact_meta else None),
+                            "contact_metadata_state": get_value(contact_meta.state if contact_meta else None),
+                            "contact_metadata_country": get_value(contact_meta.country if contact_meta else None),
+                            "contact_metadata_other_phone": get_value(contact_meta.other_phone if contact_meta else None),
+                            "contact_metadata_stage": get_value(contact_meta.stage if contact_meta else None),
+                            # Company fields
+                            "company_uuid": company.uuid if company else "",
+                            "company_name": company.name if company else "",
+                            "company_employees_count": str(company.employees_count) if company and company.employees_count else "",
+                            "company_industries": format_array(company.industries if company else None),
+                            "company_keywords": format_array(company.keywords if company else None),
+                            "company_address": company.address if company else "",
+                            "company_annual_revenue": str(company.annual_revenue) if company and company.annual_revenue else "",
+                            "company_total_funding": str(company.total_funding) if company and company.total_funding else "",
+                            "company_technologies": format_array(company.technologies if company else None),
+                            "company_text_search": company.text_search if company else "",
+                            "company_created_at": format_datetime(company.created_at if company else None),
+                            "company_updated_at": format_datetime(company.updated_at if company else None),
+                            # Company Metadata fields
+                            "company_metadata_linkedin_url": company_meta.linkedin_url if company_meta else "",
+                            "company_metadata_facebook_url": company_meta.facebook_url if company_meta else "",
+                            "company_metadata_twitter_url": company_meta.twitter_url if company_meta else "",
+                            "company_metadata_website": company_meta.website if company_meta else "",
+                            "company_metadata_company_name_for_emails": company_meta.company_name_for_emails if company_meta else "",
+                            "company_metadata_phone_number": company_meta.phone_number if company_meta else "",
+                            "company_metadata_latest_funding": company_meta.latest_funding if company_meta else "",
+                            "company_metadata_latest_funding_amount": str(company_meta.latest_funding_amount) if company_meta and company_meta.latest_funding_amount else "",
+                            "company_metadata_last_raised_at": company_meta.last_raised_at if company_meta else "",
+                            "company_metadata_city": company_meta.city if company_meta else "",
+                            "company_metadata_state": company_meta.state if company_meta else "",
+                            "company_metadata_country": company_meta.country if company_meta else "",
+                        }
+                        
+                        # Write row as CSV line
+                        row_values = [str(row.get(field, "")) for field in fieldnames]
+                        # Escape CSV values (simple escaping for commas and quotes)
+                        escaped_values = []
+                        for value in row_values:
+                            if "," in value or '"' in value or "\n" in value:
+                                escaped_values.append('"' + value.replace('"', '""') + '"')
+                            else:
+                                escaped_values.append(value)
+                        csv_line = ",".join(escaped_values) + "\n"
+                        await async_file.write(csv_line)
+                        row_count += 1
+                        
+                    except Exception as exc:
+                        logger.exception(
+                            "Failed to process contact for export: contact_uuid=%s error=%s",
+                            contact_uuid,
+                            str(exc),
+                        )
+                        # Continue with next contact even if one fails
+                        continue
         
-        for contact_uuid in contact_uuids:
-            try:
-                result = await self.contact_repo.get_contact_with_relations(
-                    session, contact_uuid
-                )
-                
-                if not result:
-                    logger.warning("Contact not found: contact_uuid=%s", contact_uuid)
-                    continue
-                
-                contact, company, contact_meta, company_meta = result
-                
-                # Helper function to format array fields
-                def format_array(value):
-                    if value is None:
-                        return ""
-                    if isinstance(value, list):
-                        return ",".join(str(v) for v in value if v)
-                    return str(value) if value else ""
-                
-                # Helper function to format datetime
-                def format_datetime(value):
-                    if value is None:
-                        return ""
-                    if isinstance(value, datetime):
-                        return value.isoformat()
-                    return str(value) if value else ""
-                
-                # Helper function to get value or empty string
-                def get_value(value, default=""):
-                    if value is None:
-                        return default
-                    if value == "_":  # Default placeholder in metadata
-                        return ""
-                    return str(value)
-                
-                row = {
-                    # Contact fields
-                    "contact_uuid": contact.uuid or "",
-                    "contact_first_name": contact.first_name or "",
-                    "contact_last_name": contact.last_name or "",
-                    "contact_company_id": contact.company_id or "",
-                    "contact_email": contact.email or "",
-                    "contact_title": contact.title or "",
-                    "contact_departments": format_array(contact.departments),
-                    "contact_mobile_phone": contact.mobile_phone or "",
-                    "contact_email_status": contact.email_status or "",
-                    "contact_text_search": contact.text_search or "",
-                    "contact_seniority": contact.seniority or "",
-                    "contact_created_at": format_datetime(contact.created_at),
-                    "contact_updated_at": format_datetime(contact.updated_at),
-                    # Contact Metadata fields
-                    "contact_metadata_linkedin_url": get_value(contact_meta.linkedin_url if contact_meta else None),
-                    "contact_metadata_facebook_url": get_value(contact_meta.facebook_url if contact_meta else None),
-                    "contact_metadata_twitter_url": get_value(contact_meta.twitter_url if contact_meta else None),
-                    "contact_metadata_website": get_value(contact_meta.website if contact_meta else None),
-                    "contact_metadata_work_direct_phone": get_value(contact_meta.work_direct_phone if contact_meta else None),
-                    "contact_metadata_home_phone": get_value(contact_meta.home_phone if contact_meta else None),
-                    "contact_metadata_city": get_value(contact_meta.city if contact_meta else None),
-                    "contact_metadata_state": get_value(contact_meta.state if contact_meta else None),
-                    "contact_metadata_country": get_value(contact_meta.country if contact_meta else None),
-                    "contact_metadata_other_phone": get_value(contact_meta.other_phone if contact_meta else None),
-                    "contact_metadata_stage": get_value(contact_meta.stage if contact_meta else None),
-                    # Company fields
-                    "company_uuid": company.uuid if company else "",
-                    "company_name": company.name if company else "",
-                    "company_employees_count": str(company.employees_count) if company and company.employees_count else "",
-                    "company_industries": format_array(company.industries if company else None),
-                    "company_keywords": format_array(company.keywords if company else None),
-                    "company_address": company.address if company else "",
-                    "company_annual_revenue": str(company.annual_revenue) if company and company.annual_revenue else "",
-                    "company_total_funding": str(company.total_funding) if company and company.total_funding else "",
-                    "company_technologies": format_array(company.technologies if company else None),
-                    "company_text_search": company.text_search if company else "",
-                    "company_created_at": format_datetime(company.created_at if company else None),
-                    "company_updated_at": format_datetime(company.updated_at if company else None),
-                    # Company Metadata fields
-                    "company_metadata_linkedin_url": company_meta.linkedin_url if company_meta else "",
-                    "company_metadata_facebook_url": company_meta.facebook_url if company_meta else "",
-                    "company_metadata_twitter_url": company_meta.twitter_url if company_meta else "",
-                    "company_metadata_website": company_meta.website if company_meta else "",
-                    "company_metadata_company_name_for_emails": company_meta.company_name_for_emails if company_meta else "",
-                    "company_metadata_phone_number": company_meta.phone_number if company_meta else "",
-                    "company_metadata_latest_funding": company_meta.latest_funding if company_meta else "",
-                    "company_metadata_latest_funding_amount": str(company_meta.latest_funding_amount) if company_meta and company_meta.latest_funding_amount else "",
-                    "company_metadata_last_raised_at": company_meta.last_raised_at if company_meta else "",
-                    "company_metadata_city": company_meta.city if company_meta else "",
-                    "company_metadata_state": company_meta.state if company_meta else "",
-                    "company_metadata_country": company_meta.country if company_meta else "",
-                }
-                
-                writer.writerow(row)
-                
-            except Exception as exc:
-                logger.exception(
-                    "Failed to process contact for export: contact_uuid=%s error=%s",
-                    contact_uuid,
-                    str(exc),
-                )
-                # Continue with next contact even if one fails
-                continue
+        logger.info("CSV generation completed: export_id=%s rows=%d", export_id, row_count)
         
-        # Get CSV content as bytes
-        csv_content = csv_buffer.getvalue().encode("utf-8")
-        csv_buffer.close()
-        
-        # Upload to S3 if configured, otherwise save locally
+        # Upload to S3 if configured, otherwise keep local
         if settings.S3_BUCKET_NAME:
             try:
                 s3_key = f"{self.s3_service.exports_prefix}{export_id}.csv"
+                
+                # Stream file to S3 in chunks
+                chunk_size = settings.MAX_UPLOAD_CHUNK_SIZE
+                async with aiofiles.open(temp_file_path, "rb") as async_file:
+                    file_chunks = []
+                    while chunk := await async_file.read(chunk_size):
+                        file_chunks.append(chunk)
+                    csv_content = b"".join(file_chunks)
+                
                 await self.s3_service.upload_file(
                     file_content=csv_content,
                     s3_key=s3_key,
                     content_type="text/csv",
                 )
-                logger.debug("CSV uploaded to S3: key=%s", s3_key)
+                logger.debug("CSV uploaded to S3: key=%s size=%d", s3_key, len(csv_content))
+                
+                # Clean up temp file
+                temp_file_path.unlink(missing_ok=True)
                 return s3_key
             except Exception as exc:
                 logger.exception("Failed to upload CSV to S3: export_id=%s", export_id)
-                # Fallback to local storage
-                exports_dir = Path(settings.UPLOAD_DIR) / "exports"
-                exports_dir.mkdir(parents=True, exist_ok=True)
+                # Fallback to local storage - rename temp file
                 file_path = exports_dir / f"{export_id}.csv"
-                with file_path.open("wb") as f:
-                    f.write(csv_content)
+                temp_file_path.rename(file_path)
                 logger.debug("CSV saved locally (S3 upload failed): file_path=%s", file_path)
                 return str(file_path)
         else:
-            # Save locally
-            exports_dir = Path(settings.UPLOAD_DIR) / "exports"
-            exports_dir.mkdir(parents=True, exist_ok=True)
+            # Save locally - rename temp file to final location
             file_path = exports_dir / f"{export_id}.csv"
-            with file_path.open("wb") as f:
-                f.write(csv_content)
+            temp_file_path.rename(file_path)
             logger.debug("CSV saved locally: file_path=%s", file_path)
             return str(file_path)
 

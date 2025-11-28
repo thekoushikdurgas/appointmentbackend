@@ -273,11 +273,69 @@ def admin_authenticated(
 
 
 @pytest.fixture(scope="session")
+def api_auth_token(
+    api_session: requests.Session,
+    api_base_url: str,
+    api_timeout: float,
+) -> Optional[str]:
+    """Authenticate and get JWT token for API requests."""
+    # Try to login with a test user
+    # First, try to register a test user if it doesn't exist
+    login_url = urljoin(f"{api_base_url}/", "/api/v2/auth/login/")
+    register_url = urljoin(f"{api_base_url}/", "/api/v2/auth/register/")
+    
+    # Default test credentials
+    test_email = "test@example.com"
+    test_password = "testpassword123"
+    
+    # Try to register first (will fail if user exists, but that's okay)
+    try:
+        register_payload = {
+            "email": test_email,
+            "password": test_password,
+            "name": "Test User"
+        }
+        api_session.post(
+            register_url,
+            json=register_payload,
+            timeout=api_timeout,
+            headers={"Content-Type": "application/json"}
+        )
+    except requests.RequestException:
+        pass  # User might already exist, continue to login
+    
+    # Try to login
+    try:
+        login_payload = {
+            "email": test_email,
+            "password": test_password
+        }
+        response = api_session.post(
+            login_url,
+            json=login_payload,
+            timeout=api_timeout,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            access_token = data.get("access_token")
+            if access_token:
+                return access_token
+    except (requests.RequestException, (KeyError, ValueError)):
+        pass
+    
+    # If login fails, return None - tests will need to handle 401 errors
+    return None
+
+
+@pytest.fixture(scope="session")
 def api_request_factory(
     api_session: requests.Session,
     api_base_url: str,
     api_timeout: float,
     api_test_recorder: "APITestRecorder",
+    api_auth_token: Optional[str],
 ) -> Callable[..., requests.Response]:
     """Fixture returning a convenience function for issuing HTTP requests."""
 
@@ -302,6 +360,11 @@ def api_request_factory(
             suffix = endpoint if endpoint.startswith("/") else f"/{endpoint}"
             url = f"{base}{suffix}"
         request_headers = {"X-Request-Id": f"pytest-{int(time.time() * 1000)}"}
+        
+        # Add authentication token if available
+        if api_auth_token:
+            request_headers["Authorization"] = f"Bearer {api_auth_token}"
+        
         if headers:
             request_headers.update(headers)
 

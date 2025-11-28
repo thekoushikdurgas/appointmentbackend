@@ -22,7 +22,6 @@ class ContactExportResponse(BaseModel):
     expires_at: datetime
     contact_count: int
     status: ExportStatus
-    job_id: Optional[str] = Field(None, description="Celery task ID for tracking the background job")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -41,7 +40,6 @@ class CompanyExportResponse(BaseModel):
     expires_at: datetime
     company_count: int
     status: ExportStatus
-    job_id: Optional[str] = Field(None, description="Celery task ID for tracking the background job")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -104,6 +102,5 @@ class ChunkedExportResponse(BaseModel):
     chunk_ids: List[str] = Field(..., description="List of chunk export IDs")
     total_count: int = Field(..., description="Total number of records across all chunks")
     status: ExportStatus
-    job_id: Optional[str] = Field(None, description="Celery task ID for tracking the background job")
 
     model_config = ConfigDict(from_attributes=True)

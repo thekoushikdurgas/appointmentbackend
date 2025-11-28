@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
@@ -20,60 +21,22 @@ from app.schemas.companies import CompanySummary
 from app.schemas.contacts import ContactCreate, ContactDetail, ContactListItem, ContactSimpleItem, ContactLocation
 from app.schemas.filters import AttributeListParams, CompanyContactFilterParams, ContactFilterParams
 from app.schemas.metadata import ContactMetadataOut
+from app.utils.batch_lookup import (
+    batch_fetch_companies_by_uuids,
+    batch_fetch_company_metadata_by_uuids,
+    batch_fetch_contact_metadata_by_uuids,
+)
 from app.utils.cursor import encode_offset_cursor
+from app.utils.normalization import (
+    PLACEHOLDER_VALUE,
+    coalesce_text,
+    normalize_sequence,
+    normalize_text,
+)
 from app.utils.pagination import build_cursor_link, build_pagination_link
+from app.utils.query_cache import get_query_cache
 
-
-PLACEHOLDER_VALUE = "_"
-
-
-def _normalize_text(value: Any, *, allow_placeholder: bool = False) -> Optional[str]:
-    """Coerce raw string-like values to cleaned text or None."""
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    if not allow_placeholder and text == PLACEHOLDER_VALUE:
-        return None
-
-    # Remove wrapping quotes that leak from CSV exports (e.g., "'+123", '"value"').
-    while len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
-        text = text[1:-1].strip()
-        if not text:
-            return None
-        if not allow_placeholder and text == PLACEHOLDER_VALUE:
-            return None
-
-    if text.startswith("'+") and len(text) > 2:
-        text = text[1:].strip()
-
-    if not text:
-        return None
-    if not allow_placeholder and text == PLACEHOLDER_VALUE:
-        return None
-    return text
-
-
-def _normalize_sequence(values: Optional[Iterable[Any]], *, allow_placeholder: bool = False) -> list[str]:
-    """Clean an iterable of values, returning only meaningful text tokens."""
-    if not values:
-        return []
-    cleaned: list[str] = []
-    for value in values:
-        normalized = _normalize_text(value, allow_placeholder=allow_placeholder)
-        if normalized:
-            cleaned.append(normalized)
-    return cleaned
-
-
-def _coalesce_text(*values: Any, allow_placeholder: bool = False) -> Optional[str]:
-    """Return the first non-empty normalized text value from the provided options."""
-    for value in values:
-        normalized = _normalize_text(value, allow_placeholder=allow_placeholder)
-        if normalized is not None:
-            return normalized
-    return None
+settings = get_settings()
 
 
 class ContactsService:
@@ -86,6 +49,39 @@ class ContactsService:
         self.repository = repository or ContactRepository()
         self.logger.debug("Exiting ContactsService.__init__ repository=%s", self.repository.__class__.__name__)
 
+    def _is_using_replica(self) -> bool:
+        """
+        Determine if the current database connection is using a replica.
+        
+        Checks configuration flags and database URL to detect replica usage.
+        
+        Returns:
+            True if using replica, False otherwise
+        """
+        # Check explicit USE_REPLICA flag
+        if settings.USE_REPLICA:
+            return True
+        
+        # Check if DATABASE_REPLICA_URL is configured and matches current connection
+        # Note: This is a simple check - in a production system, you might want to
+        # check the actual connection string or use a connection pool that routes
+        # read queries to replicas
+        if settings.DATABASE_REPLICA_URL:
+            # If replica URL is configured, assume we might be using it
+            # In a more sophisticated implementation, you could check the actual
+            # connection string or use a routing mechanism
+            return True
+        
+        # Check if DATABASE_URL contains replica indicators
+        if settings.DATABASE_URL:
+            url_lower = settings.DATABASE_URL.lower()
+            # Common replica indicators in connection strings
+            replica_indicators = ["replica", "readonly", "read-only", "read_replica"]
+            if any(indicator in url_lower for indicator in replica_indicators):
+                return True
+        
+        return False
+
     async def create_contact(
         self,
         session: AsyncSession,
@@ -93,7 +89,7 @@ class ContactsService:
     ) -> ContactDetail:
         """Create a new contact and return the hydrated detail schema."""
         data = payload.model_dump()
-        normalized_uuid = _normalize_text(data.get("uuid"), allow_placeholder=False)
+        normalized_uuid = normalize_text(data.get("uuid"), allow_placeholder=False)
         data["uuid"] = normalized_uuid or uuid4().hex
 
         for field in (
@@ -106,12 +102,12 @@ class ContactsService:
             "text_search",
             "company_id",
         ):
-            data[field] = _normalize_text(data.get(field))
+            data[field] = normalize_text(data.get(field))
 
-        departments = _normalize_sequence(data.get("departments"))
+        departments = normalize_sequence(data.get("departments"))
         data["departments"] = departments or None
 
-        seniority = _normalize_text(data.get("seniority"), allow_placeholder=False)
+        seniority = normalize_text(data.get("seniority"), allow_placeholder=False)
         data["seniority"] = seniority or PLACEHOLDER_VALUE
 
         now = datetime.now(UTC).replace(tzinfo=None)
@@ -122,6 +118,15 @@ class ContactsService:
         contact = await self.repository.create_contact(session, data)
         await session.commit()
         self.logger.debug("Created contact persisted: id=%s uuid=%s", contact.id, contact.uuid)
+        
+        # Invalidate contacts list cache on creation
+        if settings.ENABLE_QUERY_CACHING:
+            cache = get_query_cache()
+            try:
+                await cache.invalidate_pattern("query_cache:contacts:list:*")
+            except Exception as exc:
+                self.logger.warning("Failed to invalidate contacts cache: %s", exc)
+        
         detail = await self.get_contact(session, contact.uuid)
         self.logger.debug("Returning created contact detail: uuid=%s", contact.uuid)
         return detail
@@ -145,22 +150,53 @@ class ContactsService:
             use_cursor,
             active_filter_keys,
         )
+        
+        # Check cache if enabled and query is cacheable (has limit and reasonable offset)
+        cache = get_query_cache()
+        cache_key_args = {
+            "filters": filters.model_dump(exclude_none=True),
+            "limit": limit,
+            "offset": offset,
+            "use_cursor": use_cursor,
+        }
+        cached_result = None
+        if settings.ENABLE_QUERY_CACHING and limit is not None and limit <= 1000:
+            cached_result = await cache.get("contacts:list", **cache_key_args)
+            if cached_result:
+                self.logger.debug("Cache hit for contacts list query")
+                return CursorPage(**cached_result)
+        
         if limit is None:
             self.logger.warning(
                 "Unlimited query requested for contacts - this may return a large dataset. filters=%s",
                 active_filter_keys,
             )
         try:
-            rows = await self.repository.list_contacts(session, filters, limit, offset)
+            contacts = await self.repository.list_contacts(session, filters, limit, offset)
         except ValueError as exc:
             # self.logger.info("List contacts request rejected: %s", exc)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-        self.logger.debug("Repository returned %d rows for contact list", len(rows))
+        self.logger.debug("Repository returned %d contacts", len(contacts))
 
-        results = [
-            self._hydrate_contact(contact, company, contact_meta, company_meta)
-            for contact, company, contact_meta, company_meta in rows
-        ]
+        # Extract foreign keys
+        company_ids = {c.company_id for c in contacts if c.company_id}
+        contact_uuids = {c.uuid for c in contacts}
+        
+        # Batch fetch related entities
+        companies_dict = await batch_fetch_companies_by_uuids(session, company_ids)
+        contact_meta_dict = await batch_fetch_contact_metadata_by_uuids(session, contact_uuids)
+        
+        # Extract company UUIDs from fetched companies
+        company_uuids = {c.uuid for c in companies_dict.values()}
+        company_meta_dict = await batch_fetch_company_metadata_by_uuids(session, company_uuids)
+        
+        # Reconstruct tuples and hydrate contacts
+        results = []
+        for contact in contacts:
+            company = companies_dict.get(contact.company_id) if contact.company_id else None
+            contact_meta = contact_meta_dict.get(contact.uuid)
+            company_meta = company_meta_dict.get(company.uuid) if company else None
+            results.append(self._hydrate_contact(contact, company, contact_meta, company_meta))
 
         next_link = None
         # Only show next link if we have a limit and returned exactly that many results
@@ -194,7 +230,29 @@ class ContactsService:
             bool(next_link),
             bool(previous_link),
         )
-        return CursorPage(next=next_link, previous=previous_link, results=results)
+        
+        # Build meta information
+        meta = {
+            "strategy": "cursor" if use_cursor else "limit-offset",
+            "count_mode": "estimated" if not active_filter_keys else "actual",
+            "filters_applied": len(active_filter_keys) > 0,
+            "ordering": filters.ordering or "-created_at",
+            "returned_records": len(results),
+            "page_size": limit,
+            "page_size_cap": settings.MAX_PAGE_SIZE,
+            "using_replica": self._is_using_replica(),
+        }
+        
+        page = CursorPage(next=next_link, previous=previous_link, results=results, meta=meta)
+        
+        # Cache result if enabled and query is cacheable
+        if settings.ENABLE_QUERY_CACHING and limit is not None and limit <= 1000:
+            try:
+                await cache.set("contacts:list", page.model_dump(), **cache_key_args)
+            except Exception as exc:
+                self.logger.warning("Failed to cache contacts list result: %s", exc)
+        
+        return page
 
     async def list_contacts_simple(
         self,
@@ -221,31 +279,42 @@ class ContactsService:
                 active_filter_keys,
             )
         try:
-            rows = await self.repository.list_contacts(session, filters, limit, offset)
+            contacts = await self.repository.list_contacts(session, filters, limit, offset)
         except ValueError as exc:
             # self.logger.info("List contacts (simple) request rejected: %s", exc)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-        self.logger.debug("Repository returned %d rows for contact simple list", len(rows))
+        self.logger.debug("Repository returned %d contacts for simple list", len(contacts))
 
+        # Extract foreign keys
+        company_ids = {c.company_id for c in contacts if c.company_id}
+        contact_uuids = {c.uuid for c in contacts}
+        
+        # Batch fetch related entities
+        companies_dict = await batch_fetch_companies_by_uuids(session, company_ids)
+        contact_meta_dict = await batch_fetch_contact_metadata_by_uuids(session, contact_uuids)
+        
         simple_results: list[ContactSimpleItem] = []
-        for contact, company, contact_meta, company_meta in rows:
+        for contact in contacts:
+            company = companies_dict.get(contact.company_id) if contact.company_id else None
+            contact_meta = contact_meta_dict.get(contact.uuid)
             location = ContactLocation(
-                city=_normalize_text(contact_meta.city if contact_meta else None),
-                state=_normalize_text(contact_meta.state if contact_meta else None),
-                country=_normalize_text(contact_meta.country if contact_meta else None),
+                city=normalize_text(contact_meta.city if contact_meta else None),
+                state=normalize_text(contact_meta.state if contact_meta else None),
+                country=normalize_text(contact_meta.country if contact_meta else None),
             )
             # When all location fields are None, keep location as None
             location_value = location if any([location.city, location.state, location.country]) else None
             simple_results.append(
                 ContactSimpleItem(
+                    id=contact.id,
                     uuid=contact.uuid,
-                    first_name=_normalize_text(contact.first_name),
-                    last_name=_normalize_text(contact.last_name),
-                    title=_normalize_text(contact.title),
+                    first_name=normalize_text(contact.first_name),
+                    last_name=normalize_text(contact.last_name),
+                    title=normalize_text(contact.title),
                     location=location_value,
-                    company_name=_normalize_text(company.name if company else None),
-                    person_linkedin_url=_normalize_text(contact_meta.linkedin_url if contact_meta else None),
-                    company_domain=_normalize_text(contact_meta.website if contact_meta else None),
+                    company_name=normalize_text(company.name if company else None),
+                    person_linkedin_url=normalize_text(contact_meta.linkedin_url if contact_meta else None),
+                    company_domain=normalize_text(contact_meta.website if contact_meta else None),
                 )
             )
 
@@ -270,7 +339,20 @@ class ContactsService:
             bool(next_link),
             bool(previous_link),
         )
-        return CursorPage(next=next_link, previous=previous_link, results=simple_results)
+        
+        # Build meta information
+        meta = {
+            "strategy": "cursor" if use_cursor else "limit-offset",
+            "count_mode": "estimated" if not active_filter_keys else "actual",
+            "filters_applied": len(active_filter_keys) > 0,
+            "ordering": filters.ordering or "-created_at",
+            "returned_records": len(simple_results),
+            "page_size": limit,
+            "page_size_cap": settings.MAX_PAGE_SIZE,
+            "using_replica": self._is_using_replica(),
+        }
+        
+        return CursorPage(next=next_link, previous=previous_link, results=simple_results, meta=meta)
 
     async def count_contacts(
         self,
@@ -346,11 +428,11 @@ class ContactsService:
     ) -> ContactDetail:
         """Fetch a single contact with related data."""
         # self.logger.info("Service retrieving contact: contact_uuid=%s", contact_uuid)
-        row = await self.repository.get_contact_with_relations(session, contact_uuid)
-        if not row:
+        result = await self.repository.get_contact_with_relations(session, contact_uuid)
+        if not result:
             # self.logger.info("Contact not found: contact_uuid=%s", contact_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
-        contact, company, contact_meta, company_meta = row
+        contact, company, contact_meta, company_meta = result
         item = self._hydrate_contact(contact, company, contact_meta, company_meta)
         self.logger.debug("Hydrated contact detail for contact_uuid=%s", contact_uuid)
         detail = ContactDetail(
@@ -1251,10 +1333,10 @@ class ContactsService:
                 # Catch any other exceptions (including from SQLAlchemy C extensions)
                 return default
         
-        company_keywords = _normalize_sequence(safe_getattr(company, "keywords") if company else None)
-        company_technologies = _normalize_sequence(safe_getattr(company, "technologies") if company else None)
-        industries = _normalize_sequence(safe_getattr(company, "industries") if company else None)
-        contact_departments = _normalize_sequence(safe_getattr(contact, "departments"))
+        company_keywords = normalize_sequence(safe_getattr(company, "keywords") if company else None)
+        company_technologies = normalize_sequence(safe_getattr(company, "technologies") if company else None)
+        industries = normalize_sequence(safe_getattr(company, "industries") if company else None)
+        contact_departments = normalize_sequence(safe_getattr(contact, "departments"))
 
         departments = ", ".join(contact_departments) if contact_departments else None
         keywords = ", ".join(company_keywords) if company_keywords else None
@@ -1266,53 +1348,54 @@ class ContactsService:
             metadata_dict["latest_funding_amount"] = str(safe_getattr(company_meta, "latest_funding_amount"))
         
         item = ContactListItem(
+            id=safe_getattr(contact, "id"),
             uuid=safe_getattr(contact, "uuid"),
-            first_name=_normalize_text(safe_getattr(contact, "first_name")),
-            last_name=_normalize_text(safe_getattr(contact, "last_name")),
-            title=_normalize_text(safe_getattr(contact, "title")),
-            company=_normalize_text(safe_getattr(company, "name") if company else None),
-            company_name_for_emails=_normalize_text(
+            first_name=normalize_text(safe_getattr(contact, "first_name")),
+            last_name=normalize_text(safe_getattr(contact, "last_name")),
+            title=normalize_text(safe_getattr(contact, "title")),
+            company=normalize_text(safe_getattr(company, "name") if company else None),
+            company_name_for_emails=normalize_text(
                 safe_getattr(company_meta, "company_name_for_emails") if company_meta else None
             ),
-            email=_normalize_text(safe_getattr(contact, "email")),
-            email_status=_normalize_text(safe_getattr(contact, "email_status")),
+            email=normalize_text(safe_getattr(contact, "email")),
+            email_status=normalize_text(safe_getattr(contact, "email_status")),
             primary_email_catch_all_status=None,
-            seniority=_normalize_text(safe_getattr(contact, "seniority"), allow_placeholder=True),
+            seniority=normalize_text(safe_getattr(contact, "seniority"), allow_placeholder=True),
             departments=departments,
-            work_direct_phone=_normalize_text(safe_getattr(contact_meta, "work_direct_phone") if contact_meta else None),
-            home_phone=_normalize_text(safe_getattr(contact_meta, "home_phone") if contact_meta else None),
-            mobile_phone=_normalize_text(safe_getattr(contact, "mobile_phone")),
-            corporate_phone=_normalize_text(safe_getattr(company_meta, "phone_number") if company_meta else None),
-            other_phone=_normalize_text(safe_getattr(contact_meta, "other_phone") if contact_meta else None),
-            stage=_normalize_text(safe_getattr(contact_meta, "stage") if contact_meta else None),
+            work_direct_phone=normalize_text(safe_getattr(contact_meta, "work_direct_phone") if contact_meta else None),
+            home_phone=normalize_text(safe_getattr(contact_meta, "home_phone") if contact_meta else None),
+            mobile_phone=normalize_text(safe_getattr(contact, "mobile_phone")),
+            corporate_phone=normalize_text(safe_getattr(company_meta, "phone_number") if company_meta else None),
+            other_phone=normalize_text(safe_getattr(contact_meta, "other_phone") if contact_meta else None),
+            stage=normalize_text(safe_getattr(contact_meta, "stage") if contact_meta else None),
             employees=safe_getattr(company, "employees_count") if company else None,
             industry=industry,
             keywords=keywords,
-            person_linkedin_url=_normalize_text(safe_getattr(contact_meta, "linkedin_url") if contact_meta else None),
-            website=_normalize_text(safe_getattr(contact_meta, "website") if contact_meta else None),
-            company_linkedin_url=_normalize_text(safe_getattr(company_meta, "linkedin_url") if company_meta else None),
-            facebook_url=_coalesce_text(
+            person_linkedin_url=normalize_text(safe_getattr(contact_meta, "linkedin_url") if contact_meta else None),
+            website=normalize_text(safe_getattr(contact_meta, "website") if contact_meta else None),
+            company_linkedin_url=normalize_text(safe_getattr(company_meta, "linkedin_url") if company_meta else None),
+            facebook_url=coalesce_text(
                 safe_getattr(company_meta, "facebook_url") if company_meta else None,
                 safe_getattr(contact_meta, "facebook_url") if contact_meta else None,
             ),
-            twitter_url=_coalesce_text(
+            twitter_url=coalesce_text(
                 safe_getattr(company_meta, "twitter_url") if company_meta else None,
                 safe_getattr(contact_meta, "twitter_url") if contact_meta else None,
             ),
-            city=_normalize_text(safe_getattr(contact_meta, "city") if contact_meta else None),
-            state=_normalize_text(safe_getattr(contact_meta, "state") if contact_meta else None),
-            country=_normalize_text(safe_getattr(contact_meta, "country") if contact_meta else None),
-            company_address=_normalize_text(safe_getattr(company, "address") if company else None),
-            company_city=_normalize_text(safe_getattr(company_meta, "city") if company_meta else None),
-            company_state=_normalize_text(safe_getattr(company_meta, "state") if company_meta else None),
-            company_country=_normalize_text(safe_getattr(company_meta, "country") if company_meta else None),
-            company_phone=_normalize_text(safe_getattr(company_meta, "phone_number") if company_meta else None),
+            city=normalize_text(safe_getattr(contact_meta, "city") if contact_meta else None),
+            state=normalize_text(safe_getattr(contact_meta, "state") if contact_meta else None),
+            country=normalize_text(safe_getattr(contact_meta, "country") if contact_meta else None),
+            company_address=normalize_text(safe_getattr(company, "address") if company else None),
+            company_city=normalize_text(safe_getattr(company_meta, "city") if company_meta else None),
+            company_state=normalize_text(safe_getattr(company_meta, "state") if company_meta else None),
+            company_country=normalize_text(safe_getattr(company_meta, "country") if company_meta else None),
+            company_phone=normalize_text(safe_getattr(company_meta, "phone_number") if company_meta else None),
             technologies=technologies,
             annual_revenue=safe_getattr(company, "annual_revenue") if company else None,
             total_funding=safe_getattr(company, "total_funding") if company else None,
-            latest_funding=_normalize_text(safe_getattr(company_meta, "latest_funding") if company_meta else None),
+            latest_funding=normalize_text(safe_getattr(company_meta, "latest_funding") if company_meta else None),
             latest_funding_amount=safe_getattr(company_meta, "latest_funding_amount") if company_meta else None,
-            last_raised_at=_normalize_text(safe_getattr(company_meta, "last_raised_at") if company_meta else None),
+            last_raised_at=normalize_text(safe_getattr(company_meta, "last_raised_at") if company_meta else None),
             meta_data=metadata_dict or None,
             created_at=safe_getattr(contact, "created_at"),
             updated_at=safe_getattr(contact, "updated_at"),
@@ -1336,21 +1419,21 @@ class ContactsService:
         if not company:
             self.logger.debug("Exiting ContactsService._company_summary (no company)")
             return None
-        industries = _normalize_sequence(company.industries)
-        technologies = _normalize_sequence(company.technologies)
+        industries = normalize_sequence(company.industries)
+        technologies = normalize_sequence(company.technologies)
         summary = CompanySummary(
             uuid=company.uuid,
-            name=_normalize_text(company.name) or company.name,
+            name=normalize_text(company.name) or company.name,
             employees_count=company.employees_count,
             annual_revenue=company.annual_revenue,
             total_funding=company.total_funding,
             industry=", ".join(industries) if industries else None,
-            city=_normalize_text(company_meta.city if company_meta else None),
-            state=_normalize_text(company_meta.state if company_meta else None),
-            country=_normalize_text(company_meta.country if company_meta else None),
-            website=_normalize_text(company_meta.website if company_meta else None),
-            linkedin_url=_normalize_text(company_meta.linkedin_url if company_meta else None),
-            phone_number=_normalize_text(company_meta.phone_number if company_meta else None),
+            city=normalize_text(company_meta.city if company_meta else None),
+            state=normalize_text(company_meta.state if company_meta else None),
+            country=normalize_text(company_meta.country if company_meta else None),
+            website=normalize_text(company_meta.website if company_meta else None),
+            linkedin_url=normalize_text(company_meta.linkedin_url if company_meta else None),
+            phone_number=normalize_text(company_meta.phone_number if company_meta else None),
             technologies=technologies or None,
         )
         self.logger.debug(
@@ -1373,17 +1456,17 @@ class ContactsService:
             return None
         metadata = ContactMetadataOut(
             uuid=contact_meta.uuid,
-            linkedin_url=_normalize_text(contact_meta.linkedin_url),
-            facebook_url=_normalize_text(contact_meta.facebook_url),
-            twitter_url=_normalize_text(contact_meta.twitter_url),
-            website=_normalize_text(contact_meta.website),
-            work_direct_phone=_normalize_text(contact_meta.work_direct_phone),
-            home_phone=_normalize_text(contact_meta.home_phone),
-            city=_normalize_text(contact_meta.city),
-            state=_normalize_text(contact_meta.state),
-            country=_normalize_text(contact_meta.country),
-            other_phone=_normalize_text(contact_meta.other_phone),
-            stage=_normalize_text(contact_meta.stage),
+            linkedin_url=normalize_text(contact_meta.linkedin_url),
+            facebook_url=normalize_text(contact_meta.facebook_url),
+            twitter_url=normalize_text(contact_meta.twitter_url),
+            website=normalize_text(contact_meta.website),
+            work_direct_phone=normalize_text(contact_meta.work_direct_phone),
+            home_phone=normalize_text(contact_meta.home_phone),
+            city=normalize_text(contact_meta.city),
+            state=normalize_text(contact_meta.state),
+            country=normalize_text(contact_meta.country),
+            other_phone=normalize_text(contact_meta.other_phone),
+            stage=normalize_text(contact_meta.stage),
         )
         self.logger.debug(
             "Exiting ContactsService._contact_metadata contact_uuid=%s",

@@ -1,4 +1,4 @@
-"""Expose Celery task modules for auto-discovery."""
+"""Background task modules."""
 
 from . import import_tasks  # noqa: F401
 

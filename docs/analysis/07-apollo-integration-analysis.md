@@ -321,9 +321,8 @@ if "#" in url:
 
 **Mapping File:**
 
-- `app/data/insdustryids.csv`
-- Maps Tag IDs to industry names
-- Used by `get_industry_names_from_ids()`
+- ~~`app/data/insdustryids.csv`~~ (REMOVED: File was unused and not referenced in codebase)
+- Industry mapping is handled programmatically
 
 **Example:**
 
@@ -606,9 +605,8 @@ if "#" in url:
 
 **Mapping File:**
 
-- `app/data/insdustryids.csv`
-- Format: Tag ID, Industry Name
-- Loaded on service initialization
+- ~~`app/data/insdustryids.csv`~~ (REMOVED: File was unused and not referenced in codebase)
+- Industry mapping is handled programmatically
 
 **Utility Function:**
 

@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.ai_chat import (
     AIChatCreate,
+    AIChatMessageRequest,
     AIChatResponse,
     AIChatUpdate,
     PaginatedAIChatResponse,
@@ -180,6 +181,43 @@ async def update_chat(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid request data"
+        ) from exc
+
+
+@router.post("/{chat_id}/message", response_model=AIChatResponse)
+@log_function_call(logger=logger, log_arguments=True, log_result=True)
+async def send_message(
+    chat_id: str,
+    message_data: AIChatMessageRequest,
+    filters: AIChatFilterParams = Depends(resolve_ai_chat_filters),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> AIChatResponse:
+    """
+    Send a message in a chat and get AI response.
+    
+    This endpoint adds the user's message to the chat, generates an AI response
+    using Gemini, and returns the updated chat with both messages.
+    Only the chat owner can send messages.
+    """
+    logger.info("Send message request: chat_id=%s user_id=%s", chat_id, current_user.id)
+
+    try:
+        result = await service.send_message(
+            session,
+            chat_id,
+            current_user.id,
+            message_data.message,
+        )
+        logger.info("Message sent and AI response generated: chat_id=%s", chat_id)
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Send message failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while processing the request."
         ) from exc
 
 

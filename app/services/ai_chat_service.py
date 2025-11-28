@@ -18,6 +18,7 @@ from app.schemas.ai_chat import (
     PaginatedAIChatResponse,
 )
 from app.schemas.filters import AIChatFilterParams
+from app.services.gemini_service import GeminiService
 from app.utils.pagination import build_pagination_link
 
 logger = get_logger(__name__)
@@ -26,10 +27,15 @@ logger = get_logger(__name__)
 class AIChatService:
     """Business logic for AI chat conversation management."""
 
-    def __init__(self, repository: Optional[AIChatRepository] = None) -> None:
+    def __init__(
+        self,
+        repository: Optional[AIChatRepository] = None,
+        gemini_service: Optional[GeminiService] = None,
+    ) -> None:
         """Initialize the service with repository dependency."""
         logger.debug("Entering AIChatService.__init__")
         self.repository = repository or AIChatRepository()
+        self.gemini_service = gemini_service or GeminiService()
         logger.debug("Exiting AIChatService.__init__")
 
     def _validate_messages(self, messages: Optional[list[Message]]) -> None:
@@ -302,4 +308,80 @@ class AIChatService:
         # Delete chat
         await self.repository.delete_chat(session, chat)
         logger.info("Chat deleted: id=%s", chat_id)
+
+    async def send_message(
+        self,
+        session: AsyncSession,
+        chat_id: str,
+        user_id: str,
+        user_message: str,
+    ) -> AIChatResponse:
+        """
+        Send a user message and generate AI response.
+        
+        Args:
+            session: Database session
+            chat_id: Chat ID
+            user_id: User ID (for ownership verification)
+            user_message: User's message text
+            
+        Returns:
+            Updated chat with user message and AI response
+        """
+        logger.debug("Sending message: chat_id=%s user_id=%s", chat_id, user_id)
+        
+        # Get chat with ownership check
+        chat = await self.repository.get_by_id_and_user_id(session, chat_id, user_id)
+        if not chat:
+            # Check if chat exists but belongs to another user
+            existing_chat = await self.repository.get_by_id(session, chat_id)
+            if existing_chat:
+                logger.warning("Message denied: chat belongs to different user: id=%s", chat_id)
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have permission to send messages in this chat."
+                )
+            logger.warning("Chat not found: id=%s", chat_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Not found."
+            )
+        
+        # Get current messages
+        current_messages = chat.messages or []
+        
+        # Add user message
+        user_msg = {"sender": "user", "text": user_message}
+        updated_messages = current_messages + [user_msg]
+        
+        # Generate AI response
+        try:
+            ai_response_text = await self.gemini_service.generate_chat_response(
+                user_message=user_message,
+                chat_history=current_messages,
+            )
+            ai_msg = {"sender": "ai", "text": ai_response_text}
+            updated_messages.append(ai_msg)
+        except Exception as exc:
+            logger.error("Failed to generate AI response: %s", exc)
+            # Add error message instead of failing completely
+            ai_msg = {
+                "sender": "ai",
+                "text": "I apologize, but I'm having trouble processing your request right now. Please try again later."
+            }
+            updated_messages.append(ai_msg)
+        
+        # Update chat with new messages
+        await self.repository.update_chat(session, chat, messages=updated_messages)
+        await session.refresh(chat)
+        
+        logger.info("Message sent and AI response generated: chat_id=%s", chat_id)
+        return AIChatResponse(
+            id=chat.id,
+            user_id=chat.user_id,
+            title=chat.title or "",
+            messages=chat.messages or [],
+            created_at=chat.created_at,
+            updated_at=chat.updated_at,
+        )
 

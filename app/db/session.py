@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import (
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.utils.query_monitor import get_query_monitor
+import atexit
 
 
 settings = get_settings()
@@ -85,15 +86,122 @@ try:
             except Exception as e:
                 logger.debug("Could not set connection compression: %s", e)
 
+    # Connection pool statistics
+    pool_stats = {
+        "checkouts": 0,
+        "checkins": 0,
+        "invalidated": 0,
+        "overflow": 0,
+    }
+    
     @event.listens_for(sync_engine, "checkout")
     def receive_checkout(dbapi_conn, connection_record, connection_proxy):
         """Log connection checkout for monitoring."""
-        logger.debug("Connection checked out from pool")
-
+        pool_stats["checkouts"] += 1
+        if settings.ENABLE_POOL_MONITORING:
+            pool = sync_engine.pool
+            size = pool.size()
+            checked_in = pool.checkedin()
+            checked_out = pool.checkedout()
+            overflow = pool.overflow()
+            
+            # Log warning if pool is getting full
+            if checked_out > size * 0.8:
+                logger.warning(
+                    "Connection pool usage high: checked_out=%d/%d overflow=%d",
+                    checked_out,
+                    size,
+                    overflow,
+                )
+            logger.debug(
+                "Connection checked out: total=%d checked_out=%d checked_in=%d overflow=%d",
+                pool_stats["checkouts"],
+                checked_out,
+                checked_in,
+                overflow,
+            )
+    
     @event.listens_for(sync_engine, "checkin")
     def receive_checkin(dbapi_conn, connection_record):
         """Log connection checkin for monitoring."""
-        logger.debug("Connection checked in to pool")
+        pool_stats["checkins"] += 1
+        if settings.ENABLE_POOL_MONITORING:
+            pool = sync_engine.pool
+            logger.debug(
+                "Connection checked in: total=%d pool_size=%d",
+                pool_stats["checkins"],
+                pool.size(),
+            )
+    
+    @event.listens_for(sync_engine, "invalidate")
+    def receive_invalidate(dbapi_conn, connection_record, exception):
+        """Log connection invalidation."""
+        pool_stats["invalidated"] += 1
+        logger.warning(
+            "Connection invalidated: total=%d exception=%s",
+            pool_stats["invalidated"],
+            exception,
+        )
+    
+    def get_pool_stats() -> dict:
+        """Get current connection pool statistics."""
+        try:
+            pool = sync_engine.pool
+            return {
+                "size": pool.size(),
+                "checked_in": pool.checkedin(),
+                "checked_out": pool.checkedout(),
+                "overflow": pool.overflow(),
+                "total_checkouts": pool_stats["checkouts"],
+                "total_checkins": pool_stats["checkins"],
+                "total_invalidated": pool_stats["invalidated"],
+            }
+        except Exception as exc:
+            logger.warning("Could not get pool stats: %s", exc)
+            return {}
+    
+    # Log pool statistics periodically if enabled
+    if settings.ENABLE_POOL_MONITORING and settings.POOL_MONITORING_INTERVAL > 0:
+        import threading
+        import time
+        
+        def log_pool_stats():
+            """Periodically log pool statistics."""
+            while True:
+                time.sleep(settings.POOL_MONITORING_INTERVAL)
+                stats = get_pool_stats()
+                if stats:
+                    logger.info(
+                        "Connection pool stats: size=%d checked_out=%d checked_in=%d overflow=%d "
+                        "total_checkouts=%d total_checkins=%d invalidated=%d",
+                        stats.get("size", 0),
+                        stats.get("checked_out", 0),
+                        stats.get("checked_in", 0),
+                        stats.get("overflow", 0),
+                        stats.get("total_checkouts", 0),
+                        stats.get("total_checkins", 0),
+                        stats.get("total_invalidated", 0),
+                    )
+        
+        # Start monitoring thread (daemon so it doesn't block shutdown)
+        monitor_thread = threading.Thread(target=log_pool_stats, daemon=True)
+        monitor_thread.start()
+        logger.info("Connection pool monitoring started (interval=%ds)", settings.POOL_MONITORING_INTERVAL)
+    
+    # Log pool stats on shutdown
+    def log_final_pool_stats():
+        """Log final pool statistics on application shutdown."""
+        stats = get_pool_stats()
+        if stats:
+            logger.info(
+                "Final connection pool stats: size=%d total_checkouts=%d total_checkins=%d invalidated=%d",
+                stats.get("size", 0),
+                stats.get("total_checkouts", 0),
+                stats.get("total_checkins", 0),
+                stats.get("total_invalidated", 0),
+            )
+    
+    atexit.register(log_final_pool_stats)
 except AttributeError:
     # If sync_engine is not available, skip event listeners
     logger.debug("sync_engine not available, skipping connection pool event listeners")

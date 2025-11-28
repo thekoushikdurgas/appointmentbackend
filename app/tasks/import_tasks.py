@@ -1,8 +1,11 @@
-"""Celery task definitions and helpers for batched contact imports."""
+"""Background task functions for batched contact imports.
+
+This module provides async functions for processing contact imports in the background.
+These functions are designed to be used with FastAPI's BackgroundTasks.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import csv
 import json
 from datetime import datetime, timezone
@@ -20,7 +23,6 @@ from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
 from app.models.imports import ContactImportError, ContactImportJob, ImportJobStatus
 from app.services.import_service import ImportService
-from app.tasks.celery_app import celery_app
 
 
 settings = get_settings()
@@ -345,10 +347,33 @@ async def _process_csv(job_id: str, file_path: str) -> None:
             logger.debug("Finished import job cleanup: job_id=%s", job_id)
 
 
-@celery_app.task(name="contacts.process_import")
-def process_contacts_import(job_id: str, file_path: str) -> None:
-    """Celery entrypoint for processing contacts imports."""
-    logger.info("Celery task started: job_id=%s file_path=%s", job_id, file_path)
-    asyncio.run(_process_csv(job_id, file_path))
-    logger.info("Celery task finished: job_id=%s", job_id)
+async def process_contacts_import(job_id: str, file_path: str) -> None:
+    """
+    Process contacts import from CSV file.
+    
+    This function is designed to be used with FastAPI's BackgroundTasks.
+    It processes a CSV file and imports contacts/companies into the database.
+    
+    Args:
+        job_id: Import job identifier
+        file_path: Path to the CSV file to process
+    """
+    logger.info("Background task started: job_id=%s file_path=%s", job_id, file_path)
+    try:
+        await _process_csv(job_id, file_path)
+        logger.info("Background task finished: job_id=%s", job_id)
+    except Exception as exc:
+        logger.exception("Background task failed: job_id=%s error=%s", job_id, exc)
+        # Update job status to failed
+        async with AsyncSessionLocal() as session:
+            try:
+                await import_service.set_status(
+                    session,
+                    job_id,
+                    status=ImportJobStatus.failed,
+                    message=f"Failed with error: {exc}",
+                )
+                await session.commit()
+            except Exception as status_exc:
+                logger.exception("Failed to update job status after error: job_id=%s", job_id)
 

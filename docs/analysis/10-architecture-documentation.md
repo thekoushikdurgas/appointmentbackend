@@ -14,7 +14,7 @@ This document provides comprehensive architecture documentation including reques
 │  (Browser/  │
 │   Mobile)   │
 └──────┬──────┘
-       │ HTTP/WebSocket
+       │ HTTP
        │
 ┌──────▼─────────────────────────────────────┐
 │         FastAPI Application                 │
@@ -28,7 +28,6 @@ This document provides comprehensive architecture documentation including reques
 │  ┌──────────────────────────────────────┐  │
 │  │         API Layer (v1/v2)             │  │
 │  │  - REST Endpoints                     │  │
-│  │  - WebSocket Endpoints                │  │
 │  └──────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────┐  │
 │  │         Service Layer                │  │
@@ -100,35 +99,6 @@ This document provides comprehensive architecture documentation including reques
 11. Client Response
 ```
 
-### WebSocket Request Flow
-
-```
-1. WebSocket Connection
-   ↓
-2. Authentication
-   - Token validation (query param)
-   - User retrieval
-   - Connection acceptance
-   ↓
-3. Message Reception
-   - JSON parsing
-   - Request validation
-   ↓
-4. Service Layer
-   - Business logic
-   - Operation execution
-   ↓
-5. Repository Layer
-   - Query execution
-   ↓
-6. Response Generation
-   - Result serialization
-   ↓
-7. Message Transmission
-   - JSON encoding
-   - WebSocket send
-```
-
 ## 3. Authentication Flow
 
 ### JWT Authentication (v2)
@@ -178,27 +148,6 @@ This document provides comprehensive architecture documentation including reques
 3. Validation
    - Match → Continue
    - Mismatch → 403 Forbidden
-```
-
-### WebSocket Authentication
-
-```
-1. WebSocket Connection
-   ws://host/path?token=<jwt>
-   ↓
-2. get_current_user_websocket()
-   - Extract token from query param
-   - Decode token
-   - Validate token
-   - Create database session
-   - Retrieve user
-   ↓
-3. Connection Acceptance
-   - Accept connection
-   - Store in connection manager
-   ↓
-4. Message Processing
-   - User available for all messages
 ```
 
 ## 4. Data Flow
@@ -480,7 +429,6 @@ ContactImportJob (1) ── (1:N) ── ContactImportError
 **Layer 3: Endpoint Authentication**
 - JWT token validation (v2)
 - Write key validation (v1)
-- WebSocket token validation
 
 **Layer 4: Authorization**
 - Role-based access control
@@ -502,7 +450,6 @@ ContactImportJob (1) ── (1:N) ── ContactImportError
 **API Security:**
 - Write keys for v1
 - Bearer tokens for v2
-- WebSocket token validation
 
 ## 9. Error Handling Architecture
 

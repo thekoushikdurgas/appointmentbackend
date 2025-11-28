@@ -5,10 +5,12 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
+import aiofiles
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.constants import DEFAULT_ROLE, FREE_USER, INITIAL_FREE_CREDITS
 from app.core.logging import get_logger
 from app.core.security import (
     create_access_token,
@@ -17,9 +19,11 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
-from app.models.user import User, UserProfile
-from app.repositories.user import UserProfileRepository, UserRepository
+from app.models.user import User, UserHistory, UserHistoryEventType, UserProfile
+from app.repositories.token_blacklist import TokenBlacklistRepository
+from app.repositories.user import UserHistoryRepository, UserProfileRepository, UserRepository
 from app.services.s3_service import S3Service
+from app.utils.validation import is_valid_uuid
 from app.schemas.user import (
     NotificationPreferences,
     ProfileResponse,
@@ -76,14 +80,112 @@ class UserService:
         self,
         user_repository: Optional[UserRepository] = None,
         profile_repository: Optional[UserProfileRepository] = None,
+        history_repository: Optional[UserHistoryRepository] = None,
+        blacklist_repository: Optional[TokenBlacklistRepository] = None,
         s3_service: Optional[S3Service] = None,
     ) -> None:
         """Initialize the service with repository dependencies."""
         logger.debug("Entering UserService.__init__")
         self.user_repo = user_repository or UserRepository()
         self.profile_repo = profile_repository or UserProfileRepository()
+        self.history_repo = history_repository or UserHistoryRepository()
+        self.blacklist_repo = blacklist_repository or TokenBlacklistRepository()
         self.s3_service = s3_service or S3Service()
         logger.debug("Exiting UserService.__init__")
+
+    async def get_user_history(
+        self,
+        session: AsyncSession,
+        user_id: Optional[str] = None,
+        event_type: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict:
+        """
+        Get user history records with optional filtering and pagination.
+        
+        Args:
+            session: Database session
+            user_id: Optional user ID to filter by (must be valid UUID format if provided)
+            event_type: Optional event type filter ('registration' or 'login')
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+        
+        Returns:
+            Dictionary with history records and pagination info
+            
+        Raises:
+            HTTPException: If user_id is provided but not a valid UUID format
+        """
+        # Validate user_id is a valid UUID format if provided
+        if user_id is not None and not is_valid_uuid(user_id):
+            logger.warning("Invalid user_id format provided: %s", user_id)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="user_id must be a valid UUID format"
+            )
+        
+        logger.debug("Getting user history: user_id=%s event_type=%s limit=%d offset=%d", user_id, event_type, limit, offset)
+        
+        # Convert event_type string to enum if provided
+        event_type_enum = None
+        if event_type:
+            try:
+                event_type_enum = UserHistoryEventType(event_type)
+            except ValueError:
+                logger.warning("Invalid event_type: %s", event_type)
+                event_type_enum = None
+        
+        history_records, total = await self.history_repo.list_history(
+            session,
+            user_id=user_id,
+            event_type=event_type_enum,
+            limit=limit,
+            offset=offset,
+        )
+        
+        # Format response
+        history_items = []
+        for record in history_records:
+            # Get user email for display
+            user = await self.user_repo.get_by_uuid(session, record.user_id) if record.user_id else None
+            
+            history_items.append({
+                "id": record.id,
+                "user_id": record.user_id,
+                "user_email": user.email if user else None,
+                "user_name": user.name if user else None,
+                "event_type": record.event_type,
+                "ip": record.ip,
+                "continent": record.continent,
+                "continent_code": record.continent_code,
+                "country": record.country,
+                "country_code": record.country_code,
+                "region": record.region,
+                "region_name": record.region_name,
+                "city": record.city,
+                "district": record.district,
+                "zip": record.zip,
+                "lat": float(record.lat) if record.lat else None,
+                "lon": float(record.lon) if record.lon else None,
+                "timezone": record.timezone,
+                "currency": record.currency,
+                "isp": record.isp,
+                "org": record.org,
+                "asname": record.asname,
+                "reverse": record.reverse,
+                "device": record.device,
+                "proxy": record.proxy,
+                "hosting": record.hosting,
+                "created_at": record.created_at,
+            })
+        
+        return {
+            "items": history_items,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
     async def register_user(
         self,
@@ -122,18 +224,62 @@ class UserService:
             name=register_data.name,
         )
         
-        # Create default profile
+        # Create default profile with FREE_USER role and 50 initial credits
         await self.profile_repo.create_profile(
             session,
             user_id=user.id,
             notifications={"weeklyReports": True, "newLeadAlerts": True},
-            role="Member",
+            role=DEFAULT_ROLE,
+            credits=INITIAL_FREE_CREDITS,
+            subscription_plan="free",
+            subscription_status="active",
         )
         
         # Generate tokens
         token_data = {"sub": user.id}
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
+        
+        # Create user history record if geolocation data is available
+        if register_data.geolocation:
+            try:
+                geolocation = register_data.geolocation
+                await self.history_repo.create_history(
+                    session,
+                    user_id=user.id,
+                    event_type=UserHistoryEventType.REGISTRATION,
+                    ip=geolocation.ip,
+                    continent=geolocation.continent,
+                    continent_code=geolocation.continent_code,
+                    country=geolocation.country,
+                    country_code=geolocation.country_code,
+                    region=geolocation.region,
+                    region_name=geolocation.region_name,
+                    city=geolocation.city,
+                    district=geolocation.district,
+                    zip=geolocation.zip,
+                    lat=geolocation.lat,
+                    lon=geolocation.lon,
+                    timezone=geolocation.timezone,
+                    currency=geolocation.currency,
+                    isp=geolocation.isp,
+                    org=geolocation.org,
+                    asname=geolocation.asname,
+                    reverse=geolocation.reverse,
+                    device=geolocation.device,
+                    proxy=geolocation.proxy,
+                    hosting=geolocation.hosting,
+                )
+                logger.debug("User history created for registration: user_id=%s", user.id)
+            except Exception as exc:
+                # Log error but don't fail registration
+                event_type_info = f"enum={UserHistoryEventType.REGISTRATION.name} value={UserHistoryEventType.REGISTRATION.value}"
+                logger.warning(
+                    "Failed to create user history for registration: user_id=%s event_type=%s error=%s",
+                    user.id,
+                    event_type_info,
+                    exc,
+                )
         
         logger.info("User registered successfully: id=%s email=%s", user.id, user.email)
         return user, access_token, refresh_token
@@ -160,6 +306,7 @@ class UserService:
         
         if not user.is_active:
             logger.warning("Authentication failed: user disabled: %s", login_data.email)
+            # API spec shows this can be either format, using dict format for consistency
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"non_field_errors": ["User account is disabled"]}
@@ -181,7 +328,57 @@ class UserService:
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
         
-        logger.info("User authenticated successfully: id=%s email=%s", user.id, user.email)
+        # Store user.id before try block to avoid lazy loading issues if session is rolled back
+        user_id = user.id
+        user_email = user.email
+        
+        # Create user history record if geolocation data is available
+        # Use a savepoint to isolate history creation from main transaction
+        if login_data.geolocation:
+            try:
+                geolocation = login_data.geolocation
+                # Create a savepoint to isolate history creation
+                # If it fails, we rollback only the savepoint, not the entire transaction
+                async with session.begin_nested():
+                    await self.history_repo.create_history(
+                        session,
+                        user_id=user_id,
+                        event_type=UserHistoryEventType.LOGIN,
+                        ip=geolocation.ip,
+                        continent=geolocation.continent,
+                        continent_code=geolocation.continent_code,
+                        country=geolocation.country,
+                        country_code=geolocation.country_code,
+                        region=geolocation.region,
+                        region_name=geolocation.region_name,
+                        city=geolocation.city,
+                        district=geolocation.district,
+                        zip=geolocation.zip,
+                        lat=geolocation.lat,
+                        lon=geolocation.lon,
+                        timezone=geolocation.timezone,
+                        currency=geolocation.currency,
+                        isp=geolocation.isp,
+                        org=geolocation.org,
+                        asname=geolocation.asname,
+                        reverse=geolocation.reverse,
+                        device=geolocation.device,
+                        proxy=geolocation.proxy,
+                        hosting=geolocation.hosting,
+                    )
+                logger.debug("User history created for login: user_id=%s", user_id)
+            except Exception as exc:
+                # Log error but don't fail login - history creation is non-critical
+                # The savepoint rollback ensures main transaction (user update) is preserved
+                event_type_info = f"enum={UserHistoryEventType.LOGIN.name} value={UserHistoryEventType.LOGIN.value}"
+                logger.warning(
+                    "Failed to create user history for login: user_id=%s event_type=%s error=%s",
+                    user_id,
+                    event_type_info,
+                    exc,
+                )
+        
+        logger.info("User authenticated successfully: id=%s email=%s", user_id, user_email)
         return user, access_token, refresh_token
 
     async def refresh_access_token(
@@ -195,6 +392,15 @@ class UserService:
         Returns: (new_access_token, new_refresh_token)
         """
         logger.debug("Refreshing access token")
+        
+        # Check if token is blacklisted
+        is_blacklisted = await self.blacklist_repo.is_token_blacklisted(session, refresh_token)
+        if is_blacklisted:
+            logger.warning("Token refresh failed: token is blacklisted")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token is invalid or expired"
+            )
         
         payload = decode_token(refresh_token)
         if not payload or payload.get("type") != "refresh":
@@ -252,7 +458,10 @@ class UserService:
                 session,
                 user_id=user_id,
                 notifications={"weeklyReports": True, "newLeadAlerts": True},
-                role="Member",
+                role=DEFAULT_ROLE,
+                credits=INITIAL_FREE_CREDITS,
+                subscription_plan="free",
+                subscription_status="active",
             )
         
         # Build response
@@ -300,7 +509,10 @@ class UserService:
                 session,
                 user_id=user_id,
                 notifications={"weeklyReports": True, "newLeadAlerts": True},
-                role="Member",
+                role=DEFAULT_ROLE,
+                credits=INITIAL_FREE_CREDITS,
+                subscription_plan="free",
+                subscription_status="active",
             )
         
         # Prepare update data
@@ -367,17 +579,14 @@ class UserService:
                 detail={"avatar": ["Invalid file type. Allowed types: .jpg, .jpeg, .png, .gif, .webp"]}
             )
         
-        # Read file content for validation
-        file_content = await file.read()
+        # Read first chunk for validation (magic bytes check)
+        chunk_size = settings.MAX_UPLOAD_CHUNK_SIZE
+        first_chunk = await file.read(min(chunk_size, 12))  # Read up to 12 bytes for magic bytes
         await file.seek(0)  # Reset file pointer
         
-        # Validate file size (5MB max)
+        # Validate file size (5MB max) - check content-length header if available
         max_size = 5 * 1024 * 1024  # 5MB
-        if len(file_content) > max_size:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"avatar": ["Image file too large. Maximum size is 5.0MB"]}
-            )
+        # Note: For chunked uploads, we'll validate size during upload
         
         # Validate magic bytes (file signature)
         valid_signatures = {
@@ -390,8 +599,8 @@ class UserService:
         
         is_valid = False
         for signature, ext in valid_signatures.items():
-            if file_content.startswith(signature):
-                if ext == ".webp" and b"WEBP" in file_content[:12]:
+            if first_chunk.startswith(signature):
+                if ext == ".webp" and b"WEBP" in first_chunk[:12]:
                     is_valid = True
                     break
                 elif ext != ".webp":
@@ -454,14 +663,35 @@ class UserService:
         # Upload to S3 if configured, otherwise save locally
         if settings.S3_BUCKET_NAME:
             try:
-                # Upload to S3
+                # Upload to S3 using chunked upload
                 s3_key = f"{self.s3_service.avatars_prefix}{filename}"
+                
+                # For S3, we need to read the file in chunks and upload
+                # Reset file pointer to beginning
+                await file.seek(0)
+                chunk_size = settings.MAX_UPLOAD_CHUNK_SIZE
+                file_chunks = []
+                total_size = 0
+                
+                while chunk := await file.read(chunk_size):
+                    file_chunks.append(chunk)
+                    total_size += len(chunk)
+                    # Check size limit
+                    if total_size > max_size:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail={"avatar": ["Image file too large. Maximum size is 5.0MB"]}
+                        )
+                
+                # Combine chunks for S3 upload (S3 service expects full content)
+                file_content = b"".join(file_chunks)
+                
                 await self.s3_service.upload_file(
                     file_content=file_content,
                     s3_key=s3_key,
                     content_type=file.content_type or "image/jpeg",
                 )
-                logger.debug("Avatar uploaded to S3: key=%s", s3_key)
+                logger.debug("Avatar uploaded to S3: key=%s size=%d", s3_key, total_size)
                 
                 # Store S3 key in database
                 avatar_url = s3_key
@@ -479,14 +709,33 @@ class UserService:
                     detail=f"Error uploading file to S3: {str(exc)}"
                 )
         else:
-            # Fallback to local storage
+            # Fallback to local storage - use chunked async upload
             avatars_dir = Path(settings.UPLOAD_DIR) / "avatars"
             avatars_dir.mkdir(parents=True, exist_ok=True)
             file_path = avatars_dir / filename
             
             try:
-                with file_path.open("wb") as buffer:
-                    buffer.write(file_content)
+                # Reset file pointer to beginning
+                await file.seek(0)
+                chunk_size = settings.MAX_UPLOAD_CHUNK_SIZE
+                total_size = 0
+                
+                async with aiofiles.open(file_path, "wb") as async_file:
+                    while chunk := await file.read(chunk_size):
+                        await async_file.write(chunk)
+                        total_size += len(chunk)
+                        # Check size limit during upload
+                        if total_size > max_size:
+                            await async_file.close()
+                            file_path.unlink(missing_ok=True)
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail={"avatar": ["Image file too large. Maximum size is 5.0MB"]}
+                            )
+                
+                logger.debug("Avatar saved locally: path=%s size=%d", file_path, total_size)
+            except HTTPException:
+                raise
             except Exception as exc:
                 logger.exception("Failed to save avatar file: %s", file_path)
                 raise HTTPException(
@@ -543,6 +792,13 @@ class UserService:
                 detail="User not found"
             )
         
+        if not user.is_active:
+            logger.warning("Promotion failed: user account is disabled: %s", user_id)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"non_field_errors": ["User account is disabled"]}
+            )
+        
         # Get or create profile
         profile = await self.profile_repo.get_by_user_id(session, user_id)
         if not profile:
@@ -551,11 +807,15 @@ class UserService:
                 session,
                 user_id=user_id,
                 notifications={"weeklyReports": True, "newLeadAlerts": True},
-                role="Member",
+                role=DEFAULT_ROLE,
+                credits=INITIAL_FREE_CREDITS,
+                subscription_plan="free",
+                subscription_status="active",
             )
         
         # Update role to Admin
-        await self.profile_repo.update_profile(session, profile, role="Admin")
+        from app.core.constants import ADMIN
+        await self.profile_repo.update_profile(session, profile, role=ADMIN)
         
         # Refresh to get updated values
         await session.refresh(profile)
@@ -569,6 +829,75 @@ class UserService:
             name=user.name,
             email=user.email,
             role=profile.role or "Admin",
+            avatar_url=get_full_avatar_url(profile.avatar_url),
+            is_active=user.is_active,
+            job_title=profile.job_title,
+            bio=profile.bio,
+            timezone=profile.timezone,
+            notifications=NotificationPreferences(**notifications) if notifications else None,
+            created_at=user.created_at,
+            updated_at=profile.updated_at or user.updated_at,
+        )
+
+    async def promote_user_to_super_admin(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> ProfileResponse:
+        """
+        Promote a user to super admin role.
+        
+        Updates the user's profile role to "SuperAdmin". If the profile doesn't exist, it will be created.
+        
+        Returns: Updated ProfileResponse with role="SuperAdmin"
+        """
+        logger.info("Promoting user to super admin: user_id=%s", user_id)
+        
+        user = await self.user_repo.get_by_uuid(session, user_id)
+        if not user:
+            logger.warning("Promotion failed: user not found: %s", user_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        if not user.is_active:
+            logger.warning("Promotion failed: user account is disabled: %s", user_id)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"non_field_errors": ["User account is disabled"]}
+            )
+        
+        # Get or create profile
+        profile = await self.profile_repo.get_by_user_id(session, user_id)
+        if not profile:
+            logger.debug("Profile not found, creating default profile: user_id=%s", user_id)
+            profile = await self.profile_repo.create_profile(
+                session,
+                user_id=user_id,
+                notifications={"weeklyReports": True, "newLeadAlerts": True},
+                role=DEFAULT_ROLE,
+                credits=INITIAL_FREE_CREDITS,
+                subscription_plan="free",
+                subscription_status="active",
+            )
+        
+        # Update role to SuperAdmin
+        from app.core.constants import SUPER_ADMIN
+        await self.profile_repo.update_profile(session, profile, role=SUPER_ADMIN)
+        
+        # Refresh to get updated values
+        await session.refresh(profile)
+        await session.refresh(user)
+        
+        # Build response
+        notifications = profile.notifications or {}
+        logger.info("User promoted to super admin successfully: user_id=%s email=%s", user_id, user.email)
+        return ProfileResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            role=profile.role or "SuperAdmin",
             avatar_url=get_full_avatar_url(profile.avatar_url),
             is_active=user.is_active,
             job_title=profile.job_title,

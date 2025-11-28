@@ -1173,7 +1173,7 @@ async def test_create_contact_with_optional_fields(async_client):
     assert payload["seniority"] == request_body["seniority"]
     assert payload["departments"] == "Sales, Marketing"
 
-    detail_response = await async_client.get(f"/api/v1/contacts/{payload['id']}")
+    detail_response = await async_client.get(f"/api/v1/contacts/{payload['uuid']}/")
     assert detail_response.status_code == 200
     detail = detail_response.json()
     assert detail["first_name"] == request_body["first_name"]
@@ -1244,7 +1244,7 @@ async def test_contact_detail_strips_placeholder_metadata(async_client, db_sessi
         },
     )
 
-    response = await async_client.get(f"/api/v1/contacts/{contact.id}")
+    response = await async_client.get(f"/api/v1/contacts/{contact.uuid}/")
     assert response.status_code == 200
     payload = response.json()
 
@@ -1275,57 +1275,57 @@ async def test_retrieve_contact_detail_and_not_found(async_client, db_session):
         company=await create_company(db_session, name="Detail Corp"),
     )
 
-    response = await async_client.get(f"/api/v1/contacts/{contact.id}")
+    response = await async_client.get(f"/api/v1/contacts/{contact.uuid}/")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["id"] == contact.id
+    assert payload["uuid"] == contact.uuid
     assert payload["company_detail"]["name"] == "Detail Corp"
 
-    missing_response = await async_client.get("/api/v1/contacts/999999")
+    missing_response = await async_client.get("/api/v1/contacts/999999/")
     assert missing_response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_list_industries_separated_returns_sorted_unique(async_client, monkeypatch):
     class DummyService:
-        async def list_attribute_values(
+        async def list_industries_simple(
             self,
             session,
-            filters,
             params,
-            *,
-            column_factory,
-            array_mode: bool = False,
+            company,
+            separated,
+            request_url,
         ):
-            assert array_mode is True
+            from app.schemas.common import CursorPage
+            assert separated is True
             assert params.distinct is True
-            return [" Cloud", "SaaS", "Cloud", "", None]
+            return CursorPage(next=None, previous=None, results=["Cloud", "SaaS"], meta=None)
 
     monkeypatch.setattr(contacts_endpoints, "service", DummyService())
     response = await async_client.get("/api/v1/contacts/industry/", params={"separated": "true"})
     assert response.status_code == 200
-    assert response.json() == ["Cloud", "SaaS"]
+    assert response.json()["results"] == ["Cloud", "SaaS"]
 
 
 @pytest.mark.asyncio
 async def test_list_industries_collapsed_filters_empty(async_client, monkeypatch):
     class DummyService:
-        async def list_attribute_values(
+        async def list_industries_simple(
             self,
             session,
-            filters,
             params,
-            *,
-            column_factory,
-            array_mode: bool = False,
+            company,
+            separated,
+            request_url,
         ):
-            assert array_mode is False
-            return ["Software,Technology", "", None]
+            from app.schemas.common import CursorPage
+            assert separated is True  # Always separated=True for industry endpoint
+            return CursorPage(next=None, previous=None, results=["Software,Technology"], meta=None)
 
     monkeypatch.setattr(contacts_endpoints, "service", DummyService())
     response = await async_client.get("/api/v1/contacts/industry/")
     assert response.status_code == 200
-    assert response.json() == ["Software,Technology"]
+    assert response.json()["results"] == ["Software,Technology"]
 
 
 @pytest.mark.asyncio
@@ -1347,7 +1347,7 @@ async def test_list_technologies_returns_sorted_unique(async_client, monkeypatch
     monkeypatch.setattr(contacts_endpoints, "service", DummyService())
     response = await async_client.get("/api/v1/contacts/technologies/")
     assert response.status_code == 200
-    assert response.json() == ["AWS", "Python"]
+    assert response.json()["results"] == ["AWS", "Python"]
 
 
 @pytest.mark.asyncio
@@ -1381,7 +1381,7 @@ async def test_list_technologies_returns_unique_up_to_limit(async_client, db_ses
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload == ["Outlook", "Remote"]
+    assert payload["results"] == ["Outlook", "Remote"]
 
 
 @pytest.mark.asyncio
@@ -1483,7 +1483,7 @@ async def test_list_technologies_filters_empty(async_client, monkeypatch):
     monkeypatch.setattr(contacts_endpoints, "service", DummyService())
     response = await async_client.get("/api/v1/contacts/technologies/")
     assert response.status_code == 200
-    assert response.json() == ["AWS", "Python"]
+    assert response.json()["results"] == ["AWS", "Python"]
 
 
 @pytest.mark.asyncio
@@ -1580,9 +1580,9 @@ async def test_list_titles_distinct(async_client, db_session):
     response = await async_client.get("/api/v1/contacts/title/", params={"distinct": "true"})
     assert response.status_code == 200
     payload = response.json()
-    assert payload == ["Director"]
+    assert payload["results"] == ["Director"]
     for placeholder in placeholder_titles:
-        assert placeholder not in payload
+        assert placeholder not in payload["results"]
 
 
 @pytest.mark.asyncio
@@ -1604,7 +1604,7 @@ async def test_list_companies_distinct_search_emits_no_cartesian_warnings(async_
         )
 
     assert response.status_code == 200
-    assert "DCS Systems" in response.json()
+    assert "DCS Systems" in response.json()["results"]
     offending = [
         warning
         for warning in captured
@@ -1640,7 +1640,7 @@ async def test_list_keywords_separated_handles_mixed_formats(async_client, monke
     monkeypatch.setattr(contacts_endpoints, "service", DummyService())
     response = await async_client.get("/api/v1/contacts/keywords/", params={"separated": "true"})
     assert response.status_code == 200
-    assert response.json() == ["AI", "Cloud", "DevOps", "ML", "SaaS"]
+    assert response.json()["results"] == ["AI", "Cloud", "DevOps", "ML", "SaaS"]
 
 
 @pytest.mark.asyncio
@@ -1960,6 +1960,29 @@ async def test_attribute_endpoints_accept_params(async_client, monkeypatch, endp
             captured["array_mode"] = array_mode
             captured["column_factory"] = column_factory
             return ["Value One", "Value Two"]
+        
+        async def list_industries_simple(
+            self,
+            session,
+            params,
+            company,
+            separated,
+            request_url,
+        ):
+            from app.schemas.common import CursorPage
+            return CursorPage(next=None, previous=None, results=["Value One", "Value Two"])
+        
+        async def list_company_addresses_paginated(
+            self,
+            session,
+            filters,
+            params,
+            request_url,
+        ):
+            from app.schemas.common import CursorPage
+            captured["filters"] = filters
+            captured["params"] = params
+            return CursorPage(next=None, previous=None, results=["Value One", "Value Two"])
 
     monkeypatch.setattr(contacts_endpoints, "service", DummyService())
     response = await async_client.get(
@@ -1974,7 +1997,7 @@ async def test_attribute_endpoints_accept_params(async_client, monkeypatch, endp
         },
     )
     assert response.status_code == 200
-    assert response.json() == ["Value One", "Value Two"]
+    assert response.json()["results"] == ["Value One", "Value Two"]
 
     params = captured["params"]
     assert params.limit == 5
@@ -2200,7 +2223,7 @@ async def test_attribute_endpoints_distinct_empty_results(async_client, db_sessi
             params={"distinct": "true"},
         )
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json()["results"] == []
 
 
 @pytest.mark.asyncio

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The API layer is organized into two versions (v1 and v2) with clear separation of concerns. This document analyzes the API versioning structure, authentication patterns, endpoint implementations, and WebSocket support.
+The API layer is organized into two versions (v1 and v2) with clear separation of concerns. This document analyzes the API versioning structure, authentication patterns, and endpoint implementations.
 
 ## 1. API Versioning Structure
 
@@ -13,7 +13,7 @@ The API layer is organized into two versions (v1 and v2) with clear separation o
 - Legacy endpoints for contacts, companies, and imports
 - Uses write keys for authorization (header-based)
 - Organized by resource type
-- Includes WebSocket support for contacts and companies
+- REST API endpoints for contacts and companies
 
 **API v2 (`app/api/v2/api.py`):**
 
@@ -22,7 +22,7 @@ The API layer is organized into two versions (v1 and v2) with clear separation o
 - Apollo.io integration
 - AI chat functionality
 - Export management
-- WebSocket support for Apollo operations
+- REST API endpoints for Apollo operations
 
 ### Router Aggregation Pattern
 
@@ -33,9 +33,7 @@ Both versions use FastAPI's `APIRouter` pattern:
 api_router = APIRouter()
 api_router.include_router(root.router)
 api_router.include_router(contacts.router)
-api_router.include_router(contacts_websocket.router)
 api_router.include_router(companies.router)
-api_router.include_router(companies_websocket.router)
 api_router.include_router(imports.router)
 
 # v2
@@ -44,7 +42,6 @@ api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(ai_chats.router)
 api_router.include_router(apollo.router)
-api_router.include_router(apollo_websocket.router)
 api_router.include_router(exports.router, prefix="/exports")
 ```
 
@@ -113,30 +110,6 @@ api_router.include_router(exports.router, prefix="/exports")
 - Default role: "Member"
 - Admin role: "Admin"
 - Role stored in `user_profiles` table
-
-### WebSocket Authentication
-
-#### `get_current_user_websocket`
-
-**Purpose:** Authenticate WebSocket connections
-
-**Flow:**
-
-1. Token passed as query parameter: `ws://host/path?token=<jwt>`
-2. Validates token (same as HTTP)
-3. Creates dedicated database session for WebSocket
-4. Returns `User` object or closes connection with error code
-
-**WebSocket Close Codes:**
-
-- `1008` (Policy Violation): Authentication failures
-- `1011` (Internal Error): Server errors during authentication
-
-**Key Differences from HTTP:**
-
-- Manual session management (not using dependency injection)
-- Connection closure instead of HTTP exceptions
-- Query parameter instead of header
 
 ### Write Key Authentication (v1)
 
@@ -356,105 +329,6 @@ except Exception as exc:
 - Supports additional query parameters for filtering
 - Cursor-based pagination
 
-## 7. WebSocket Implementation
-
-### WebSocket Manager Pattern
-
-**Connection Manager:**
-```python
-class ApolloWebSocketManager:
-    """Manages WebSocket connections."""
-    
-    def __init__(self):
-        self.active_connections: dict[str, WebSocket] = {}
-    
-    async def connect(self, websocket: WebSocket, user: User):
-        """Accept and store connection."""
-        await websocket.accept()
-        self.active_connections[str(user.id)] = websocket
-    
-    def disconnect(self, user_id: str):
-        """Remove disconnected connection."""
-        if user_id in self.active_connections:
-            del self.active_connections[user_id]
-    
-    async def send_message(self, websocket: WebSocket, message: dict):
-        """Send JSON message."""
-        await websocket.send_json(message)
-```
-
-**Features:**
-
-- Per-user connection tracking
-- Automatic connection management
-- JSON message serialization
-- Error handling
-
-### WebSocket Endpoint Pattern
-
-**Standard Pattern:**
-```python
-@router.websocket("/endpoint")
-async def websocket_endpoint(
-    websocket: WebSocket,
-    token: Optional[str] = Query(None),
-):
-    """WebSocket endpoint."""
-    # Authenticate
-    user = await get_current_user_websocket(websocket, token)
-    
-    # Connect
-    await connection_manager.connect(websocket, user)
-    
-    try:
-        while True:
-            # Receive message
-            data = await websocket.receive_json()
-            
-            # Process request
-            request = RequestModel.model_validate(data)
-            
-            # Handle operation
-            async with AsyncSessionLocal() as session:
-                result = await service.method(session, request, user)
-            
-            # Send response
-            response = ResponseModel(...)
-            await connection_manager.send_message(websocket, response.model_dump())
-            
-    except WebSocketDisconnect:
-        connection_manager.disconnect(str(user.id))
-    except Exception as exc:
-        logger.exception("WebSocket error: %s", exc)
-        await websocket.close(code=1011)
-```
-
-### WebSocket Request/Response Pattern
-
-**Request Structure:**
-```json
-{
-    "action": "search_contacts",
-    "data": {
-        "url": "https://app.apollo.io/...",
-        "limit": 100,
-        "offset": 0
-    }
-}
-```
-
-**Response Structure:**
-```json
-{
-    "action": "search_contacts",
-    "status": "success",
-    "data": {
-        "count": 1234,
-        "results": [...]
-    }
-}
-```
-
 **Error Response:**
 ```json
 {
@@ -535,7 +409,6 @@ async def websocket_endpoint(
 
 - v1: Write keys via headers
 - v2: JWT tokens via `get_current_user`
-- WebSocket: Token via query parameter
 
 **Filter Parameters:**
 
@@ -594,7 +467,6 @@ async def websocket_endpoint(
 - Write key authentication
 - Legacy endpoints
 - Direct service calls
-- WebSocket support for contacts/companies
 
 ### v2 Characteristics
 
@@ -603,7 +475,6 @@ async def websocket_endpoint(
 - Apollo integration
 - AI chat functionality
 - Export management
-- WebSocket support for Apollo
 
 ## Summary
 
@@ -612,7 +483,6 @@ The API layer demonstrates:
 1. **Clear Versioning**: Separate v1 and v2 with different authentication
 2. **Consistent Patterns**: Filter resolution, pagination, error handling
 3. **Security**: JWT authentication, role-based access control
-4. **Real-time Support**: WebSocket implementation for long-running operations
 5. **Developer Experience**: Comprehensive logging, clear error messages, OpenAPI docs
 
 The architecture supports both legacy API clients (v1) and modern authenticated clients (v2), with clear migration path.

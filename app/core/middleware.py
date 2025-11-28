@@ -147,3 +147,19 @@ class TimingMiddleware(BaseHTTPMiddleware):
         )
         return response
 
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    """Echoes X-Request-Id header from request to response if provided."""
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        """Echo X-Request-Id header in response if present in request."""
+        request_id = request.headers.get("X-Request-Id")
+        response = await call_next(request)
+        if request_id:
+            response.headers["X-Request-Id"] = request_id
+            logger.debug(
+                "Echoed X-Request-Id header: request_id=%s path=%s",
+                request_id,
+                request.url.path,
+            )
+        return response

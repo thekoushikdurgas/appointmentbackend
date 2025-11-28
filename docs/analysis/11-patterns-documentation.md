@@ -4,30 +4,36 @@
 
 This document catalogs the key design patterns, optimization techniques, and architectural patterns used throughout the codebase.
 
-## 1. Conditional JOIN Pattern
+## 1. UUID-Based Lookup Pattern (No JOINs)
 
 ### Pattern Description
 
-**Purpose:** Optimize database queries by only joining tables when filters require them.
+**Purpose:** Optimize database queries by using EXISTS subqueries instead of JOINs, then batch fetching related entities by UUID.
 
 **Implementation:**
 ```python
-# Determine joins needed
-needs_company = self._needs_company_join(filters)
-needs_contact_meta = self._needs_contact_metadata_join(filters)
-needs_company_meta = self._needs_company_metadata_join(filters)
+# Always use minimal query (no JOINs)
+stmt = self.base_query_minimal()  # Only contacts table
 
-# Select appropriate base query
-if needs_company_meta or needs_contact_meta:
-    stmt = self.base_query_with_metadata()  # All joins
-elif needs_company:
-    stmt = self.base_query_with_company()  # Company only
-else:
-    stmt = self.base_query_minimal()  # No joins
+# Determine which EXISTS subqueries are needed
+needs_company = self._needs_company_exists_subquery(filters)
+needs_contact_meta = self._needs_contact_metadata_exists_subquery(filters)
+needs_company_meta = self._needs_company_metadata_exists_subquery(filters)
+
+# Apply filters using EXISTS subqueries (no JOINs)
+if needs_company:
+    company_subq = select(1).select_from(Company).where(Company.uuid == Contact.company_id)
+    # ... apply company filters ...
+    stmt = stmt.where(exists(company_subq))
+
+# Repository returns only Contact objects
+# Service layer batch fetches related entities by UUIDs
 ```
 
 **Benefits:**
-- 10x faster for simple queries
+- No JOIN overhead - queries are simpler and faster
+- Better scalability - can optimize each query independently
+- Reduced query complexity - easier to understand and maintain
 - Reduced query complexity
 - Better index usage
 - Lower database load

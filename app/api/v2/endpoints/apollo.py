@@ -255,10 +255,29 @@ def _build_filter_from_base(
     # to only include the specific value
     if param_value is not None:
         # This is a value count - need to modify filter to use only this value
-        # For most parameters, we need to remap with the single value
-        # This is complex, so we'll fall back to remapping for now
-        # TODO: Optimize this further by directly modifying filter_dict
+        # For simple parameters, we can directly modify filter_dict
+        # For complex parameters (like personTitles[] with includeSimilarTitles), we need remapping
         
+        # Simple parameter mappings that can be directly modified
+        simple_param_mappings = {
+            "personSeniorities[]": "seniority",
+            "personDepartmentOrSubdepartments[]": "department",
+            "personLocations[]": "contact_location",
+            "organizationLocations[]": "company_location",
+            "contactEmailStatusV2[]": "email_status",
+            "qOrganizationKeywordTags[]": "keywords",
+            "qKeywords": "search",
+        }
+        
+        # Check if this is a simple parameter we can directly modify
+        if param_name in simple_param_mappings:
+            filter_key = simple_param_mappings[param_name]
+            # For comma-separated filters, replace with single value
+            filter_dict[filter_key] = param_value
+            return filter_dict, base_unmapped_dict
+        
+        # For complex parameters (personTitles[], etc.), we need remapping
+        # This handles cases like personTitles[] which depends on includeSimilarTitles
         if all_apollo_params and apollo_service:
             # Build raw params with only this value
             raw_params = {}
@@ -269,7 +288,7 @@ def _build_filter_from_base(
                     else:
                         raw_params[key] = values
             
-            # Remap with single value
+            # Remap with single value (for complex parameters)
             value_filter_dict, value_unmapped_dict = apollo_service.map_to_contact_filters(
                 raw_params, include_unmapped=True
             )
@@ -1776,7 +1795,7 @@ async def get_contact_uuids_from_apollo_url(
         )
 
         # Step 4: Get contact UUIDs
-        uuids = await contacts_service.get_uuids_by_filters(session, filters, limit, offset)
+        uuids = await contacts_service.get_uuids_by_filters(session, filters, limit)
 
         logger.info(
             "Apollo contacts UUID completed: user_id=%s count=%d",

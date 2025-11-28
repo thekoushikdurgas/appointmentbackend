@@ -44,11 +44,16 @@ class Settings(BaseSettings):
     DATABASE_POOL_RECYCLE: int = 1800
     DATABASE_POOL_PRE_PING: bool = True  # Verify connections before using
     DATABASE_POOL_RESET_ON_RETURN: str = "commit"  # Better connection reuse
+    # Connection pool monitoring
+    ENABLE_POOL_MONITORING: bool = Field(True, alias="ENABLE_POOL_MONITORING")  # Enable pool statistics tracking
+    POOL_MONITORING_INTERVAL: int = Field(60, alias="POOL_MONITORING_INTERVAL")  # Log pool stats every N seconds
     DATABASE_URL: Optional[str] = None
+    DATABASE_REPLICA_URL: Optional[str] = Field(None, alias="DATABASE_REPLICA_URL", description="Optional replica database URL for read operations")
+    USE_REPLICA: bool = Field(False, alias="USE_REPLICA", description="Whether to use replica database for read operations")
     # Query compression and caching
     ENABLE_QUERY_COMPRESSION: bool = True  # Enable PostgreSQL query compression
     QUERY_CACHE_TTL: int = 300  # Query result cache TTL in seconds
-    ENABLE_QUERY_CACHING: bool = False  # Enable Redis-based query caching (requires Redis)
+    ENABLE_QUERY_CACHING: bool = False  # Enable in-memory query caching
     ENABLE_QUERY_MONITORING: bool = True  # Enable query performance monitoring
     SLOW_QUERY_THRESHOLD: float = 1.0  # Threshold in seconds for logging slow queries
     USE_APPROXIMATE_COUNTS: bool = False  # Use approximate counts for very large unfiltered queries
@@ -85,11 +90,13 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: List[AnyHttpUrl] = [
         AnyHttpUrl("http://localhost:3000"),
-        AnyHttpUrl("http://localhost:8000"),
+        AnyHttpUrl("http://127.0.0.1:8000"),
         AnyHttpUrl("http://127.0.0.1:3000"),
         AnyHttpUrl("http://127.0.0.1:8000"),
         AnyHttpUrl("http://54.87.173.234"),
         AnyHttpUrl("http://54.87.173.234:8000"),
+        AnyHttpUrl("http://3.88.218.42"),
+        AnyHttpUrl("http://3.88.218.42:3000"),
     ]
     TRUSTED_HOSTS: List[str] = [
         "54.87.173.234",
@@ -102,15 +109,6 @@ class Settings(BaseSettings):
     USE_PROXY_HEADERS: bool = True
     FORWARDED_ALLOW_IPS: str = "*"
 
-    # Celery / Redis
-    REDIS_HOST: str = "54.87.173.234"
-    REDIS_PORT: int = 6379
-    REDIS_DB: int = 0
-    REDIS_URL: Optional[str] = None
-    CELERY_BROKER_URL: Optional[str] = None
-    CELERY_RESULT_BACKEND: Optional[str] = None
-    CELERY_TASK_TIME_LIMIT: int = 60 * 30  # 30 minutes
-    CELERY_TASK_SOFT_TIME_LIMIT: int = 60 * 25
 
     # File uploads
     UPLOAD_DIR: str = "./uploads"
@@ -127,6 +125,17 @@ class Settings(BaseSettings):
     S3_USE_PRESIGNED_URLS: bool = Field(True, alias="S3_USE_PRESIGNED_URLS")
     S3_PRESIGNED_URL_EXPIRATION: int = Field(3600, alias="S3_PRESIGNED_URL_EXPIRATION")  # 1 hour in seconds
 
+    # BulkMailVerifier Configuration
+    BULKMAILVERIFIER_EMAIL: Optional[str] = Field("mr.ayansaha@gmail.com", alias="BULKMAILVERIFIER_EMAIL")
+    BULKMAILVERIFIER_PASSWORD: Optional[str] = Field("Bangalore@2020", alias="BULKMAILVERIFIER_PASSWORD")
+    BULKMAILVERIFIER_BASE_URL: str = Field(
+        "https://app.bulkmailverifier.com", alias="BULKMAILVERIFIER_BASE_URL"
+    )
+    BULKMAILVERIFIER_MAX_RETRIES: int = Field(10, alias="BULKMAILVERIFIER_MAX_RETRIES")
+
+    # Gemini AI Configuration
+    GEMINI_API_KEY: Optional[str] = Field(None, alias="GEMINI_API_KEY")
+
     # Pagination defaults
     # WARNING: Setting DEFAULT_PAGE_SIZE to None enables unlimited queries by default.
     # This can have significant performance and memory implications for large datasets.
@@ -138,12 +147,25 @@ class Settings(BaseSettings):
     ENABLE_RESPONSE_COMPRESSION: bool = True
     COMPRESSION_MIN_SIZE: int = 1000  # Minimum response size to compress (bytes)
     
-    # Celery worker configuration
-    CELERY_WORKER_CONCURRENCY: int = 4  # Number of concurrent worker processes
     
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    # Big Data Handling Configuration
+    # Streaming configuration
+    STREAMING_CHUNK_SIZE: int = Field(1024 * 1024, alias="STREAMING_CHUNK_SIZE")  # 1MB default chunk size for streaming responses
+    ENABLE_STREAMING_QUERIES: bool = Field(True, alias="ENABLE_STREAMING_QUERIES")  # Enable streaming for large database queries
+    MAX_STREAMING_RESULTS: Optional[int] = Field(None, alias="MAX_STREAMING_RESULTS")  # Maximum results to stream (None = unlimited)
+    
+    # File upload configuration
+    MAX_UPLOAD_CHUNK_SIZE: int = Field(1024 * 1024, alias="MAX_UPLOAD_CHUNK_SIZE")  # 1MB default chunk size for file uploads
+    MAX_UPLOAD_SIZE: Optional[int] = Field(None, alias="MAX_UPLOAD_SIZE")  # Maximum file upload size in bytes (None = unlimited)
+    
+    # Parallel processing configuration
+    PARALLEL_PROCESSING_WORKERS: int = Field(4, alias="PARALLEL_PROCESSING_WORKERS")  # Number of workers for parallel processing
+    PARALLEL_PROCESSING_MAX_WORKERS: int = Field(8, alias="PARALLEL_PROCESSING_MAX_WORKERS")  # Maximum workers for parallel processing
+    ENABLE_PARALLEL_PROCESSING: bool = Field(True, alias="ENABLE_PARALLEL_PROCESSING")  # Enable parallel processing utilities
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -198,44 +220,6 @@ class Settings(BaseSettings):
         )
         return assembled
 
-    @field_validator("REDIS_URL", mode="before")
-    @classmethod
-    def assemble_redis_url(cls, value: Optional[str], info: ValidationInfo) -> str:
-        """Build a Redis connection URL from component environment variables."""
-        logger.debug(
-            "Entering Settings.assemble_redis_url provided=%s", bool(value and isinstance(value, str))
-        )
-        if value and isinstance(value, str):
-            logger.debug("Exiting Settings.assemble_redis_url using provided URL.")
-            return value
-        host = cls._value_from_info(info, "REDIS_HOST")
-        port = cls._value_from_info(info, "REDIS_PORT")
-        db = cls._value_from_info(info, "REDIS_DB")
-        redis_url = f"redis://{host}:{port}/{db}"
-        logger.debug("Exiting Settings.assemble_redis_url result=%s", redis_url)
-        return redis_url
-
-    @field_validator("CELERY_BROKER_URL", "CELERY_RESULT_BACKEND", mode="before")
-    @classmethod
-    def default_celery_urls(cls, value: Optional[str], info: ValidationInfo) -> str:
-        """Default Celery broker/result URLs to Redis when unset."""
-        logger.debug(
-            "Entering Settings.default_celery_urls provided=%s", bool(value and isinstance(value, str))
-        )
-        if value and isinstance(value, str):
-            logger.debug("Exiting Settings.default_celery_urls using provided value.")
-            return value
-        redis_url = cls._value_from_info(info, "REDIS_URL")
-        if redis_url:
-            logger.debug(
-                "Exiting Settings.default_celery_urls reusing redis_url=%s", redis_url
-            )
-            return redis_url
-        assembled = cls.assemble_redis_url(None, info)
-        logger.debug(
-            "Exiting Settings.default_celery_urls assembled redis_url=%s", assembled
-        )
-        return assembled
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

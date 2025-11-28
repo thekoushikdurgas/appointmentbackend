@@ -37,7 +37,6 @@ def setup_logging() -> None:
     logging.getLogger("uvicorn").setLevel(logging.INFO)
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
-    logging.getLogger("celery").setLevel(logging.INFO)
 
 
 def get_logger(name: str | None = None) -> logging.Logger:

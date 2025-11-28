@@ -7,21 +7,25 @@ import time
 from typing import Any, Callable, Iterable, List, Optional, Union
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_admin, get_current_user
+from app.api.deps import check_can_modify_resources, get_current_admin, get_current_free_or_pro_user, get_current_user
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
+from app.models.contacts import Contact
 from app.models.user import User
+from app.repositories.contacts import ContactRepository
 from app.schemas.common import CountResponse, CursorPage, UuidListResponse
 from app.schemas.contacts import ContactCreate, ContactDetail, ContactListItem, ContactSimpleItem
 from app.schemas.filters import AttributeListParams, ContactFilterParams
 from app.services.contacts_service import ContactsService
 from app.utils.cursor import decode_offset_cursor
 from app.utils.pagination import build_pagination_link
+from app.utils.streaming_queries import stream_query_results
 
 
 settings = get_settings()
@@ -137,8 +141,16 @@ def _resolve_pagination(
     limit: Optional[int],
 ) -> Optional[int]:
     """Choose the most appropriate page size within configured bounds."""
-    # If explicit limit is provided, use it (no cap when explicitly requested)
+    # If explicit limit is provided, cap it at MAX_PAGE_SIZE if set
     if limit is not None:
+        if settings.MAX_PAGE_SIZE is not None:
+            resolved = min(limit, settings.MAX_PAGE_SIZE)
+            logger.debug(
+                "Resolved pagination: explicit limit=%d capped to %d",
+                limit,
+                resolved,
+            )
+            return resolved
         logger.debug(
             "Resolved pagination: explicit limit=%d (no cap applied)",
             limit,
@@ -250,6 +262,156 @@ async def list_contacts(
     return page
 
 
+@router.get("/stream/")
+async def stream_contacts(
+    request: Request,
+    filters: ContactFilterParams = Depends(resolve_contact_filters),
+    format: str = Query("jsonl", regex="^(jsonl|csv)$"),
+    max_results: Optional[int] = Query(None, ge=1, description="Maximum results to stream"),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """
+    Stream contacts as JSONL or CSV for large datasets.
+    
+    This endpoint is optimized for large result sets and streams data in chunks
+    without loading everything into memory. Use this for exports or bulk operations.
+    
+    Formats:
+    - jsonl: Newline-delimited JSON (one JSON object per line)
+    - csv: Comma-separated values with header row
+    
+    Example:
+        GET /api/v1/contacts/stream/?format=jsonl&email=example.com
+    """
+    if not settings.ENABLE_STREAMING_QUERIES:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Streaming queries are disabled",
+        )
+    
+    # Apply max_results limit from settings if not specified
+    if max_results is None and settings.MAX_STREAMING_RESULTS:
+        max_results = settings.MAX_STREAMING_RESULTS
+    
+    logger.info(
+        "Streaming contacts: format=%s max_results=%s filters=%s",
+        format,
+        max_results,
+        sorted(filters.model_dump(exclude_none=True).keys()),
+    )
+    
+    # Build query using repository - use a simplified approach for streaming
+    # For full filtering, we'd need to replicate the repository's query building logic
+    # For now, use a basic query with common filters
+    contact_repo = ContactRepository()
+    
+    # Start with base query
+    query = select(Contact)
+    
+    # Apply basic filters that don't require complex joins
+    if filters.email:
+        query = query.where(Contact.email.ilike(f"%{filters.email}%"))
+    if filters.first_name:
+        query = query.where(Contact.first_name.ilike(f"%{filters.first_name}%"))
+    if filters.last_name:
+        query = query.where(Contact.last_name.ilike(f"%{filters.last_name}%"))
+    if filters.title:
+        query = query.where(Contact.title.ilike(f"%{filters.title}%"))
+    
+    # Note: For full filter support, we'd need to use the repository's full query building
+    # This is a simplified version for streaming large datasets
+    
+    async def generate_jsonl():
+        """Generate JSONL stream using optimized serialization."""
+        from pydantic import TypeAdapter
+        
+        count = 0
+        # Use TypeAdapter for efficient JSON serialization
+        adapter = TypeAdapter(dict)
+        
+        async for batch in stream_query_results(
+            session,
+            query,
+            batch_size=1000,
+            max_results=max_results,
+        ):
+            for contact in batch:
+                # Convert contact to dict (simplified for streaming)
+                contact_dict = {
+                    "uuid": contact.uuid,
+                    "first_name": contact.first_name,
+                    "last_name": contact.last_name,
+                    "email": contact.email,
+                    "title": contact.title,
+                    "mobile_phone": contact.mobile_phone,
+                    "company_id": contact.company_id,
+                }
+                # Use TypeAdapter for faster serialization
+                json_line = adapter.dump_json(contact_dict).decode("utf-8") + "\n"
+                yield json_line
+                count += 1
+                if max_results and count >= max_results:
+                    break
+        logger.info("Streamed %d contacts as JSONL", count)
+    
+    async def generate_csv():
+        """Generate CSV stream."""
+        import csv
+        from io import StringIO
+        
+        # Write header
+        header = ["uuid", "first_name", "last_name", "email", "title", "mobile_phone", "company_id"]
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(header)
+        yield buffer.getvalue()
+        buffer.seek(0)
+        buffer.truncate(0)
+        
+        count = 0
+        async for batch in stream_query_results(
+            session,
+            query,
+            batch_size=1000,
+            max_results=max_results,
+        ):
+            for contact in batch:
+                writer.writerow([
+                    contact.uuid,
+                    contact.first_name or "",
+                    contact.last_name or "",
+                    contact.email or "",
+                    contact.title or "",
+                    contact.mobile_phone or "",
+                    contact.company_id or "",
+                ])
+                yield buffer.getvalue()
+                buffer.seek(0)
+                buffer.truncate(0)
+                count += 1
+                if max_results and count >= max_results:
+                    break
+        logger.info("Streamed %d contacts as CSV", count)
+    
+    if format == "jsonl":
+        return StreamingResponse(
+            generate_jsonl(),
+            media_type="application/x-ndjson",
+            headers={
+                "Content-Disposition": "attachment; filename=contacts.jsonl",
+            },
+        )
+    else:  # csv
+        return StreamingResponse(
+            generate_csv(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=contacts.csv",
+            },
+        )
+
+
 def _parse_iterable_like(value: Any) -> Iterable[str]:
     """Best effort parsing for list-like attribute payloads."""
     if value is None:
@@ -343,12 +505,15 @@ async def get_contact_uuids(
 @router.post("/", response_model=ContactDetail, status_code=status.HTTP_201_CREATED)
 async def create_contact(
     payload: ContactCreate,
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_current_free_or_pro_user),  # Free and Pro users can create
     _: None = Depends(require_contacts_write_key),
     session: AsyncSession = Depends(get_db),
 ) -> ContactDetail:
-    """Create a new contact with optional fields."""
-    logger.info("Creating contact via API")
+    """Create a new contact with optional fields.
+    
+    Free users and Pro users can create contacts.
+    """
+    logger.info("Creating contact via API: user_id=%s", current_user.id)
     contact = await service.create_contact(session, payload)
     logger.info("Created contact via API: uuid=%s", contact.uuid)
     return contact

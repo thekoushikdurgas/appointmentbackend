@@ -792,6 +792,8 @@ CONTACT_FILTER_COLUMN_MAP: dict[str, str] = {
     "cursor": "Cursor token override",
     "exclude_company_ids": "Contact.company_id (exclusion list)",
     "exclude_titles": "Contact.title (exclusion list)",
+    "jumble_title_words": "Contact.title (jumble words - AND logic)",
+    "normalize_title_column": "Contact.title (normalization flag)",
     "exclude_company_locations": "Company.text_search (exclusion list)",
     "exclude_company_name": "Company.name (exclusion list)",
     "exclude_domain_list": "CompanyMetadata.website (domain exclusion list)",

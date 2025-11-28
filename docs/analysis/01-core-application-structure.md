@@ -46,7 +46,7 @@ The middleware is added in reverse order of execution (last added = first execut
    - Configured with specific allowed origins
 
 2. **CORS-Friendly Trusted Host Middleware**
-   - Custom middleware that allows OPTIONS and WebSocket requests to bypass host validation
+   - Custom middleware that allows OPTIONS requests to bypass host validation
    - Ensures CORS preflight requests aren't blocked
 
 3. **Proxy Headers Middleware** (if enabled)
@@ -148,13 +148,11 @@ The `Settings` class uses Pydantic's `BaseSettings` with:
 - `TRUSTED_HOSTS`: List of trusted hostnames
 - `USE_PROXY_HEADERS`: Boolean for reverse proxy support
 
-#### Celery/Redis Configuration
+#### Background Tasks Configuration
 
-- `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`
-- `CELERY_BROKER_URL`: Auto-assembled from Redis URL
-- `CELERY_RESULT_BACKEND`: Auto-assembled from Redis URL
-- `CELERY_TASK_TIME_LIMIT`: 30 minutes
-- `CELERY_TASK_SOFT_TIME_LIMIT`: 25 minutes
+- `BACKGROUND_TASK_CONCURRENCY`: Maximum concurrent background tasks (default: 10)
+- `BACKGROUND_TASK_SHUTDOWN_TIMEOUT`: Timeout for graceful shutdown in seconds (default: 30)
+- Background tasks use FastAPI's `BackgroundTasks` with in-memory status tracking
 
 #### AWS S3 Configuration
 
@@ -339,7 +337,6 @@ Request → get_db() → AsyncSessionLocal() →
 **Features:**
 
 - Bypasses host validation for OPTIONS requests (CORS preflight)
-- Bypasses host validation for WebSocket upgrade requests
 - Validates host for other requests
 - Returns 400 for invalid hosts
 
@@ -414,7 +411,6 @@ Request → get_db() → AsyncSessionLocal() →
 
 - Trusted hosts configuration
 - CORS-friendly implementation
-- WebSocket support
 
 ## Summary
 

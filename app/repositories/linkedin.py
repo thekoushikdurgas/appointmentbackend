@@ -13,6 +13,14 @@ from app.core.logging import get_logger
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
 from app.repositories.base import AsyncRepository
+from app.utils.batch_lookup import (
+    batch_fetch_companies_by_uuids,
+    batch_fetch_company_metadata_by_uuids,
+    batch_fetch_contact_metadata_by_uuids,
+    fetch_company_by_uuid,
+    fetch_company_metadata_by_uuid,
+    fetch_contact_metadata_by_uuid,
+)
 
 logger = get_logger(__name__)
 
@@ -37,28 +45,49 @@ class LinkedInRepository(AsyncRepository):
         """
         logger.debug("Entering search_contacts_by_linkedin_url linkedin_url=%s", linkedin_url)
         
-        # Create aliases for joins
-        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata")
-        company_alias = aliased(Company, name="company")
-        company_meta_alias = aliased(CompanyMetadata, name="company_metadata")
+        # Use EXISTS subquery to filter contacts by LinkedIn URL in metadata
+        from sqlalchemy import exists
         
-        # Build query with all joins
         stmt: Select = (
-            select(Contact, contact_meta_alias, company_alias, company_meta_alias)
-            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
-            .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
-            .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+            select(Contact)
             .where(
-                and_(
-                    contact_meta_alias.linkedin_url.isnot(None),
-                    contact_meta_alias.linkedin_url != "_",
-                    contact_meta_alias.linkedin_url.ilike(f"%{linkedin_url}%"),
+                exists(
+                    select(1)
+                    .select_from(ContactMetadata)
+                    .where(
+                        and_(
+                            ContactMetadata.uuid == Contact.uuid,
+                            ContactMetadata.linkedin_url.isnot(None),
+                            ContactMetadata.linkedin_url != "_",
+                            ContactMetadata.linkedin_url.ilike(f"%{linkedin_url}%"),
+                        )
+                    )
                 )
             )
         )
         
         result = await session.execute(stmt)
-        rows = result.all()
+        contacts = result.scalars().all()
+        
+        # Extract foreign keys
+        company_ids = {c.company_id for c in contacts if c.company_id}
+        contact_uuids = {c.uuid for c in contacts}
+        
+        # Batch fetch related entities
+        companies_dict = await batch_fetch_companies_by_uuids(session, company_ids)
+        contact_meta_dict = await batch_fetch_contact_metadata_by_uuids(session, contact_uuids)
+        
+        # Extract company UUIDs from fetched companies
+        company_uuids = {c.uuid for c in companies_dict.values()}
+        company_meta_dict = await batch_fetch_company_metadata_by_uuids(session, company_uuids)
+        
+        # Reconstruct tuples
+        rows = []
+        for contact in contacts:
+            company = companies_dict.get(contact.company_id) if contact.company_id else None
+            contact_meta = contact_meta_dict.get(contact.uuid)
+            company_meta = company_meta_dict.get(company.uuid) if company else None
+            rows.append((contact, contact_meta, company, company_meta))
         
         logger.debug(
             "Exiting search_contacts_by_linkedin_url found=%d contacts",
@@ -76,22 +105,34 @@ class LinkedInRepository(AsyncRepository):
         """
         logger.debug("Entering search_companies_by_linkedin_url linkedin_url=%s", linkedin_url)
         
-        company_meta_alias = aliased(CompanyMetadata, name="company_metadata")
+        # Use EXISTS subquery to filter companies by LinkedIn URL in metadata
+        from sqlalchemy import exists
         
-        # Build query with company metadata join
         stmt: Select = (
-            select(Company, company_meta_alias)
-            .outerjoin(company_meta_alias, Company.uuid == company_meta_alias.uuid)
+            select(Company)
             .where(
-                and_(
-                    company_meta_alias.linkedin_url.isnot(None),
-                    company_meta_alias.linkedin_url.ilike(f"%{linkedin_url}%"),
+                exists(
+                    select(1)
+                    .select_from(CompanyMetadata)
+                    .where(
+                        and_(
+                            CompanyMetadata.uuid == Company.uuid,
+                            CompanyMetadata.linkedin_url.isnot(None),
+                            CompanyMetadata.linkedin_url.ilike(f"%{linkedin_url}%"),
+                        )
+                    )
                 )
             )
         )
         
         result = await session.execute(stmt)
-        rows = result.all()
+        companies = result.scalars().all()
+        
+        company_uuids = {c.uuid for c in companies}
+        company_meta_dict = await batch_fetch_company_metadata_by_uuids(session, company_uuids)
+        
+        # Reconstruct tuples
+        rows = [(company, company_meta_dict.get(company.uuid)) for company in companies]
         
         logger.debug(
             "Exiting search_companies_by_linkedin_url found=%d companies",
@@ -109,27 +150,39 @@ class LinkedInRepository(AsyncRepository):
         """
         logger.debug("Entering find_contact_by_exact_linkedin_url linkedin_url=%s", linkedin_url)
         
-        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata")
-        company_alias = aliased(Company, name="company")
-        company_meta_alias = aliased(CompanyMetadata, name="company_metadata")
+        # Use EXISTS subquery to find contact by exact LinkedIn URL
+        from sqlalchemy import exists
         
         stmt: Select = (
-            select(Contact, contact_meta_alias, company_alias, company_meta_alias)
-            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
-            .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
-            .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
+            select(Contact)
             .where(
-                and_(
-                    contact_meta_alias.linkedin_url.isnot(None),
-                    contact_meta_alias.linkedin_url != "_",
-                    contact_meta_alias.linkedin_url.ilike(linkedin_url),
+                exists(
+                    select(1)
+                    .select_from(ContactMetadata)
+                    .where(
+                        and_(
+                            ContactMetadata.uuid == Contact.uuid,
+                            ContactMetadata.linkedin_url.isnot(None),
+                            ContactMetadata.linkedin_url != "_",
+                            ContactMetadata.linkedin_url.ilike(linkedin_url),
+                        )
+                    )
                 )
             )
             .limit(1)
         )
         
         result = await session.execute(stmt)
-        row = result.first()
+        contact = result.scalar_one_or_none()
+        
+        if not contact:
+            return None
+        
+        company = await fetch_company_by_uuid(session, contact.company_id) if contact.company_id else None
+        contact_meta = await fetch_contact_metadata_by_uuid(session, contact.uuid)
+        company_meta = await fetch_company_metadata_by_uuid(session, company.uuid) if company else None
+        
+        row = (contact, contact_meta, company, company_meta)
         
         logger.debug(
             "Exiting find_contact_by_exact_linkedin_url found=%s",
@@ -147,22 +200,36 @@ class LinkedInRepository(AsyncRepository):
         """
         logger.debug("Entering find_company_by_exact_linkedin_url linkedin_url=%s", linkedin_url)
         
-        company_meta_alias = aliased(CompanyMetadata, name="company_metadata")
+        # Use EXISTS subquery to find company by exact LinkedIn URL
+        from sqlalchemy import exists
         
         stmt: Select = (
-            select(Company, company_meta_alias)
-            .outerjoin(company_meta_alias, Company.uuid == company_meta_alias.uuid)
+            select(Company)
             .where(
-                and_(
-                    company_meta_alias.linkedin_url.isnot(None),
-                    company_meta_alias.linkedin_url.ilike(linkedin_url),
+                exists(
+                    select(1)
+                    .select_from(CompanyMetadata)
+                    .where(
+                        and_(
+                            CompanyMetadata.uuid == Company.uuid,
+                            CompanyMetadata.linkedin_url.isnot(None),
+                            CompanyMetadata.linkedin_url.ilike(linkedin_url),
+                        )
+                    )
                 )
             )
             .limit(1)
         )
         
         result = await session.execute(stmt)
-        row = result.first()
+        company = result.scalar_one_or_none()
+        
+        if not company:
+            return None
+        
+        company_meta = await fetch_company_metadata_by_uuid(session, company.uuid)
+        
+        row = (company, company_meta)
         
         logger.debug(
             "Exiting find_company_by_exact_linkedin_url found=%s",
@@ -180,16 +247,17 @@ class LinkedInRepository(AsyncRepository):
         """
         logger.debug("Entering get_company_contacts company_uuid=%s", company_uuid)
         
-        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata")
-        
-        stmt: Select = (
-            select(Contact, contact_meta_alias)
-            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
-            .where(Contact.company_id == company_uuid)
-        )
+        # Fetch contacts only (no joins)
+        stmt: Select = select(Contact).where(Contact.company_id == company_uuid)
         
         result = await session.execute(stmt)
-        rows = result.all()
+        contacts = result.scalars().all()
+        
+        contact_uuids = {c.uuid for c in contacts}
+        contact_meta_dict = await batch_fetch_contact_metadata_by_uuids(session, contact_uuids)
+        
+        # Reconstruct tuples
+        rows = [(contact, contact_meta_dict.get(contact.uuid)) for contact in contacts]
         
         logger.debug(
             "Exiting get_company_contacts found=%d contacts",
@@ -451,25 +519,23 @@ class LinkedInRepository(AsyncRepository):
             logger.debug("Exiting find_contacts_by_company_uuids: empty UUID list")
             return {}
         
-        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata")
-        
-        # Batch query: fetch all contacts for all companies in one query
-        stmt: Select = (
-            select(Contact, contact_meta_alias)
-            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
-            .where(Contact.company_id.in_(company_uuids))
-        )
+        # Fetch contacts only (no joins)
+        stmt: Select = select(Contact).where(Contact.company_id.in_(company_uuids))
         
         result = await session.execute(stmt)
-        rows = result.all()
+        contacts = result.scalars().all()
         
-        # Group contacts by company_id
+        contact_uuids = {c.uuid for c in contacts}
+        contact_meta_dict = await batch_fetch_contact_metadata_by_uuids(session, contact_uuids)
+        
+        # Group contacts by company_id and reconstruct tuples
         contacts_by_company: dict[str, list[tuple[Contact, Optional[ContactMetadata]]]] = {}
-        for contact, contact_meta in rows:
+        for contact in contacts:
             company_uuid = contact.company_id
             if company_uuid:
                 if company_uuid not in contacts_by_company:
                     contacts_by_company[company_uuid] = []
+                contact_meta = contact_meta_dict.get(contact.uuid)
                 contacts_by_company[company_uuid].append((contact, contact_meta))
         
         logger.debug(

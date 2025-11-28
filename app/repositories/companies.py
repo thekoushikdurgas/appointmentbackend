@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Sequence
 
-from sqlalchemy import Select, and_, cast, distinct, func, or_, select, text, true
+from sqlalchemy import Select, and_, cast, distinct, func, or_, select, text, true, exists
 from sqlalchemy.types import Text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -14,6 +14,7 @@ from app.core.logging import get_logger
 from app.models.companies import Company, CompanyMetadata
 from app.repositories.base import AsyncRepository
 from app.schemas.filters import AttributeListParams, CompanyFilterParams
+from app.utils.batch_lookup import fetch_company_metadata_by_uuid
 from app.utils.query import (
     apply_ilike_filter,
     apply_numeric_range_filter,
@@ -35,8 +36,8 @@ class CompanyRepository(AsyncRepository[Company]):
         logger.debug("Exiting CompanyRepository.__init__")
 
     @staticmethod
-    def _needs_company_metadata_join(filters: CompanyFilterParams) -> bool:
-        """Determine if CompanyMetadata table join is needed based on filters."""
+    def _needs_company_metadata_exists_subquery(filters: CompanyFilterParams) -> bool:
+        """Determine if CompanyMetadata table EXISTS subquery is needed based on filters."""
         company_meta_fields = [
             filters.city, filters.state, filters.country, filters.phone_number,
             filters.website, filters.linkedin_url, filters.facebook_url,
@@ -46,8 +47,8 @@ class CompanyRepository(AsyncRepository[Company]):
         return any(field is not None for field in company_meta_fields)
 
     @staticmethod
-    def _needs_company_metadata_join_for_search(search: Optional[str]) -> bool:
-        """Determine if CompanyMetadata join is needed for search term."""
+    def _needs_company_metadata_exists_subquery_for_search(search: Optional[str]) -> bool:
+        """Determine if CompanyMetadata EXISTS subquery is needed for search term."""
         return search is not None and bool(search.strip())
 
     def base_query_minimal(self) -> Select:
@@ -57,26 +58,6 @@ class CompanyRepository(AsyncRepository[Company]):
         logger.debug("Exiting CompanyRepository.base_query_minimal")
         return stmt
 
-    def base_query_with_metadata(self) -> tuple[Select, CompanyMetadata]:
-        """Construct the base query with joins to company metadata table."""
-        logger.debug("Entering CompanyRepository.base_query_with_metadata")
-        company_meta_alias = aliased(CompanyMetadata, name="company_metadata")
-
-        stmt: Select = (
-            select(Company, company_meta_alias)
-            .select_from(Company)
-            .outerjoin(company_meta_alias, Company.uuid == company_meta_alias.uuid)
-        )
-        logger.debug("Exiting CompanyRepository.base_query_with_metadata")
-        return stmt, company_meta_alias
-
-    def base_query(self) -> tuple[Select, CompanyMetadata]:
-        """Construct the base query with joins to company metadata table.
-        
-        DEPRECATED: Use base_query_with_metadata() instead for clarity.
-        This method is kept for backward compatibility.
-        """
-        return self.base_query_with_metadata()
 
     def apply_filters(
         self,
@@ -86,7 +67,14 @@ class CompanyRepository(AsyncRepository[Company]):
         *,
         dialect_name: str | None = None,
     ) -> Select:
-        """Apply filter parameters to the given SQLAlchemy statement."""
+        """Apply filter parameters to the given SQLAlchemy statement.
+        
+        DEPRECATED: This method is deprecated. The company_meta parameter is ignored.
+        Use _apply_filters_with_exists() directly instead.
+        
+        This method now delegates to _apply_filters_with_exists() which uses EXISTS subqueries
+        instead of JOINs for better performance.
+        """
         logger.debug(
             "Entering CompanyRepository.apply_filters filters=%s",
             sorted(filters.model_dump(exclude_none=True).keys()),
@@ -238,63 +226,15 @@ class CompanyRepository(AsyncRepository[Company]):
         logger.debug("Exiting CompanyRepository.apply_search_terms")
         return stmt
 
-    async def list_companies(
+    def _build_ordering_map_with_subqueries(
         self,
-        session: AsyncSession,
-        filters: CompanyFilterParams,
-        limit: Optional[int],
-        offset: int,
-    ) -> Sequence[tuple[Company, CompanyMetadata]]:
-        """Return companies with associated metadata rows.
+        ordering: Optional[str],
+        *,
+        dialect_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Build ordering map using subqueries for CompanyMetadata columns."""
+        from sqlalchemy import select as sql_select
         
-        Optimized to only join CompanyMetadata when needed based on filters and ordering.
-        """
-        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
-        logger.debug(
-            "Listing companies: limit=%s offset=%d ordering=%s filters=%s",
-            limit,
-            offset,
-            filters.ordering,
-            active_filter_keys,
-        )
-        
-        # Determine if CompanyMetadata join is needed
-        needs_company_meta = self._needs_company_metadata_join(filters) or self._needs_company_metadata_join_for_search(filters.search)
-        
-        # Check ordering requirements
-        ordering_lower = (filters.ordering or "").lower()
-        if any(field in ordering_lower for field in ["latest_funding_amount", "city", "state", "country", "phone_number", "website", "linkedin_url", "latest_funding", "last_raised_at"]):
-            needs_company_meta = True
-        
-        # Use conditional joins
-        if needs_company_meta:
-            stmt, company_meta_alias = self.base_query_with_metadata()
-        else:
-            stmt = self.base_query_minimal()
-            company_meta_alias = None
-        
-        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
-        
-        # Apply filters - use appropriate method based on joins
-        if company_meta_alias is not None:
-            stmt = self.apply_filters(
-                stmt,
-                filters,
-                company_meta_alias,
-                dialect_name=dialect_name,
-            )
-            stmt = self.apply_search_terms(
-                stmt,
-                filters.search,
-                company_meta_alias,
-                dialect_name=dialect_name,
-            )
-        else:
-            # No metadata join - apply filters with EXISTS
-            stmt = self._apply_filters_with_exists(stmt, filters, dialect_name=dialect_name)
-            if filters.search:
-                stmt = self._apply_search_terms_with_exists(stmt, filters.search, filters, dialect_name=dialect_name)
-        # Build ordering map based on available joins
         ordering_map = {
             "created_at": Company.created_at,
             "updated_at": Company.updated_at,
@@ -308,15 +248,106 @@ class CompanyRepository(AsyncRepository[Company]):
             "technologies": cast(Company.technologies, Text),
         }
         
-        if company_meta_alias is not None:
-            ordering_map.update({
-                "city": company_meta_alias.city,
-                "state": company_meta_alias.state,
-                "country": company_meta_alias.country,
-                "latest_funding_amount": company_meta_alias.latest_funding_amount,
-            })
+        if not ordering:
+            return ordering_map
         
+        ordering_lower = ordering.lower()
+        
+        # CompanyMetadata fields - use subqueries
+        if any(field in ordering_lower for field in ["latest_funding_amount", "city", "state", "country", "phone_number", "website", "linkedin_url", "latest_funding", "last_raised_at"]):
+            if "city" in ordering_lower:
+                ordering_map["city"] = (
+                    sql_select(CompanyMetadata.city)
+                    .where(CompanyMetadata.uuid == Company.uuid)
+                    .scalar_subquery()
+                )
+            if "state" in ordering_lower:
+                ordering_map["state"] = (
+                    sql_select(CompanyMetadata.state)
+                    .where(CompanyMetadata.uuid == Company.uuid)
+                    .scalar_subquery()
+                )
+            if "country" in ordering_lower:
+                ordering_map["country"] = (
+                    sql_select(CompanyMetadata.country)
+                    .where(CompanyMetadata.uuid == Company.uuid)
+                    .scalar_subquery()
+                )
+            if "latest_funding_amount" in ordering_lower:
+                ordering_map["latest_funding_amount"] = (
+                    sql_select(CompanyMetadata.latest_funding_amount)
+                    .where(CompanyMetadata.uuid == Company.uuid)
+                    .scalar_subquery()
+                )
+            if "phone_number" in ordering_lower:
+                ordering_map["phone_number"] = (
+                    sql_select(CompanyMetadata.phone_number)
+                    .where(CompanyMetadata.uuid == Company.uuid)
+                    .scalar_subquery()
+                )
+            if "website" in ordering_lower:
+                ordering_map["website"] = (
+                    sql_select(CompanyMetadata.website)
+                    .where(CompanyMetadata.uuid == Company.uuid)
+                    .scalar_subquery()
+                )
+            if "linkedin_url" in ordering_lower:
+                ordering_map["linkedin_url"] = (
+                    sql_select(CompanyMetadata.linkedin_url)
+                    .where(CompanyMetadata.uuid == Company.uuid)
+                    .scalar_subquery()
+                )
+            if "latest_funding" in ordering_lower:
+                ordering_map["latest_funding"] = (
+                    sql_select(CompanyMetadata.latest_funding)
+                    .where(CompanyMetadata.uuid == Company.uuid)
+                    .scalar_subquery()
+                )
+            if "last_raised_at" in ordering_lower:
+                ordering_map["last_raised_at"] = (
+                    sql_select(CompanyMetadata.last_raised_at)
+                    .where(CompanyMetadata.uuid == Company.uuid)
+                    .scalar_subquery()
+                )
+        
+        return ordering_map
+
+    async def list_companies(
+        self,
+        session: AsyncSession,
+        filters: CompanyFilterParams,
+        limit: Optional[int],
+        offset: int,
+    ) -> Sequence[Company]:
+        """Return companies matching the filters.
+        
+        Uses EXISTS subqueries instead of JOINs for filtering on CompanyMetadata.
+        Returns only Company objects - metadata should be fetched separately.
+        """
+        active_filter_keys = sorted(filters.model_dump(exclude_none=True).keys())
+        logger.debug(
+            "Listing companies: limit=%s offset=%d ordering=%s filters=%s",
+            limit,
+            offset,
+            filters.ordering,
+            active_filter_keys,
+        )
+        
+        # Use minimal query (no joins)
+        stmt = self.base_query_minimal()
+        dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
+        
+        # Apply filters using EXISTS subqueries
+        stmt = self._apply_filters_with_exists(stmt, filters, dialect_name=dialect_name)
+        
+        # Apply search terms using EXISTS subqueries
+        if filters.search:
+            stmt = self._apply_search_terms_with_exists(stmt, filters.search, filters, dialect_name=dialect_name)
+        
+        # Build ordering map using subqueries for CompanyMetadata columns
+        ordering_map = self._build_ordering_map_with_subqueries(filters.ordering, dialect_name=dialect_name)
         stmt = apply_ordering(stmt, filters.ordering, ordering_map)
+        
         stmt = stmt.offset(offset)
         if limit is not None:
             stmt = stmt.limit(limit)
@@ -328,21 +359,10 @@ class CompanyRepository(AsyncRepository[Company]):
             rows = await batcher.fetch_all()
         else:
             result = await session.execute(stmt)
-            rows = result.fetchall()
+            rows = result.scalars().all()
         
-        # Normalize results to always return 2-tuple format for compatibility
-        normalized_rows = []
-        for row in rows:
-            if isinstance(row, tuple) and len(row) == 2:
-                normalized_rows.append(row)
-            elif isinstance(row, Company):
-                # Only Company (no metadata)
-                normalized_rows.append((row, None))
-            else:
-                normalized_rows.append((row, None))
-        
-        logger.debug("Retrieved %d companies from repository query", len(normalized_rows))
-        return normalized_rows
+        logger.debug("Retrieved %d companies from repository query", len(rows))
+        return rows
 
     async def create_company(self, session: AsyncSession, data: dict[str, Any]) -> Company:
         """Persist a new company record."""
@@ -479,7 +499,7 @@ class CompanyRepository(AsyncRepository[Company]):
             stmt = self._apply_multi_value_exclusion(stmt, Company.text_search, filters.exclude_locations)
         
         # CompanyMetadata filters using EXISTS
-        if self._needs_company_metadata_join(filters):
+        if self._needs_company_metadata_exists_subquery(filters):
             company_meta_subq = (
                 select(1)
                 .select_from(CompanyMetadata)
@@ -574,7 +594,7 @@ class CompanyRepository(AsyncRepository[Company]):
         ]
         
         # CompanyMetadata search using EXISTS
-        if self._needs_company_metadata_join(filters) or self._needs_company_metadata_join_for_search(search):
+        if self._needs_company_metadata_exists_subquery(filters) or self._needs_company_metadata_exists_subquery_for_search(search):
             company_meta_search_subq = (
                 select(1)
                 .select_from(CompanyMetadata)
@@ -676,26 +696,113 @@ class CompanyRepository(AsyncRepository[Company]):
         if column_factory is None:
             raise ValueError("column_factory must be provided for attribute value queries.")
 
-        company_meta_alias = aliased(CompanyMetadata, name="company_meta_attribute")
-
-        column_expression = column_factory(Company, company_meta_alias)
-
+        # Convert column_expression to scalar subquery if it references CompanyMetadata
+        from sqlalchemy import select as sql_select
+        
+        # Check if column is from CompanyMetadata
+        column_expression = column_factory(Company, None)
+        # Try to detect if column_factory returns a CompanyMetadata column
+        # If so, convert to scalar subquery
+        if hasattr(column_expression, 'table'):
+            table = column_expression.table
+            if hasattr(table, '__tablename__') and table.__tablename__ == 'companies_metadata':
+                # Column is from CompanyMetadata - use scalar subquery
+                column_name = getattr(column_expression, 'key', None) or getattr(column_expression, 'name', None)
+                if column_name and hasattr(CompanyMetadata, column_name):
+                    company_meta_column = getattr(CompanyMetadata, column_name)
+                    column_expression = (
+                        sql_select(company_meta_column)
+                        .where(CompanyMetadata.uuid == Company.uuid)
+                        .scalar_subquery()
+                    )
+        
         stmt = select(column_expression).select_from(Company)
-        stmt = stmt.outerjoin(company_meta_alias, Company.uuid == company_meta_alias.uuid)
 
         dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
-        stmt = self.apply_filters(
-            stmt,
-            filters,
-            company_meta_alias,
-            dialect_name=dialect_name,
-        )
-        stmt = self.apply_search_terms(
-            stmt,
-            params.search or filters.search,
-            company_meta_alias,
-            dialect_name=dialect_name,
-        )
+        # Apply filters using EXISTS subqueries (no JOINs)
+        # For company metadata filters, use EXISTS subqueries
+        if self._needs_company_metadata_exists_subquery(filters):
+            company_meta_subq = (
+                select(1)
+                .select_from(CompanyMetadata)
+                .where(CompanyMetadata.uuid == Company.uuid)
+            )
+            
+            # Apply company metadata filters to subquery
+            if filters.city:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.city, filters.city
+                )
+            if filters.state:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.state, filters.state
+                )
+            if filters.country:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.country, filters.country
+                )
+            if filters.phone_number:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.phone_number, filters.phone_number
+                )
+            if filters.website:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.website, filters.website
+                )
+            if filters.linkedin_url:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.linkedin_url, filters.linkedin_url
+                )
+            if filters.latest_funding:
+                company_meta_subq = self._apply_multi_value_filter(
+                    company_meta_subq, CompanyMetadata.latest_funding, filters.latest_funding
+                )
+            if filters.latest_funding_amount_min is not None:
+                company_meta_subq = company_meta_subq.where(
+                    CompanyMetadata.latest_funding_amount >= filters.latest_funding_amount_min
+                )
+            if filters.latest_funding_amount_max is not None:
+                company_meta_subq = company_meta_subq.where(
+                    CompanyMetadata.latest_funding_amount <= filters.latest_funding_amount_max
+                )
+            
+            stmt = stmt.where(exists(company_meta_subq))
+        
+        # Apply company table filters directly
+        stmt = self.apply_filters(stmt, filters, None, dialect_name=dialect_name)
+        
+        # Apply search terms
+        search_term = params.search or filters.search
+        if search_term:
+            search_stripped = search_term.strip()
+            if search_stripped:
+                pattern = f"%{search_stripped}%"
+                search_conditions = [
+                    Company.name.ilike(pattern),
+                    Company.address.ilike(pattern),
+                    Company.text_search.ilike(pattern),
+                ]
+                # Add CompanyMetadata search using EXISTS if needed
+                if self._needs_company_metadata_exists_subquery(filters):
+                    company_meta_search_subq = (
+                        select(1)
+                        .select_from(CompanyMetadata)
+                        .where(CompanyMetadata.uuid == Company.uuid)
+                        .where(
+                            or_(
+                                CompanyMetadata.city.ilike(pattern),
+                                CompanyMetadata.state.ilike(pattern),
+                                CompanyMetadata.country.ilike(pattern),
+                                CompanyMetadata.phone_number.ilike(pattern),
+                                CompanyMetadata.website.ilike(pattern),
+                                CompanyMetadata.linkedin_url.ilike(pattern),
+                            )
+                        )
+                    )
+                    search_conditions.append(exists(company_meta_search_subq))
+                
+                if search_conditions:
+                    stmt = stmt.where(or_(*search_conditions))
         stmt = stmt.where(column_expression.isnot(None))
         
         # Apply distinct BEFORE ordering to avoid SQL issues
@@ -736,43 +843,47 @@ class CompanyRepository(AsyncRepository[Company]):
         params: AttributeListParams,
     ) -> list[str]:
         """Optimized array attribute extraction using lateral unnesting."""
-        stmt, company_meta_alias = self.base_query()
+        # Use minimal query with EXISTS subqueries for filtering
+        stmt = self.base_query_minimal()
         dialect_name = getattr(session.bind.dialect, "name", None) if session.bind else None
-        stmt = self.apply_filters(
-            stmt,
-            filters,
-            company_meta_alias,
-            dialect_name=dialect_name,
-        )
-        stmt = self.apply_search_terms(
-            stmt,
-            filters.search,
-            company_meta_alias,
-            dialect_name=dialect_name,
-        )
+        stmt = self._apply_filters_with_exists(stmt, filters, dialect_name=dialect_name)
+        if filters.search:
+            stmt = self._apply_search_terms_with_exists(stmt, filters.search, filters, dialect_name=dialect_name)
 
-        filtered_companies = (
+        # Get company UUIDs from filtered query
+        filtered_company_uuids_subq = (
             stmt.with_only_columns(Company.uuid)
             .where(Company.uuid.isnot(None))
             .distinct()
-            .subquery()
         )
-
+        
+        # Execute to get company UUIDs
+        company_uuids_result = await session.execute(filtered_company_uuids_subq)
+        company_uuids = {row[0] for row in company_uuids_result if row[0]}
+        
+        if not company_uuids:
+            logger.debug("No companies match filters, returning empty array attribute list")
+            return []
+        
         source_company = aliased(Company, name="array_company")
-        source_company_meta = aliased(CompanyMetadata, name="array_company_meta")
-        array_column = column_factory(source_company, source_company_meta)
+        # Array columns are from Company, so only pass Company to column_factory
+        array_column = column_factory(source_company, None)
 
-        value_selectable = lateral(
-            select(func.unnest(array_column).label("value"))
-        ).alias("attribute_values")
-        value_column = value_selectable.c.value
-
-        attr_stmt = (
-            select(value_column)
-            .select_from(filtered_companies)
-            .join(source_company, source_company.uuid == filtered_companies.c.uuid)
-            .join(value_selectable, true())
-        )
+        # Use subquery to unnest arrays without lateral join
+        # Create a subquery that unnests arrays for all matching companies
+        unnest_subq = (
+            select(
+                func.unnest(array_column).label("value"),
+                source_company.uuid.label("company_uuid")
+            )
+            .select_from(source_company)
+            .where(source_company.uuid.in_(company_uuids))
+            .where(array_column.isnot(None))
+        ).subquery()
+        
+        # Main query selects from the unnested subquery
+        attr_stmt = select(unnest_subq.c.value)
+        value_column = unnest_subq.c.value
 
         trimmed_value = func.nullif(func.trim(value_column), "")
         attr_stmt = attr_stmt.where(value_column.isnot(None))
@@ -802,36 +913,29 @@ class CompanyRepository(AsyncRepository[Company]):
         session: AsyncSession,
         company_uuid: str,
     ) -> Optional[tuple[Company, CompanyMetadata]]:
-        """Fetch a company and its related metadata."""
+        """Fetch a company and its related metadata using separate queries."""
         logger.debug("Getting company with metadata: company_uuid=%s", company_uuid)
-        stmt, _ = self.base_query()
-        stmt = stmt.where(Company.uuid == company_uuid)
-        result = await session.execute(stmt)
-        row = result.first()
+        company = await self.get_by_uuid(session, company_uuid)
+        if not company:
+            logger.debug("Company not found: company_uuid=%s", company_uuid)
+            return None
+        
+        company_meta = await fetch_company_metadata_by_uuid(session, company_uuid)
+        
         logger.debug(
             "Company with metadata %sfound for company_uuid=%s",
-            "" if row else "not ",
+            "" if company_meta else "not ",
             company_uuid,
         )
-        return row
+        return (company, company_meta)
 
     async def get_company_by_uuid_with_metadata(
         self,
         session: AsyncSession,
         company_uuid: str,
     ) -> Optional[tuple[Company, CompanyMetadata]]:
-        """Fetch a company and its related metadata by UUID."""
-        logger.debug("Getting company with metadata: company_uuid=%s", company_uuid)
-        stmt, _ = self.base_query()
-        stmt = stmt.where(Company.uuid == company_uuid)
-        result = await session.execute(stmt)
-        row = result.first()
-        logger.debug(
-            "Company with metadata %sfound for company_uuid=%s",
-            "" if row else "not ",
-            company_uuid,
-        )
-        return row
+        """Fetch a company and its related metadata by UUID using separate queries."""
+        return await self.get_company_with_metadata(session, company_uuid)
 
     @staticmethod
     def _split_filter_values(raw_value: str) -> list[str]:

@@ -54,6 +54,12 @@ class AIChatUpdate(BaseModel):
     messages: Optional[list[Message]] = Field(None, description="List of messages")
 
 
+class AIChatMessageRequest(BaseModel):
+    """Schema for sending a message in a chat."""
+
+    message: str = Field(..., min_length=1, description="User message text")
+
+
 class AIChatListItem(BaseModel):
     """Schema for AI chat in list responses."""
 

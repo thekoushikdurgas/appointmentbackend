@@ -306,9 +306,8 @@ await cache.set(
 - Invalid ID handling
 
 **Mapping File:**
-- `app/data/insdustryids.csv`
-- Format: Tag ID, Industry Name
-- Loaded on first use
+- ~~`app/data/insdustryids.csv`~~ (REMOVED: File was unused and not referenced in codebase)
+- Industry mapping is handled programmatically
 
 **Usage:**
 ```python

@@ -13,7 +13,6 @@
 #
 # Add a new filter parameter to the contacts endpoint that supports multi-value input
 #
-# Implement a new WebSocket endpoint for real-time updates following the existing WebSocket patterns
 #
 # Add pagination support to a new endpoint using the cursor-based pagination utilities
 #
@@ -83,7 +82,6 @@
 #
 # Add logging for Apollo.io API requests and responses
 #
-# Implement WebSocket support for Apollo.io operations following existing patterns
 #
 # ========================================
 # CELERY BACKGROUND TASKS PROMPTS
@@ -111,7 +109,6 @@
 #
 # Add integration tests for a new API endpoint
 #
-# Create tests for WebSocket endpoints
 #
 # Add tests for Celery tasks
 #

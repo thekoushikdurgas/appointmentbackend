@@ -13,6 +13,7 @@ class CursorPage(BaseModel, Generic[T]):
     next: Optional[str]
     previous: Optional[str]
     results: List[T]
+    meta: Optional[dict] = None  # Optional metadata field for frontend compatibility
 
 
 class CountResponse(BaseModel):

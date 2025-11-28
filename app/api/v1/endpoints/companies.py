@@ -6,15 +6,18 @@ import json
 from typing import Any, Callable, Iterable, List, Optional, Union
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_admin, get_current_user
+from app.api.deps import check_can_modify_resources, get_current_admin, get_current_free_or_pro_user, get_current_user
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
+from app.models.companies import Company
 from app.models.user import User
+from app.repositories.companies import CompanyRepository
 from app.schemas.common import CountResponse, CursorPage, UuidListResponse
 from app.schemas.companies import CompanyCreate, CompanyDetail, CompanyListItem, CompanyUpdate
 from app.schemas.contacts import ContactListItem
@@ -22,6 +25,7 @@ from app.schemas.filters import AttributeListParams, CompanyContactFilterParams,
 from app.services.companies_service import CompaniesService
 from app.services.contacts_service import ContactsService
 from app.utils.cursor import decode_offset_cursor
+from app.utils.streaming_queries import stream_query_results
 
 
 settings = get_settings()
@@ -226,6 +230,141 @@ async def list_companies(
     return page
 
 
+@router.get("/stream/")
+async def stream_companies(
+    request: Request,
+    filters: CompanyFilterParams = Depends(resolve_company_filters),
+    format: str = Query("jsonl", regex="^(jsonl|csv)$"),
+    max_results: Optional[int] = Query(None, ge=1, description="Maximum results to stream"),
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """
+    Stream companies as JSONL or CSV for large datasets.
+    
+    This endpoint is optimized for large result sets and streams data in chunks
+    without loading everything into memory. Use this for exports or bulk operations.
+    
+    Formats:
+    - jsonl: Newline-delimited JSON (one JSON object per line)
+    - csv: Comma-separated values with header row
+    
+    Example:
+        GET /api/v1/companies/stream/?format=jsonl&name=example
+    """
+    if not settings.ENABLE_STREAMING_QUERIES:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Streaming queries are disabled",
+        )
+    
+    # Apply max_results limit from settings if not specified
+    if max_results is None and settings.MAX_STREAMING_RESULTS:
+        max_results = settings.MAX_STREAMING_RESULTS
+    
+    logger.info(
+        "Streaming companies: format=%s max_results=%s filters=%s",
+        format,
+        max_results,
+        sorted(filters.model_dump(exclude_none=True).keys()),
+    )
+    
+    # Build query - simplified for streaming
+    query = select(Company)
+    
+    # Apply basic filters
+    if filters.name:
+        query = query.where(Company.name.ilike(f"%{filters.name}%"))
+    if filters.address:
+        query = query.where(Company.address.ilike(f"%{filters.address}%"))
+    
+    async def generate_jsonl():
+        """Generate JSONL stream using optimized serialization."""
+        from pydantic import TypeAdapter
+        
+        count = 0
+        # Use TypeAdapter for efficient JSON serialization
+        adapter = TypeAdapter(dict)
+        
+        async for batch in stream_query_results(
+            session,
+            query,
+            batch_size=1000,
+            max_results=max_results,
+        ):
+            for company in batch:
+                company_dict = {
+                    "uuid": company.uuid,
+                    "name": company.name,
+                    "address": company.address,
+                    "employees_count": company.employees_count,
+                    "annual_revenue": company.annual_revenue,
+                    "total_funding": company.total_funding,
+                }
+                # Use TypeAdapter for faster serialization
+                json_line = adapter.dump_json(company_dict).decode("utf-8") + "\n"
+                yield json_line
+                count += 1
+                if max_results and count >= max_results:
+                    break
+        logger.info("Streamed %d companies as JSONL", count)
+    
+    async def generate_csv():
+        """Generate CSV stream."""
+        import csv
+        from io import StringIO
+        
+        # Write header
+        header = ["uuid", "name", "address", "employees_count", "annual_revenue", "total_funding"]
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(header)
+        yield buffer.getvalue()
+        buffer.seek(0)
+        buffer.truncate(0)
+        
+        count = 0
+        async for batch in stream_query_results(
+            session,
+            query,
+            batch_size=1000,
+            max_results=max_results,
+        ):
+            for company in batch:
+                writer.writerow([
+                    company.uuid,
+                    company.name or "",
+                    company.address or "",
+                    company.employees_count or "",
+                    company.annual_revenue or "",
+                    company.total_funding or "",
+                ])
+                yield buffer.getvalue()
+                buffer.seek(0)
+                buffer.truncate(0)
+                count += 1
+                if max_results and count >= max_results:
+                    break
+        logger.info("Streamed %d companies as CSV", count)
+    
+    if format == "jsonl":
+        return StreamingResponse(
+            generate_jsonl(),
+            media_type="application/x-ndjson",
+            headers={
+                "Content-Disposition": "attachment; filename=companies.jsonl",
+            },
+        )
+    else:  # csv
+        return StreamingResponse(
+            generate_csv(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=companies.csv",
+            },
+        )
+
+
 @router.get("/count/", response_model=CountResponse)
 async def count_companies(
     filters: CompanyFilterParams = Depends(resolve_company_filters),
@@ -259,12 +398,15 @@ async def get_company_uuids(
 @router.post("/", response_model=CompanyDetail, status_code=status.HTTP_201_CREATED)
 async def create_company(
     payload: CompanyCreate,
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_current_free_or_pro_user),  # Free and Pro users can create
     _: None = Depends(require_companies_write_key),
     session: AsyncSession = Depends(get_db),
 ) -> CompanyDetail:
-    """Create a new company with optional fields."""
-    logger.info("Creating company via API")
+    """Create a new company with optional fields.
+    
+    Free users and Pro users can create companies.
+    """
+    logger.info("Creating company via API: user_id=%s", current_user.id)
     company = await service.create_company(session, payload)
     logger.info("Created company via API: uuid=%s", company.uuid)
     return company
@@ -274,12 +416,16 @@ async def create_company(
 async def update_company(
     company_uuid: str,
     payload: CompanyUpdate,
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(check_can_modify_resources),  # Only Pro users and above can update
     _: None = Depends(require_companies_write_key),
     session: AsyncSession = Depends(get_db),
 ) -> CompanyDetail:
-    """Update an existing company."""
-    logger.info("Updating company via API: company_uuid=%s", company_uuid)
+    """Update an existing company.
+    
+    Only Pro users, Admin, and Super Admin can update companies.
+    Free users can only create and read.
+    """
+    logger.info("Updating company via API: company_uuid=%s user_id=%s", company_uuid, current_user.id)
     company = await service.update_company(session, company_uuid, payload)
     logger.info("Updated company via API: company_uuid=%s", company_uuid)
     return company
@@ -292,12 +438,16 @@ async def update_company(
 )
 async def delete_company(
     company_uuid: str,
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(check_can_modify_resources),  # Only Pro users and above can delete
     _: None = Depends(require_companies_write_key),
     session: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete a company."""
-    logger.info("Deleting company via API: company_uuid=%s", company_uuid)
+    """Delete a company.
+    
+    Only Pro users, Admin, and Super Admin can delete companies.
+    Free users can only create and read.
+    """
+    logger.info("Deleting company via API: company_uuid=%s user_id=%s", company_uuid, current_user.id)
     await service.delete_company(session, company_uuid)
     logger.info("Deleted company via API: company_uuid=%s", company_uuid)
 

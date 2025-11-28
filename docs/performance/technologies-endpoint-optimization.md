@@ -60,16 +60,16 @@ Test the endpoint with various parameters:
 
 ```bash
 # Test 1: Small offset (should be fast)
-curl "http://localhost:8000/api/v1/contacts/technologies/?limit=25&offset=0&distinct=true"
+curl "http://127.0.0.1:8000/api/v1/contacts/technologies/?limit=25&offset=0&distinct=true"
 
 # Test 2: Large offset (previously slow, now optimized)
-curl "http://localhost:8000/api/v1/contacts/technologies/?limit=25&offset=50&distinct=true"
+curl "http://127.0.0.1:8000/api/v1/contacts/technologies/?limit=25&offset=50&distinct=true"
 
 # Test 3: With search filter
-curl "http://localhost:8000/api/v1/contacts/technologies/?limit=25&offset=50&distinct=true&search=Python"
+curl "http://127.0.0.1:8000/api/v1/contacts/technologies/?limit=25&offset=50&distinct=true&search=Python"
 
 # Test 4: With company filter
-curl "http://localhost:8000/api/v1/contacts/technologies/?limit=25&offset=50&distinct=true&company=Acme"
+curl "http://127.0.0.1:8000/api/v1/contacts/technologies/?limit=25&offset=50&distinct=true&company=Acme"
 ```
 
 ### 3. Monitor Logs

@@ -89,6 +89,5 @@ class LinkedInExportResponse(BaseModel):
     contact_count: int
     company_count: int
     status: ExportStatus
-    job_id: Optional[str] = Field(None, description="Celery task ID for tracking the background job")
 
     model_config = ConfigDict(from_attributes=True)

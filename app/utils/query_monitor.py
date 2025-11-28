@@ -1,4 +1,22 @@
-"""Query performance monitoring utilities."""
+"""Query performance monitoring utilities.
+
+This module provides database query performance monitoring to identify and log
+slow queries. The monitor is automatically set up in db/session.py when
+ENABLE_QUERY_MONITORING is enabled in configuration.
+
+The monitor tracks:
+- Total query count
+- Slow queries (exceeding threshold)
+- Average query time
+- Query execution statistics
+
+Usage:
+    The monitor is automatically initialized when the database engine is created.
+    To access statistics:
+        from app.utils.query_monitor import get_query_monitor
+        monitor = get_query_monitor()
+        stats = monitor.get_stats()
+"""
 
 from __future__ import annotations
 

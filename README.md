@@ -1,21 +1,21 @@
 # Contact360 FastAPI Backend
 
-This project is a production-ready FastAPI service that exposes the Contact360 data APIs and a high-throughput CSV import pipeline backed by Celery.
+This project is a production-ready FastAPI service that exposes the Contact360 data APIs and a high-throughput CSV import pipeline using FastAPI's BackgroundTasks.
 
 ## Features
 
 - FastAPI application structured with clear separation of concerns (API, services, repositories, models)
 - Async SQLAlchemy (`asyncpg`) database layer targeting the Contact360 Postgres schema
 - Comprehensive filtering, search, and aggregation endpoints derived from the Contact360 Postman collection
-- Background CSV import processing using Celery workers, Redis broker/result backend, and persistent job tracking
-- Docker Compose environment for API, Celery worker, Redis, and optional Flower monitoring
+- Background CSV import processing using FastAPI's BackgroundTasks with task status tracking
+- Docker Compose environment for API and PostgreSQL database
 - Automated testing with `pytest` and async fixtures
 - API versioning (v1 and v2) with JWT authentication
-- WebSocket support for real-time updates
 - Apollo.io integration for contact enrichment
 - LinkedIn integration for profile lookup
 - Email finder service
 - AI chat functionality with Google Gemini
+- **Big Data Optimizations**: Streaming responses, chunked file uploads, query caching, parallel processing, and database-level aggregations
 
 ## Getting Started
 
@@ -23,7 +23,6 @@ This project is a production-ready FastAPI service that exposes the Contact360 d
 
 - Python 3.11+
 - PostgreSQL database (or Supabase)
-- Redis (for Celery)
 - Docker (optional, for containerized workflow)
 
 ### Installation
@@ -64,7 +63,6 @@ cp .env.example .env
 
 5. Edit `.env` file with your configuration:
    - Database connection (PostgreSQL/Supabase)
-   - Redis connection
    - Secret keys
    - API keys for external services
 
@@ -76,23 +74,7 @@ cp .env.example .env
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-2. Start Celery worker (in a separate terminal):
-
-```bash
-celery -A app.tasks.celery_app worker --loglevel=info
-```
-
-3. Start Celery beat scheduler (optional, for scheduled tasks):
-
-```bash
-celery -A app.tasks.celery_app beat --loglevel=info
-```
-
-4. Start Flower monitor (optional, for Celery monitoring):
-
-```bash
-celery -A app.tasks.celery_app flower --port=5555
-```
+2. Background tasks run automatically with the API server using FastAPI's BackgroundTasks.
 
 ### Docker Compose
 
@@ -104,19 +86,16 @@ docker compose up --build
 
 This will start:
 - API server (port 8000)
-- Celery worker
-- Redis
-- Flower (port 5555)
+- PostgreSQL database
 
 ### Service URLs
 
-- **API Base**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **Health Check**: http://localhost:8000/health
-- **API v1**: http://localhost:8000/api/v1
-- **API v2**: http://localhost:8000/api/v2
-- **Flower**: http://localhost:5555
+- **API Base**: http://127.0.0.1:8000
+- **API Documentation**: http://127.0.0.1:8000/docs
+- **ReDoc**: http://127.0.0.1:8000/redoc
+- **Health Check**: http://127.0.0.1:8000/health
+- **API v1**: http://127.0.0.1:8000/api/v1
+- **API v2**: http://127.0.0.1:8000/api/v2
 
 ## Development
 
@@ -177,14 +156,14 @@ app/
 │   ├── company.py     # Company service
 │   ├── apollo.py      # Apollo.io integration
 │   └── import.py      # Import service
-├── tasks/              # Celery configuration & background tasks
-│   ├── celery_app.py  # Celery app configuration
+├── tasks/              # Background task modules
 │   └── import_tasks.py # Import tasks
 ├── tests/              # Test suite
 │   ├── unit/          # Unit tests
 │   └── integration/   # Integration tests
 └── utils/              # Shared utilities
     ├── cursor.py      # Cursor pagination
+    ├── normalization.py  # Text normalization utilities (shared across services)
     └── filters.py     # Filter utilities
 ```
 
@@ -194,7 +173,6 @@ app/
 
 - **v1**: Legacy endpoints for contacts, companies, and imports
   - Uses write keys for authorization (header-based)
-  - WebSocket support for contacts and companies
 - **v2**: Modern endpoints with JWT authentication
   - User management and authentication
   - Apollo.io integration
@@ -202,7 +180,6 @@ app/
   - Export management
   - LinkedIn integration
   - Email finder
-  - WebSocket support for Apollo operations
 
 ### Key Endpoints
 
@@ -235,7 +212,7 @@ app/
 - `GET /api/v2/exports/` - List export jobs
 - `POST /api/v2/exports/` - Create export job
 
-For complete API documentation, visit http://localhost:8000/docs when the server is running.
+For complete API documentation, visit http://127.0.0.1:8000/docs when the server is running.
 
 See [docs/COMPLETE_API_DOCUMENTATION.md](docs/COMPLETE_API_DOCUMENTATION.md) for detailed API documentation.
 
@@ -269,9 +246,6 @@ POSTGRES_HOST=host
 POSTGRES_PORT=5432
 POSTGRES_DB=database
 
-# Redis
-REDIS_URL=redis://localhost:6379/0
-
 # Security
 SECRET_KEY=your-secret-key-here
 
@@ -300,13 +274,44 @@ See [deploy/](deploy/) directory for deployment configurations and systemd servi
 - Check connection string in `.env`
 - Test connection: `psql "postgresql://..."`
 
-### Celery worker issues
-- Check Redis is running: `redis-cli ping`
-- Verify Celery configuration in `app/tasks/celery_app.py`
-- Check Redis connection in `.env`
-- View worker logs: `celery -A app.tasks.celery_app worker --loglevel=debug`
+### Background task issues
+- Check application logs for task execution errors
+- Verify database connection for tasks that require database access
+- Monitor memory usage for long-running tasks
 
 For more troubleshooting tips, see [commands.txt](commands.txt).
+
+## Big Data Handling
+
+The backend includes comprehensive optimizations for handling large datasets efficiently:
+
+### Streaming Responses
+- **Streaming Endpoints**: `/api/v1/contacts/stream/` and `/api/v1/companies/stream/` for large dataset exports
+- **Formats**: JSONL (newline-delimited JSON) and CSV
+- **Memory Efficient**: Streams data in chunks without loading everything into memory
+
+### Chunked File Uploads
+- **Async File Handling**: Uses `aiofiles` for efficient chunked uploads
+- **Memory Efficient**: Processes files in configurable chunks (default 1MB)
+- **Progress Tracking**: Supports large file uploads without memory exhaustion
+
+### Query Caching
+- **In-Memory Caching**: Optional in-memory query result caching with TTL support
+- **Automatic Invalidation**: Cache invalidation on data mutations
+- **Configurable TTL**: Time-to-live settings for cached queries
+
+### Parallel Processing
+- **ThreadPoolExecutor**: For I/O-bound tasks (database queries, API calls)
+- **ProcessPoolExecutor**: For CPU-intensive tasks (bypasses Python's GIL)
+- **Batch Processing**: Utilities for processing large datasets in parallel batches
+
+### Database Optimizations
+- **Connection Pooling**: Optimized pool sizing and monitoring
+- **Database-Level Aggregations**: Uses PostgreSQL `json_build_object` and array functions
+- **Streaming Queries**: Server-side cursors for large result sets
+- **Query Monitoring**: Automatic slow query detection and logging
+
+See [Big Data Optimizations Documentation](docs/BIG_DATA_OPTIMIZATIONS.md) for detailed information.
 
 ## Documentation
 
@@ -315,6 +320,7 @@ For more troubleshooting tips, see [commands.txt](commands.txt).
 - [Prompts Reference](promsts.txt) - Development prompts
 - [API Documentation](docs/COMPLETE_API_DOCUMENTATION.md) - Complete API reference
 - [Architecture Analysis](docs/analysis/) - Deep codebase analysis
+- [Big Data Optimizations](docs/BIG_DATA_OPTIMIZATIONS.md) - Comprehensive guide to big data handling
 
 ## License
 

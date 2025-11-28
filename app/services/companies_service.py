@@ -16,60 +16,19 @@ from app.repositories.companies import CompanyRepository
 from app.schemas.common import CountResponse, CursorPage
 from app.schemas.companies import CompanyCreate, CompanyDetail, CompanyListItem, CompanyMetadataOut, CompanyUpdate
 from app.schemas.filters import AttributeListParams, CompanyFilterParams
+from app.utils.batch_lookup import batch_fetch_company_metadata_by_uuids
 from app.utils.cursor import encode_offset_cursor
+from app.utils.normalization import (
+    PLACEHOLDER_VALUE,
+    coalesce_text,
+    normalize_sequence,
+    normalize_text,
+)
 from app.utils.pagination import build_cursor_link, build_pagination_link
+from app.utils.query_cache import get_query_cache
+from app.core.config import get_settings
 
-
-PLACEHOLDER_VALUE = "_"
-
-
-def _normalize_text(value: Any, *, allow_placeholder: bool = False) -> Optional[str]:
-    """Coerce raw string-like values to cleaned text or None."""
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    if not allow_placeholder and text == PLACEHOLDER_VALUE:
-        return None
-
-    # Remove wrapping quotes that leak from CSV exports (e.g., "'+123", '"value"').
-    while len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
-        text = text[1:-1].strip()
-        if not text:
-            return None
-        if not allow_placeholder and text == PLACEHOLDER_VALUE:
-            return None
-
-    if text.startswith("'+") and len(text) > 2:
-        text = text[1:].strip()
-
-    if not text:
-        return None
-    if not allow_placeholder and text == PLACEHOLDER_VALUE:
-        return None
-    return text
-
-
-def _normalize_sequence(values: Optional[Iterable[Any]], *, allow_placeholder: bool = False) -> list[str]:
-    """Clean an iterable of values, returning only meaningful text tokens."""
-    if not values:
-        return []
-    cleaned: list[str] = []
-    for value in values:
-        normalized = _normalize_text(value, allow_placeholder=allow_placeholder)
-        if normalized:
-            cleaned.append(normalized)
-    return cleaned
-
-
-def _coalesce_text(*values: Any, allow_placeholder: bool = False) -> Optional[str]:
-    """Return the first non-empty normalized text value from the provided options."""
-    for value in values:
-        normalized = _normalize_text(value, allow_placeholder=allow_placeholder)
-        if normalized is not None:
-            return normalized
-    return None
+settings = get_settings()
 
 
 class CompaniesService:
@@ -89,7 +48,7 @@ class CompaniesService:
     ) -> CompanyDetail:
         """Create a new company and return the hydrated detail schema."""
         data = payload.model_dump()
-        normalized_uuid = _normalize_text(data.get("uuid"), allow_placeholder=False)
+        normalized_uuid = normalize_text(data.get("uuid"), allow_placeholder=False)
         data["uuid"] = normalized_uuid or uuid4().hex
 
         for field in (
@@ -97,19 +56,19 @@ class CompaniesService:
             "address",
             "text_search",
         ):
-            data[field] = _normalize_text(data.get(field))
+            data[field] = normalize_text(data.get(field))
 
         for field in ("employees_count", "annual_revenue", "total_funding"):
             if data.get(field) is not None and data[field] < 0:
                 data[field] = None
 
-        industries = _normalize_sequence(data.get("industries"))
+        industries = normalize_sequence(data.get("industries"))
         data["industries"] = industries or None
 
-        keywords = _normalize_sequence(data.get("keywords"))
+        keywords = normalize_sequence(data.get("keywords"))
         data["keywords"] = keywords or None
 
-        technologies = _normalize_sequence(data.get("technologies"))
+        technologies = normalize_sequence(data.get("technologies"))
         data["technologies"] = technologies or None
 
         now = datetime.now(UTC).replace(tzinfo=None)
@@ -120,6 +79,15 @@ class CompaniesService:
         company = await self.repository.create_company(session, data)
         await session.commit()
         self.logger.debug("Created company persisted: id=%s uuid=%s", company.id, company.uuid)
+        
+        # Invalidate companies list cache on creation
+        if settings.ENABLE_QUERY_CACHING:
+            cache = get_query_cache()
+            try:
+                await cache.invalidate_pattern("query_cache:companies:list:*")
+            except Exception as exc:
+                self.logger.warning("Failed to invalidate companies cache: %s", exc)
+        
         detail = await self.get_company_by_uuid(session, company.uuid)
         self.logger.debug("Returning created company detail: uuid=%s", company.uuid)
         return detail
@@ -135,22 +103,22 @@ class CompaniesService:
         
         for field in ("name", "address", "text_search"):
             if field in data:
-                data[field] = _normalize_text(data.get(field))
+                data[field] = normalize_text(data.get(field))
 
         for field in ("employees_count", "annual_revenue", "total_funding"):
             if field in data and data[field] is not None and data[field] < 0:
                 data[field] = None
 
         if "industries" in data:
-            industries = _normalize_sequence(data.get("industries"))
+            industries = normalize_sequence(data.get("industries"))
             data["industries"] = industries or None
 
         if "keywords" in data:
-            keywords = _normalize_sequence(data.get("keywords"))
+            keywords = normalize_sequence(data.get("keywords"))
             data["keywords"] = keywords or None
 
         if "technologies" in data:
-            technologies = _normalize_sequence(data.get("technologies"))
+            technologies = normalize_sequence(data.get("technologies"))
             data["technologies"] = technologies or None
 
         data["updated_at"] = datetime.now(UTC).replace(tzinfo=None)
@@ -162,6 +130,15 @@ class CompaniesService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         await session.commit()
         self.logger.debug("Updated company persisted: id=%s uuid=%s", company.id, company.uuid)
+        
+        # Invalidate companies list cache on update
+        if settings.ENABLE_QUERY_CACHING:
+            cache = get_query_cache()
+            try:
+                await cache.invalidate_pattern("query_cache:companies:list:*")
+            except Exception as exc:
+                self.logger.warning("Failed to invalidate companies cache: %s", exc)
+        
         detail = await self.get_company_by_uuid(session, company.uuid)
         self.logger.debug("Returning updated company detail: uuid=%s", company.uuid)
         return detail
@@ -179,6 +156,14 @@ class CompaniesService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         await session.commit()
         self.logger.debug("Deleted company: company_uuid=%s", company_uuid)
+        
+        # Invalidate companies list cache on deletion
+        if settings.ENABLE_QUERY_CACHING:
+            cache = get_query_cache()
+            try:
+                await cache.invalidate_pattern("query_cache:companies:list:*")
+            except Exception as exc:
+                self.logger.warning("Failed to invalidate companies cache: %s", exc)
 
     async def list_companies(
         self,
@@ -199,21 +184,44 @@ class CompaniesService:
             use_cursor,
             active_filter_keys,
         )
+        
+        # Check cache if enabled and query is cacheable (has limit and reasonable offset)
+        cache = get_query_cache()
+        cache_key_args = {
+            "filters": filters.model_dump(exclude_none=True),
+            "limit": limit,
+            "offset": offset,
+            "use_cursor": use_cursor,
+        }
+        cached_result = None
+        if settings.ENABLE_QUERY_CACHING and limit is not None and limit <= 1000:
+            cached_result = await cache.get("companies:list", **cache_key_args)
+            if cached_result:
+                self.logger.debug("Cache hit for companies list query")
+                return CursorPage(**cached_result)
+        
         if limit is None:
             self.logger.warning(
                 "Unlimited query requested for companies - this may return a large dataset. filters=%s",
                 active_filter_keys,
             )
         try:
-            rows = await self.repository.list_companies(session, filters, limit, offset)
+            companies = await self.repository.list_companies(session, filters, limit, offset)
         except ValueError as exc:
             # self.logger.info("List companies request rejected: %s", exc)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-        self.logger.debug("Repository returned %d rows for company list", len(rows))
+        self.logger.debug("Repository returned %d companies", len(companies))
 
+        # Extract company UUIDs
+        company_uuids = {c.uuid for c in companies}
+        
+        # Batch fetch metadata
+        company_meta_dict = await batch_fetch_company_metadata_by_uuids(session, company_uuids)
+        
+        # Reconstruct tuples and hydrate companies
         results = [
-            self._hydrate_company(company, company_meta)
-            for company, company_meta in rows
+            self._hydrate_company(company, company_meta_dict.get(company.uuid))
+            for company in companies
         ]
 
         next_link = None
@@ -248,7 +256,16 @@ class CompaniesService:
             bool(next_link),
             bool(previous_link),
         )
-        return CursorPage(next=next_link, previous=previous_link, results=results)
+        page = CursorPage(next=next_link, previous=previous_link, results=results)
+        
+        # Cache result if enabled and query is cacheable
+        if settings.ENABLE_QUERY_CACHING and limit is not None and limit <= 1000:
+            try:
+                await cache.set("companies:list", page.model_dump(), **cache_key_args)
+            except Exception as exc:
+                self.logger.warning("Failed to cache companies list result: %s", exc)
+        
+        return page
 
     async def count_companies(
         self,
@@ -294,11 +311,11 @@ class CompaniesService:
     ) -> CompanyDetail:
         """Fetch a single company with related data."""
         # self.logger.info("Service retrieving company: company_uuid=%s", company_uuid)
-        row = await self.repository.get_company_with_metadata(session, company_uuid)
-        if not row:
+        result = await self.repository.get_company_with_metadata(session, company_uuid)
+        if not result:
             # self.logger.info("Company not found: company_uuid=%s", company_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-        company, company_meta = row
+        company, company_meta = result
         item = self._hydrate_company(company, company_meta)
         self.logger.debug("Hydrated company detail for company_uuid=%s", company_uuid)
         detail = CompanyDetail(
@@ -379,25 +396,25 @@ class CompaniesService:
             "Entering CompaniesService._hydrate_company company_id=%s",
             getattr(company, "id", None),
         )
-        industries = _normalize_sequence(company.industries)
-        keywords = _normalize_sequence(company.keywords)
-        technologies = _normalize_sequence(company.technologies)
+        industries = normalize_sequence(company.industries)
+        keywords = normalize_sequence(company.keywords)
+        technologies = normalize_sequence(company.technologies)
 
         industry = ", ".join(industries) if industries else None
 
         item = CompanyListItem(
             uuid=company.uuid,
-            name=_normalize_text(company.name),
+            name=normalize_text(company.name),
             employees_count=company.employees_count,
             annual_revenue=company.annual_revenue,
             total_funding=company.total_funding,
             industry=industry,
-            city=_normalize_text(company_meta.city if company_meta else None),
-            state=_normalize_text(company_meta.state if company_meta else None),
-            country=_normalize_text(company_meta.country if company_meta else None),
-            website=_normalize_text(company_meta.website if company_meta else None),
-            linkedin_url=_normalize_text(company_meta.linkedin_url if company_meta else None),
-            phone_number=_normalize_text(company_meta.phone_number if company_meta else None),
+            city=normalize_text(company_meta.city if company_meta else None),
+            state=normalize_text(company_meta.state if company_meta else None),
+            country=normalize_text(company_meta.country if company_meta else None),
+            website=normalize_text(company_meta.website if company_meta else None),
+            linkedin_url=normalize_text(company_meta.linkedin_url if company_meta else None),
+            phone_number=normalize_text(company_meta.phone_number if company_meta else None),
             technologies=technologies or None,
             keywords=keywords or None,
             metadata=self._company_metadata(company_meta),
@@ -422,18 +439,18 @@ class CompaniesService:
             return None
         metadata = CompanyMetadataOut(
             uuid=company_meta.uuid,
-            linkedin_url=_normalize_text(company_meta.linkedin_url),
-            facebook_url=_normalize_text(company_meta.facebook_url),
-            twitter_url=_normalize_text(company_meta.twitter_url),
-            website=_normalize_text(company_meta.website),
-            company_name_for_emails=_normalize_text(company_meta.company_name_for_emails),
-            phone_number=_normalize_text(company_meta.phone_number),
-            latest_funding=_normalize_text(company_meta.latest_funding),
+            linkedin_url=normalize_text(company_meta.linkedin_url),
+            facebook_url=normalize_text(company_meta.facebook_url),
+            twitter_url=normalize_text(company_meta.twitter_url),
+            website=normalize_text(company_meta.website),
+            company_name_for_emails=normalize_text(company_meta.company_name_for_emails),
+            phone_number=normalize_text(company_meta.phone_number),
+            latest_funding=normalize_text(company_meta.latest_funding),
             latest_funding_amount=company_meta.latest_funding_amount,
-            last_raised_at=_normalize_text(company_meta.last_raised_at),
-            city=_normalize_text(company_meta.city),
-            state=_normalize_text(company_meta.state),
-            country=_normalize_text(company_meta.country),
+            last_raised_at=normalize_text(company_meta.last_raised_at),
+            city=normalize_text(company_meta.city),
+            state=normalize_text(company_meta.state),
+            country=normalize_text(company_meta.country),
         )
         self.logger.debug(
             "Exiting CompaniesService._company_metadata company_uuid=%s",

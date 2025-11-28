@@ -27,26 +27,13 @@ from app.schemas.linkedin import (
     LinkedInUpsertResponse,
 )
 from app.schemas.metadata import ContactMetadataOut
+from app.utils.normalization import PLACEHOLDER_VALUE, normalize_text
 
 logger = get_logger(__name__)
-
-PLACEHOLDER_VALUE = "_"
 
 # Performance optimization constants
 MAX_LINKEDIN_SEARCH_RESULTS = 1000  # Maximum results per search to prevent memory issues
 LINKEDIN_UUID_BATCH_SIZE = 1000  # PostgreSQL IN clause limit
-
-
-def _normalize_text(value: Any, *, allow_placeholder: bool = False) -> Optional[str]:
-    """Coerce raw string-like values to cleaned text or None."""
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    if not allow_placeholder and text == PLACEHOLDER_VALUE:
-        return None
-    return text
 
 
 class LinkedInService:
@@ -323,7 +310,7 @@ class LinkedInService:
         companies: list[CompanyWithRelations] = []
         
         # Normalize LinkedIn URL
-        normalized_url = _normalize_text(linkedin_url)
+        normalized_url = normalize_text(linkedin_url)
         if not normalized_url:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -353,7 +340,7 @@ class LinkedInService:
                     # Update contact fields
                     for key, value in contact_data.items():
                         if hasattr(contact, key):
-                            normalized = _normalize_text(value) if isinstance(value, str) else value
+                            normalized = normalize_text(value) if isinstance(value, str) else value
                             setattr(contact, key, normalized)
                     contact.updated_at = datetime.now(UTC).replace(tzinfo=None)
                     await session.flush()
@@ -365,7 +352,7 @@ class LinkedInService:
                         if contact_metadata:
                             for key, value in contact_metadata.items():
                                 if hasattr(contact_meta, key):
-                                    normalized = _normalize_text(value) if isinstance(value, str) else value
+                                    normalized = normalize_text(value) if isinstance(value, str) else value
                                     setattr(contact_meta, key, normalized)
                         # Always update linkedin_url
                         contact_meta.linkedin_url = normalized_url
@@ -379,7 +366,7 @@ class LinkedInService:
                         if contact_metadata:
                             for key, value in contact_metadata.items():
                                 if hasattr(contact_meta, key):
-                                    normalized = _normalize_text(value) if isinstance(value, str) else value
+                                    normalized = normalize_text(value) if isinstance(value, str) else value
                                     setattr(contact_meta, key, normalized)
                         session.add(contact_meta)
                         await session.flush()
@@ -389,7 +376,7 @@ class LinkedInService:
                 self.logger.info("Creating new contact with LinkedIn URL")
                 
                 contact_uuid = contact_data.get("uuid") if contact_data else None
-                normalized_uuid = _normalize_text(contact_uuid, allow_placeholder=False)
+                normalized_uuid = normalize_text(contact_uuid, allow_placeholder=False)
                 contact_uuid = normalized_uuid or uuid4().hex
                 
                 now = datetime.now(UTC).replace(tzinfo=None)
@@ -403,7 +390,7 @@ class LinkedInService:
                 if contact_data:
                     for key, value in contact_data.items():
                         if hasattr(contact, key) and key != "uuid":
-                            normalized = _normalize_text(value) if isinstance(value, str) else value
+                            normalized = normalize_text(value) if isinstance(value, str) else value
                             setattr(contact, key, normalized)
                 
                 session.add(contact)
@@ -417,7 +404,7 @@ class LinkedInService:
                 if contact_metadata:
                     for key, value in contact_metadata.items():
                         if hasattr(contact_meta, key):
-                            normalized = _normalize_text(value) if isinstance(value, str) else value
+                            normalized = normalize_text(value) if isinstance(value, str) else value
                             setattr(contact_meta, key, normalized)
                 session.add(contact_meta)
                 await session.flush()
@@ -463,7 +450,7 @@ class LinkedInService:
                     # Update company fields
                     for key, value in company_data.items():
                         if hasattr(company, key):
-                            normalized = _normalize_text(value) if isinstance(value, str) else value
+                            normalized = normalize_text(value) if isinstance(value, str) else value
                             setattr(company, key, normalized)
                     company.updated_at = datetime.now(UTC).replace(tzinfo=None)
                     await session.flush()
@@ -475,7 +462,7 @@ class LinkedInService:
                         if company_metadata:
                             for key, value in company_metadata.items():
                                 if hasattr(company_meta, key):
-                                    normalized = _normalize_text(value) if isinstance(value, str) else value
+                                    normalized = normalize_text(value) if isinstance(value, str) else value
                                     setattr(company_meta, key, normalized)
                         # Always update linkedin_url
                         company_meta.linkedin_url = normalized_url
@@ -489,7 +476,7 @@ class LinkedInService:
                         if company_metadata:
                             for key, value in company_metadata.items():
                                 if hasattr(company_meta, key):
-                                    normalized = _normalize_text(value) if isinstance(value, str) else value
+                                    normalized = normalize_text(value) if isinstance(value, str) else value
                                     setattr(company_meta, key, normalized)
                         session.add(company_meta)
                         await session.flush()
@@ -499,7 +486,7 @@ class LinkedInService:
                 self.logger.info("Creating new company with LinkedIn URL")
                 
                 company_uuid = company_data.get("uuid") if company_data else None
-                normalized_uuid = _normalize_text(company_uuid, allow_placeholder=False)
+                normalized_uuid = normalize_text(company_uuid, allow_placeholder=False)
                 company_uuid = normalized_uuid or uuid4().hex
                 
                 now = datetime.now(UTC).replace(tzinfo=None)
@@ -512,7 +499,7 @@ class LinkedInService:
                 if company_data:
                     for key, value in company_data.items():
                         if hasattr(company, key) and key != "uuid":
-                            normalized = _normalize_text(value) if isinstance(value, str) else value
+                            normalized = normalize_text(value) if isinstance(value, str) else value
                             setattr(company, key, normalized)
                 
                 session.add(company)
@@ -526,7 +513,7 @@ class LinkedInService:
                 if company_metadata:
                     for key, value in company_metadata.items():
                         if hasattr(company_meta, key):
-                            normalized = _normalize_text(value) if isinstance(value, str) else value
+                            normalized = normalize_text(value) if isinstance(value, str) else value
                             setattr(company_meta, key, normalized)
                 session.add(company_meta)
                 await session.flush()

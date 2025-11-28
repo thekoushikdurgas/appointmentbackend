@@ -8,6 +8,7 @@ from app.api.deps import get_current_user
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
 from app.models.user import User
+from app.repositories.token_blacklist import TokenBlacklistRepository
 from app.schemas.common import MessageResponse
 from app.schemas.filters import AuthFilterParams
 from app.schemas.user import (
@@ -26,6 +27,7 @@ from app.services.user_service import UserService
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = get_logger(__name__)
 service = UserService()
+blacklist_repo = TokenBlacklistRepository()
 
 
 async def resolve_auth_filters(request: Request) -> AuthFilterParams:
@@ -92,12 +94,19 @@ async def login(
     try:
         user, access_token, refresh_token = await service.authenticate_user(session, login_data)
         
+        # Refresh user to ensure all attributes are loaded and object is attached to session
+        await session.refresh(user)
+        
+        # Extract user attributes immediately to avoid lazy loading issues
+        user_id = user.id
+        user_email = user.email
+        
         response = TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            user={"id": user.id, "email": user.email}
+            user={"id": user_id, "email": user_email}
         )
-        logger.info("Login successful: user_id=%s email=%s", user.id, user.email)
+        logger.info("Login successful: user_id=%s email=%s", user_id, user_email)
         return response
     except HTTPException:
         raise
@@ -120,14 +129,31 @@ async def logout(
     """
     Logout the current user and invalidate refresh token.
     
-    Note: In a production system, you would blacklist the refresh token.
-    For now, logout succeeds even if refresh token is not provided.
+    If a refresh_token is provided, it will be blacklisted to prevent reuse.
+    Logout succeeds even if refresh token is not provided.
     """
     logger.info("Logout request: user_id=%s", current_user.id)
     
-    # TODO: Implement token blacklisting (store in database or Redis)
-    # For now, we just return success
-    # If refresh_token is provided, it could be blacklisted here
+    # Blacklist refresh token if provided
+    if logout_data.refresh_token:
+        try:
+            # Check if token is already blacklisted (idempotent operation)
+            is_blacklisted = await blacklist_repo.is_token_blacklisted(session, logout_data.refresh_token)
+            if not is_blacklisted:
+                await blacklist_repo.create_blacklist_entry(
+                    session,
+                    logout_data.refresh_token,
+                    current_user.id,
+                )
+                await session.commit()
+                logger.info("Refresh token blacklisted: user_id=%s", current_user.id)
+            else:
+                logger.debug("Refresh token already blacklisted: user_id=%s", current_user.id)
+        except Exception as exc:
+            # Log error but don't fail logout - blacklisting is best effort
+            logger.warning("Failed to blacklist refresh token: user_id=%s error=%s", current_user.id, exc)
+            # Rollback the blacklist operation but continue with logout
+            await session.rollback()
     
     response = LogoutResponse(message="Logout successful")
     logger.info("Logout successful: user_id=%s", current_user.id)
@@ -148,8 +174,11 @@ async def get_session(
     logger.debug("Session request: user_id=%s", current_user.id)
     
     response = SessionResponse(
-        user={"id": current_user.id, "email": current_user.email},
-        last_sign_in_at=current_user.last_sign_in_at
+        user={
+            "id": current_user.id,
+            "email": current_user.email,
+            "last_sign_in_at": current_user.last_sign_in_at
+        }
     )
     logger.debug("Session response: user_id=%s", current_user.id)
     return response

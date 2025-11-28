@@ -2,12 +2,12 @@
 
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from fastapi.websockets import WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.constants import ADMIN, FREE_USER, PRO_USER, SUPER_ADMIN
 from app.core.logging import get_logger
 from app.core.security import decode_token
 from app.db.session import AsyncSessionLocal, get_db
@@ -93,23 +93,33 @@ async def get_current_active_user(
     return current_user
 
 
+def get_user_role(profile: Optional[object]) -> str:
+    """
+    Helper function to get user role from profile.
+    
+    Returns the role from profile, or FREE_USER as default.
+    """
+    if profile and hasattr(profile, 'role') and profile.role:
+        return profile.role
+    return FREE_USER
+
+
 async def get_current_admin(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> User:
     """
-    Ensure the current user is an admin.
+    Ensure the current user is an admin or super admin.
     
-    Checks the user's profile role. If profile doesn't exist, defaults to "Member".
-    Raises HTTPException (403 Forbidden) if user is not an admin.
+    Checks the user's profile role. If profile doesn't exist, defaults to FREE_USER.
+    Raises HTTPException (403 Forbidden) if user is not an admin or super admin.
     """
     profile_repo = UserProfileRepository()
     profile = await profile_repo.get_by_user_id(session, current_user.id)
     
-    # Default role is "Member" if profile doesn't exist
-    user_role = profile.role if profile and profile.role else "Member"
+    user_role = get_user_role(profile)
     
-    if user_role != "Admin":
+    if user_role not in [ADMIN, SUPER_ADMIN]:
         logger.warning("Access denied: user is not admin: user_id=%s role=%s", current_user.id, user_role)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -120,64 +130,118 @@ async def get_current_admin(
     return current_user
 
 
-async def get_current_user_websocket(
-    websocket: WebSocket,
-    token: Optional[str] = Query(None),
+async def get_current_super_admin(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
 ) -> User:
     """
-    Get the current authenticated user from JWT token in WebSocket query parameters.
+    Ensure the current user is a super admin.
     
-    For WebSocket connections, the token is passed as a query parameter during
-    the handshake: ws://host:port/path?token=<jwt_token>
-    
-    Args:
-        websocket: WebSocket connection object
-        token: JWT token from query parameters
-    
-    Returns:
-        Authenticated User object
-    
-    Raises:
-        WebSocketDisconnect: If authentication fails, closes connection with appropriate status
+    Checks the user's profile role. If profile doesn't exist, defaults to FREE_USER.
+    Raises HTTPException (403 Forbidden) if user is not a super admin.
     """
-    # WebSocket close codes (RFC 6455)
-    WS_1008_POLICY_VIOLATION = 1008
-    WS_1011_INTERNAL_ERROR = 1011
+    profile_repo = UserProfileRepository()
+    profile = await profile_repo.get_by_user_id(session, current_user.id)
     
-    if not token:
-        logger.warning("WebSocket authentication failed: no token provided")
-        await websocket.close(code=WS_1008_POLICY_VIOLATION, reason="Authentication credentials were not provided")
-        raise WebSocketDisconnect(code=WS_1008_POLICY_VIOLATION)
+    user_role = get_user_role(profile)
     
-    # Decode token
-    payload = decode_token(token)
-    if not payload or payload.get("type") != "access":
-        logger.warning("WebSocket authentication failed: invalid token")
-        await websocket.close(code=WS_1008_POLICY_VIOLATION, reason="Invalid authentication token")
-        raise WebSocketDisconnect(code=WS_1008_POLICY_VIOLATION)
+    if user_role != SUPER_ADMIN:
+        logger.warning("Access denied: user is not super admin: user_id=%s role=%s", current_user.id, user_role)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action. Super Admin role required."
+        )
     
-    user_id = payload.get("sub")
-    if not user_id:
-        logger.warning("WebSocket authentication failed: missing user ID in token")
-        await websocket.close(code=WS_1008_POLICY_VIOLATION, reason="Invalid authentication token")
-        raise WebSocketDisconnect(code=WS_1008_POLICY_VIOLATION)
+    logger.debug("Super admin access granted: user_id=%s email=%s", current_user.id, current_user.email)
+    return current_user
+
+
+async def get_current_admin_or_super_admin(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Ensure the current user is an admin or super admin.
     
-    # Get user from database - create session manually for WebSocket
-    async with AsyncSessionLocal() as session:
-        try:
-            user_repo = UserRepository()
-            user = await user_repo.get_by_uuid(session, user_id)
-            if not user:
-                logger.warning("WebSocket authentication failed: user not found: %s", user_id)
-                await websocket.close(code=WS_1008_POLICY_VIOLATION, reason="User not found")
-                raise WebSocketDisconnect(code=WS_1008_POLICY_VIOLATION)
-            
-            logger.debug("WebSocket user authenticated: id=%s email=%s", user.id, user.email)
-            return user
-        except WebSocketDisconnect:
-            raise
-        except Exception as exc:
-            logger.exception("Error during WebSocket authentication: %s", exc)
-            await websocket.close(code=WS_1011_INTERNAL_ERROR, reason="Internal server error")
-            raise WebSocketDisconnect(code=WS_1011_INTERNAL_ERROR)
+    This is an alias for get_current_admin for clarity.
+    """
+    return await get_current_admin(current_user, session)
+
+
+async def get_current_pro_user(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Ensure the current user is a pro user.
+    
+    Checks the user's profile role. If profile doesn't exist, defaults to FREE_USER.
+    Raises HTTPException (403 Forbidden) if user is not a pro user.
+    """
+    profile_repo = UserProfileRepository()
+    profile = await profile_repo.get_by_user_id(session, current_user.id)
+    
+    user_role = get_user_role(profile)
+    
+    if user_role != PRO_USER:
+        logger.warning("Access denied: user is not pro user: user_id=%s role=%s", current_user.id, user_role)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action. Pro User role required."
+        )
+    
+    logger.debug("Pro user access granted: user_id=%s email=%s", current_user.id, current_user.email)
+    return current_user
+
+
+async def get_current_free_or_pro_user(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Ensure the current user is a free user or pro user.
+    
+    Checks the user's profile role. If profile doesn't exist, defaults to FREE_USER.
+    Raises HTTPException (403 Forbidden) if user is not a free or pro user.
+    """
+    profile_repo = UserProfileRepository()
+    profile = await profile_repo.get_by_user_id(session, current_user.id)
+    
+    user_role = get_user_role(profile)
+    
+    if user_role not in [FREE_USER, PRO_USER]:
+        logger.warning("Access denied: user is not free or pro user: user_id=%s role=%s", current_user.id, user_role)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action. Free or Pro User role required."
+        )
+    
+    logger.debug("Free or pro user access granted: user_id=%s email=%s", current_user.id, current_user.email)
+    return current_user
+
+
+async def check_can_modify_resources(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Check if user can modify (update/delete) resources.
+    
+    Free users can only create and read, not update or delete.
+    Pro users, Admin, and Super Admin can do full CRUD.
+    """
+    profile_repo = UserProfileRepository()
+    profile = await profile_repo.get_by_user_id(session, current_user.id)
+    
+    user_role = get_user_role(profile)
+    
+    if user_role == FREE_USER:
+        logger.warning("Access denied: free user cannot modify resources: user_id=%s", current_user.id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Free users can only create and read resources. Upgrade to Pro for full access."
+        )
+    
+    logger.debug("Modify access granted: user_id=%s role=%s", current_user.id, user_role)
+    return current_user
 

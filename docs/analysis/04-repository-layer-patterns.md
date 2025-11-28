@@ -31,13 +31,13 @@ class AsyncRepository(Generic[ModelType]):
 - Async SQLAlchemy throughout
 - Logging at entry/exit
 
-## 2. ContactRepository - Conditional JOIN Optimization
+## 2. ContactRepository - UUID-Based Lookups (No JOINs)
 
-### JOIN Detection Methods
+### EXISTS Subquery Detection Methods
 
-**Purpose:** Determine which tables need to be joined based on filters and ordering.
+**Purpose:** Determine which tables need EXISTS subqueries based on filters and ordering.
 
-#### `_needs_company_join(filters)`
+#### `_needs_company_exists_subquery(filters)`
 
 **Checks for:**
 
@@ -48,9 +48,9 @@ class AsyncRepository(Generic[ModelType]):
 - Technology/keyword/industry filters
 - Company address filters
 
-**Returns:** `bool` - Whether Company table join is needed
+**Returns:** `bool` - Whether Company table EXISTS subquery is needed
 
-#### `_needs_contact_metadata_join(filters)`
+#### `_needs_contact_metadata_exists_subquery(filters)`
 
 **Checks for:**
 
@@ -59,9 +59,9 @@ class AsyncRepository(Generic[ModelType]):
 - LinkedIn/website/stage filters
 - Social media URL filters
 
-**Returns:** `bool` - Whether ContactMetadata join is needed
+**Returns:** `bool` - Whether ContactMetadata EXISTS subquery is needed
 
-#### `_needs_company_metadata_join(filters)`
+#### `_needs_company_metadata_exists_subquery(filters)`
 
 **Checks for:**
 
@@ -70,19 +70,19 @@ class AsyncRepository(Generic[ModelType]):
 - Latest funding filters
 - Company LinkedIn URL
 
-**Returns:** `bool` - Whether CompanyMetadata join is needed
+**Returns:** `bool` - Whether CompanyMetadata EXISTS subquery is needed
 
-#### `_needs_joins_for_ordering(ordering)`
+#### Ordering by Related Tables
 
-**Purpose:** Determine joins needed for ORDER BY clause
+**Purpose:** Use scalar subqueries for ordering by related table columns (no JOINs)
 
-**Checks ordering field:**
+**Pattern:**
 
-- Company fields → needs Company join
-- CompanyMetadata fields → needs Company + CompanyMetadata joins
-- ContactMetadata fields → needs ContactMetadata join
+- Company fields → scalar subquery: `ORDER BY (SELECT name FROM companies WHERE uuid = contacts.company_id)`
+- CompanyMetadata fields → scalar subquery through Company
+- ContactMetadata fields → scalar subquery: `ORDER BY (SELECT city FROM contacts_metadata WHERE uuid = contacts.uuid)`
 
-**Returns:** `tuple[bool, bool, bool]` - (needs_company, needs_contact_meta, needs_company_meta)
+**Returns:** Scalar subquery expression for ORDER BY clause
 
 ### Base Query Methods
 
@@ -90,62 +90,52 @@ class AsyncRepository(Generic[ModelType]):
 
 **Returns:** `SELECT * FROM contacts`
 
-- No joins
+- No JOINs - queries only contacts table
 - Fastest query
-- Used when no filters require joins
-
-#### `base_query_with_company()`
-
-**Returns:** `SELECT * FROM contacts LEFT JOIN companies`
-
-- Only Company join
-- Used when company filters present but no metadata needed
-
-#### `base_query_with_metadata()`
-
-**Returns:** `SELECT * FROM contacts LEFT JOIN companies LEFT JOIN contacts_metadata LEFT JOIN companies_metadata`
-
-- All joins
-- Used when metadata filters present
+- Always used as base query
 
 ### Query Building Strategy
 
-**Conditional JOIN Selection:**
+**UUID-Based Lookup Pattern (No JOINs):**
 
 ```python
-# Determine joins needed
-needs_company = self._needs_company_join(filters)
-needs_contact_meta = self._needs_contact_metadata_join(filters)
-needs_company_meta = self._needs_company_metadata_join(filters)
+# Always start with minimal query (no JOINs)
+stmt = self.base_query_minimal()
 
-# Check ordering requirements
-order_company, order_contact_meta, order_company_meta = self._needs_joins_for_ordering(filters.ordering)
+# Determine which EXISTS subqueries are needed
+needs_company = self._needs_company_exists_subquery(filters)
+needs_contact_meta = self._needs_contact_metadata_exists_subquery(filters)
+needs_company_meta = self._needs_company_metadata_exists_subquery(filters)
 
-# Combine requirements
-needs_company = needs_company or order_company
-needs_contact_meta = needs_contact_meta or order_contact_meta
-needs_company_meta = needs_company_meta or order_company_meta
+# Apply filters using EXISTS subqueries (no JOINs)
+if needs_company:
+    company_subq = select(1).select_from(Company).where(Company.uuid == Contact.company_id)
+    # ... apply company filters to subquery ...
+    stmt = stmt.where(exists(company_subq))
 
-# Select appropriate base query
-if needs_company_meta or needs_contact_meta:
-    stmt, company, contact_meta, company_meta = self.base_query_with_metadata()
-elif needs_company:
-    stmt, company = self.base_query_with_company()
-    contact_meta = None
-    company_meta = None
-else:
-    stmt = self.base_query_minimal()
-    company = None
-    contact_meta = None
-    company_meta = None
+if needs_contact_meta:
+    contact_meta_subq = select(1).select_from(ContactMetadata).where(ContactMetadata.uuid == Contact.uuid)
+    # ... apply metadata filters to subquery ...
+    stmt = stmt.where(exists(contact_meta_subq))
+
+if needs_company_meta:
+    company_meta_subq = select(1).select_from(CompanyMetadata).where(
+        CompanyMetadata.uuid.in_(select(Company.uuid).where(Company.uuid == Contact.company_id))
+    )
+    # ... apply metadata filters to subquery ...
+    stmt = stmt.where(exists(company_meta_subq))
+
+# Repository returns only Contact objects
+# Service layer batch fetches related entities by UUIDs
 ```
 
 **Benefits:**
 
-- Minimal queries when possible
-- Only joins tables when needed
-- Significant performance improvement
-- Reduces query complexity
+- No JOIN overhead - queries are simpler and faster
+- Better scalability - can optimize each query independently
+- Reduced query complexity - easier to understand and maintain
+- Batch lookups prevent N+1 query problems
+- UUID-based foreign key lookups are efficient with proper indexing
 
 ## 3. Filter Application Order
 
@@ -395,15 +385,25 @@ else:
 
 ## 7. Query Optimization Techniques
 
-### EXISTS Subqueries (Fallback)
+### EXISTS Subqueries (Primary Pattern)
 
-**When No Company Join:**
+**Always Used Instead of JOINs:**
 
-- Uses EXISTS subqueries for company filters
-- Avoids JOIN overhead
-- Less efficient than JOINs but works
+- Uses EXISTS subqueries for all related table filters
+- Avoids JOIN overhead entirely
+- More efficient than JOINs for filtering
+- Used for all company, contact_metadata, and company_metadata filters
 
 **Method:** `_apply_filters_with_exists()`
+
+**Pattern:**
+```sql
+WHERE EXISTS (
+    SELECT 1 FROM companies co 
+    WHERE co.uuid = contacts.company_id 
+    AND co.name ILIKE '%value%'
+)
+```
 
 ### Trigram Index Optimization
 
@@ -494,10 +494,10 @@ logger.info("Query executed: duration=%.3fs", query_execution_time)
 
 **Follows same patterns as ContactRepository:**
 
-- Conditional JOIN detection
-- Minimal vs full queries
-- Filter application order
-- Metadata handling
+- EXISTS subquery detection (no JOINs)
+- Always uses minimal query (Company only)
+- Filter application using EXISTS subqueries
+- Metadata handling via EXISTS subqueries
 
 **Key Differences:**
 
@@ -507,8 +507,7 @@ logger.info("Query executed: duration=%.3fs", query_execution_time)
 
 ### Base Query Methods
 
-- `base_query_minimal()`: Company only
-- `base_query_with_metadata()`: Company + CompanyMetadata
+- `base_query_minimal()`: Company only (always used, no JOINs)
 
 ## 10. Array Column Handling
 
@@ -553,19 +552,23 @@ WHERE NOT ('value' = ANY(array_column))
 
 ## 11. NULL Handling
 
-### LEFT JOIN NULLs
+### UUID-Based Lookup NULLs
 
 **Pattern:**
 
-- All joins are LEFT OUTER JOIN
-- NULL values handled gracefully
-- Filters check for NULL before applying
+- No JOINs - queries only main table
+- Related entities fetched separately by UUID
+- NULL values handled when batch fetching (entity may not exist)
+- Filters use EXISTS subqueries which handle NULLs automatically
 
 **Example:**
 
 ```python
-if company_meta is not None:
-    stmt = self._apply_multi_value_filter(stmt, company_meta.city, filters.city)
+# Filter using EXISTS subquery (handles NULL company_id automatically)
+if filters.company:
+    company_subq = select(1).select_from(Company).where(Company.uuid == Contact.company_id)
+    company_subq = company_subq.where(Company.name.ilike(f'%{filters.company}%'))
+    stmt = stmt.where(exists(company_subq))
 ```
 
 ### Exclusion with NULLs
@@ -606,19 +609,22 @@ rows = await batcher.fetch_all()
 
 **Returns:**
 
-- Tuple of (Contact, Company, ContactMetadata, CompanyMetadata)
-- Some values may be None if not joined
-- Service layer handles None values
+- Repository returns only Contact objects (or Company objects for CompanyRepository)
+- Service layer batch fetches related entities by UUIDs
+- Reconstructs response objects with related data
+- Handles missing related entities gracefully (None values)
 
 ## 13. Performance Optimizations
 
-### Conditional JOINs
+### UUID-Based Lookups (No JOINs)
 
 **Impact:**
 
-- Minimal queries: ~10x faster
-- Reduced query complexity
-- Better index usage
+- No JOIN overhead: queries are simpler and faster
+- Better scalability: can optimize each query independently
+- Reduced query complexity: easier to understand and maintain
+- Batch lookups prevent N+1 query problems
+- UUID-based foreign key lookups are efficient with proper indexing
 
 ### Default Ordering
 
@@ -646,11 +652,12 @@ rows = await batcher.fetch_all()
 
 ## 14. Key Patterns Summary
 
-### 1. Conditional JOIN Pattern
+### 1. UUID-Based Lookup Pattern (No JOINs)
 
-- Detect required joins
-- Select minimal base query
-- Only join when necessary
+- Always query only main table (contacts or companies)
+- Use EXISTS subqueries for related table filters
+- Use scalar subqueries for ordering by related table columns
+- Batch fetch related entities by UUIDs in service layer
 
 ### 2. Filter Application Order
 
@@ -680,11 +687,11 @@ rows = await batcher.fetch_all()
 
 The repository layer demonstrates:
 
-1. **Sophisticated Optimization**: Conditional JOINs based on filters
-2. **Complex Filter Logic**: Multi-phase filter application
-3. **Performance Focus**: Minimal queries, batch processing, monitoring
+1. **UUID-Based Lookups**: No JOINs - uses EXISTS subqueries for filtering and scalar subqueries for ordering
+2. **Complex Filter Logic**: Multi-phase filter application using EXISTS subqueries
+3. **Performance Focus**: No JOIN overhead, batch UUID lookups, monitoring
 4. **Flexible Querying**: Supports various filter types and combinations
 5. **Maintainable Code**: Clear separation of concerns, well-documented
 
-The conditional JOIN optimization is the most significant performance feature, allowing queries to be 10x faster when no joins are needed.
+The UUID-based lookup pattern is the most significant performance feature, eliminating JOIN overhead entirely and allowing queries to be simpler and faster.
 

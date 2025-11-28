@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -28,7 +28,7 @@ service = LinkedInService()
 export_service = ExportService()
 
 
-@router.get("/", response_model=LinkedInSearchResponse)
+@router.post("/", response_model=LinkedInSearchResponse)
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def search_by_linkedin_url(
     request: LinkedInSearchRequest,
@@ -42,14 +42,14 @@ async def search_by_linkedin_url(
     company LinkedIn URLs (CompanyMetadata.linkedin_url), returning all
     matching records with their related data.
     
-    Request body should contain:
+    Request body:
     - url: LinkedIn URL to search for (person or company) (required)
     
     Returns:
         Combined results with contacts and companies, including their metadata
         and relationships.
     """
-    logger.info("GET /linkedin search request: url=%s user_id=%s", request.url, current_user.id)
+    logger.info("POST /linkedin search request: url=%s user_id=%s", request.url, current_user.id)
     
     if not request.url or not request.url.strip():
         raise HTTPException(
@@ -60,7 +60,7 @@ async def search_by_linkedin_url(
     try:
         result = await service.search_by_url(session, request.url.strip())
         logger.info(
-            "GET /linkedin search completed: contacts=%d companies=%d",
+            "POST /linkedin search completed: contacts=%d companies=%d",
             result.total_contacts,
             result.total_companies,
         )
@@ -139,6 +139,7 @@ async def upsert_by_linkedin_url(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def create_linkedin_export(
     request: LinkedInExportRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> LinkedInExportResponse:
@@ -190,14 +191,13 @@ async def create_linkedin_export(
         await session.commit()
         
         # Enqueue background task
-        task = process_linkedin_export.delay(export.export_id, valid_urls)
+        background_tasks.add_task(process_linkedin_export, export.export_id, valid_urls)
         
         logger.info(
-            "LinkedIn export queued: export_id=%s user_id=%s url_count=%d task_id=%s",
+            "LinkedIn export queued: export_id=%s user_id=%s url_count=%d",
             export.export_id,
             current_user.id,
             len(valid_urls),
-            task.id,
         )
         
         # Generate initial download URL (will be updated when export completes)
@@ -217,7 +217,6 @@ async def create_linkedin_export(
             contact_count=0,  # Will be updated when export completes
             company_count=0,  # Will be updated when export completes
             status=ExportStatus.pending,
-            job_id=task.id,
         )
     except HTTPException:
         raise

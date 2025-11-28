@@ -16,8 +16,10 @@ from app.core.logging import get_logger, setup_logging
 from app.core.middleware import (
     CORSFriendlyTrustedHostMiddleware,
     LoggingMiddleware,
+    RequestIdMiddleware,
     TimingMiddleware,
 )
+from app.utils.query_cache import QueryCache, set_query_cache
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -31,7 +33,7 @@ async def lifespan(app: FastAPI):
     """
     Application lifespan context.
 
-    Configures logging, prepares directories, and will later initialize external resources.
+    Configures logging, prepares directories, and initializes query cache.
     """
     logger.debug("Entering lifespan startup")
     setup_logging()
@@ -39,8 +41,19 @@ async def lifespan(app: FastAPI):
     if not settings.S3_BUCKET_NAME:
         Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
         Path(settings.UPLOAD_DIR, "avatars").mkdir(parents=True, exist_ok=True)
+    
+    # Initialize in-memory query cache
+    query_cache = QueryCache(enabled=settings.ENABLE_QUERY_CACHING)
+    set_query_cache(query_cache)
+    if settings.ENABLE_QUERY_CACHING:
+        logger.info("Query cache initialized and enabled (in-memory)")
+    else:
+        logger.info("Query cache initialized (disabled)")
+    
     logger.info("Application startup complete: project=%s version=%s", settings.PROJECT_NAME, settings.VERSION)
     yield
+    
+    # Cleanup
     logger.info("Application shutdown initiated: project=%s", settings.PROJECT_NAME)
     logger.debug("Exiting lifespan cleanup")
 
@@ -78,6 +91,7 @@ if settings.ENABLE_RESPONSE_COMPRESSION:
 # Add custom middleware first (these process requests last, responses first)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(TimingMiddleware)
+app.add_middleware(RequestIdMiddleware)
 
 # Add security middleware
 # Use CORS-friendly wrapper that allows OPTIONS requests to bypass host validation
@@ -98,12 +112,12 @@ if settings.TRUSTED_HOSTS:
 # This ensures CORS headers are added even if other middleware might reject the request
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","http://localhost:8000","http://127.0.0.1:3000","http://127.0.0.1:8000","http://54.87.173.234","http://54.87.173.234:8000","http://3.88.218.42","http://3.88.218.42:3000"],
-    # allow_origins=[str(origin) for origin in settings.ALLOWED_ORIGINS],
-    # allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
-    # expose_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 
@@ -153,8 +167,9 @@ async def options_handler(request: Request, full_path: str):
         logger.debug("Origin allowed: %s", origin)
     elif not origin:
         # No origin header (same-origin request or non-browser client)
-        allow_origin = "*"
-        logger.debug("No origin header, allowing all origins")
+        # Use first allowed origin as fallback, or "*" if none configured
+        allow_origin = str(allowed_origins[0]) if allowed_origins else "*"
+        logger.debug("No origin header, using fallback origin: %s", allow_origin)
     else:
         # Origin not in allowed list - reject the preflight
         logger.warning("Origin not allowed: %s (allowed: %s)", origin, allowed_origins)

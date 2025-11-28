@@ -12,6 +12,10 @@ from app.core.logging import get_logger
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
 from app.repositories.base import AsyncRepository
+from app.utils.batch_lookup import (
+    batch_fetch_companies_by_uuids,
+    batch_fetch_contact_metadata_by_uuids,
+)
 
 logger = get_logger(__name__)
 
@@ -508,19 +512,8 @@ class EmailFinderRepository(AsyncRepository):
         if len(emails) > 10:
             logger.debug("... and %d more emails", len(emails) - 10)
         
-        # Create aliases for joins
-        contact_meta_alias = aliased(ContactMetadata, name="contact_metadata")
-        company_alias = aliased(Company, name="company")
-        company_meta_alias = aliased(CompanyMetadata, name="company_metadata")
-        
-        # Fetch full contact data with all relations
-        stmt: Select = (
-            select(Contact, contact_meta_alias, company_alias, company_meta_alias)
-            .outerjoin(contact_meta_alias, Contact.uuid == contact_meta_alias.uuid)
-            .outerjoin(company_alias, Contact.company_id == company_alias.uuid)
-            .outerjoin(company_meta_alias, company_alias.uuid == company_meta_alias.uuid)
-            .where(Contact.email.in_(emails))
-        )
+        # Fetch contacts only (no joins)
+        stmt: Select = select(Contact).where(Contact.email.in_(emails))
         
         # Log the SQL query
         try:
@@ -530,7 +523,27 @@ class EmailFinderRepository(AsyncRepository):
             logger.debug("Could not compile SQL for logging: %s", e)
         
         result = await session.execute(stmt)
-        rows = result.all()
+        contacts = result.scalars().all()
+        
+        # Extract foreign keys
+        company_ids = {c.company_id for c in contacts if c.company_id}
+        contact_uuids = {c.uuid for c in contacts}
+        
+        # Batch fetch related entities
+        companies_dict = await batch_fetch_companies_by_uuids(session, company_ids)
+        contact_meta_dict = await batch_fetch_contact_metadata_by_uuids(session, contact_uuids)
+        
+        # Extract company UUIDs from fetched companies
+        company_uuids = {c.uuid for c in companies_dict.values()}
+        company_meta_dict = await batch_fetch_company_metadata_by_uuids(session, company_uuids)
+        
+        # Reconstruct tuples
+        rows = []
+        for contact in contacts:
+            company = companies_dict.get(contact.company_id) if contact.company_id else None
+            contact_meta = contact_meta_dict.get(contact.uuid)
+            company_meta = company_meta_dict.get(company.uuid) if company else None
+            rows.append((contact, contact_meta, company, company_meta))
         
         logger.info("Fetched full data for %d contacts (requested %d emails)", len(rows), len(emails))
         

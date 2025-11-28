@@ -885,7 +885,7 @@ REDIS_PORT=6379
 REDIS_DB=0
 
 # CORS
-ALLOWED_ORIGINS=["http://localhost:3000","http://localhost:8000"]
+ALLOWED_ORIGINS=["http://localhost:3000","http://127.0.0.1:8000"]
 
 # Email
 SMTP_HOST=smtp.gmail.com

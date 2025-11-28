@@ -15,7 +15,7 @@ TAG_ID_TO_INDUSTRY: dict[str, str] = {}
 
 def _load_industry_mapping() -> dict[str, str]:
     """Load industry tag ID to industry name mapping from CSV file."""
-    csv_path = Path(__file__).parent.parent / "data" / "insdustryids.csv"
+    csv_path = Path(__file__).parent.parent / "data" / "industryids.csv"
     
     if not csv_path.exists():
         logger.error("Industry mapping CSV file not found: %s", csv_path)

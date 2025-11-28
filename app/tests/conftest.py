@@ -80,6 +80,14 @@ async def override_get_current_user(db_session: AsyncSession) -> AsyncGenerator[
     )
     db_session.add(test_user)
     await db_session.flush()
+    
+    # Create admin profile for the test user
+    test_profile = UserProfile(
+        user_id=test_user.id,
+        role="Admin",
+    )
+    db_session.add(test_profile)
+    await db_session.flush()
 
     async def _get_test_user():
         return test_user

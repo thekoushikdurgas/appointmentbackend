@@ -24,7 +24,6 @@
 #
 # 3. Start Services:
 #    uvicorn app.main:app --reload
-#    celery -A app.tasks.celery_app worker --loglevel=info
 #
 # ========================================
 # ENVIRONMENT SETUP
@@ -62,23 +61,14 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > test.txt
 
 # ========================================
-# CELERY BACKGROUND TASKS
+# BACKGROUND TASKS
 # ========================================
 #
-# Start Celery worker:
-celery -A app.tasks.celery_app worker --loglevel=info
-celery -A app.tasks.celery_app worker --loglevel=debug
-
-# Start Celery beat (scheduler):
-celery -A app.tasks.celery_app beat --loglevel=info
-
-# Start Flower (Celery monitor):
-celery -A app.tasks.celery_app flower --port=5555
-# Access at: http://localhost:5555
-
-# Check Celery status:
-celery -A app.tasks.celery_app inspect active
-celery -A app.tasks.celery_app inspect stats
+# Background tasks run automatically with the API server using FastAPI's BackgroundTasks.
+# No separate worker process is required.
+#
+# Task status can be tracked via the application logs or database records
+# for long-running tasks (imports, exports).
 
 # ========================================
 # TESTING
@@ -176,8 +166,6 @@ docker compose up -d --build              # Detached mode
 
 # View logs:
 docker compose logs -f api
-docker compose logs -f worker
-docker compose logs -f redis
 docker compose logs -f                    # All services
 
 # Stop services:
@@ -186,11 +174,9 @@ docker compose down -v                    # Remove volumes
 
 # Restart specific service:
 docker compose restart api
-docker compose restart worker
 
 # Execute command in container:
 docker compose exec api bash
-docker compose exec worker bash
 
 # ========================================
 # API TESTING
@@ -206,8 +192,8 @@ python scripts/test_contact_attributes.py --token "YOUR_TOKEN"
 python -m json.tool "postman/Contact360 API.postman_collection.json"
 
 # Test API endpoints with curl:
-curl http://localhost:8000/health
-curl http://localhost:8000/api/v1/ -H "Authorization: Bearer YOUR_TOKEN"
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/api/v1/ -H "Authorization: Bearer YOUR_TOKEN"
 
 # ========================================
 # LOGGING
@@ -218,8 +204,8 @@ tail -f logs/app.log                      # Linux/Mac
 type logs\app.log                          # Windows (view)
 Get-Content logs\app.log -Wait             # Windows (tail)
 
-# View Celery logs:
-celery -A app.tasks.celery_app worker --loglevel=debug
+# View background task logs:
+# Background tasks are logged in the main application log file
 
 # ========================================
 # DEPLOYMENT
@@ -240,17 +226,13 @@ sudo journalctl -u appointmentbackend-api.service -f
 #
 # Application Entrypoints:
 # - API:        uvicorn app.main:app
-# - Worker:     celery -A app.tasks.celery_app worker --loglevel=info
-# - Scheduler:  celery -A app.tasks.celery_app beat --loglevel=info
-# - Monitor:    celery -A app.tasks.celery_app flower --port=5555
 #
 # Service URLs:
-# - Docs:       http://localhost:8000/docs
-# - ReDoc:      http://localhost:8000/redoc
-# - Health:     http://localhost:8000/health
-# - API v1:     http://localhost:8000/api/v1
-# - API v2:     http://localhost:8000/api/v2
-# - Flower:     http://localhost:5555
+# - Docs:       http://127.0.0.1:8000/docs
+# - ReDoc:      http://127.0.0.1:8000/redoc
+# - Health:     http://127.0.0.1:8000/health
+# - API v1:     http://127.0.0.1:8000/api/v1
+# - API v2:     http://127.0.0.1:8000/api/v2
 #
 # Project Structure:
 # - app/api          # FastAPI routers (v1, v2)
@@ -259,7 +241,7 @@ sudo journalctl -u appointmentbackend-api.service -f
 # - app/models       # SQLAlchemy models
 # - app/repositories # Query layer
 # - app/services     # Domain/business logic
-# - app/tasks        # Celery configuration & background jobs
+# - app/tasks        # Background task modules
 # - app/tests        # Pytest suite
 # - app/utils        # Utility functions
 # - scripts/         # Helper shell scripts
@@ -268,7 +250,7 @@ sudo journalctl -u appointmentbackend-api.service -f
 # Common Workflow:
 # 1. Activate virtualenv (venv\Scripts\activate)
 # 2. Export environment variables (see .env.example)
-# 3. Run uvicorn / celery locally
+# 3. Run uvicorn locally
 # 4. Execute pytest before pushing
 # 5. Run ruff check and format
 # 6. Deploy via git pull + systemctl restart appointmentbackend-api.service
@@ -289,11 +271,10 @@ sudo journalctl -u appointmentbackend-api.service -f
 # - Test connection: psql command above
 # - Check network/firewall settings
 #
-# Celery worker issues:
-# - Check Redis is running: redis-cli ping
-# - Verify Celery configuration in app/tasks/celery_app.py
-# - Check Redis connection in .env
-# - View worker logs: celery -A app.tasks.celery_app worker --loglevel=debug
+# Background task issues:
+# - Check application logs for task execution errors
+# - Verify database connection for tasks that require database access
+# - Monitor memory usage for long-running tasks
 #
 # Import errors:
 # - Ensure virtual environment is activated
@@ -312,7 +293,6 @@ sudo journalctl -u appointmentbackend-api.service -f
 #
 # Required variables (see .env.example):
 # - DATABASE_URL or individual POSTGRES_* variables
-# - REDIS_URL (for Celery)
 # - SECRET_KEY (for JWT tokens)
 # - API keys for external services (Apollo, etc.)
 #

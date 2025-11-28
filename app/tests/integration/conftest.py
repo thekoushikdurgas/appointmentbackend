@@ -15,7 +15,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption(
         "--api-base-url",
         action="store",
-        default="http://localhost:8000",
+        default="http://127.0.0.1:8000",
         dest="api_base_url",
         help="Base URL for hitting the running Contact360 API service.",
     )

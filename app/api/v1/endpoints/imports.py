@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import shutil
 import uuid
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+import aiofiles
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,6 +58,7 @@ async def import_info(
 
 @router.post("/", response_model=ImportJobDetail, status_code=status.HTTP_202_ACCEPTED)
 async def upload_contacts_import(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     filters: ImportFilterParams = Depends(resolve_import_filters),
     session: AsyncSession = Depends(get_db),
@@ -85,9 +86,38 @@ async def upload_contacts_import(
     temp_filename = f"{uuid.uuid4()}_{file.filename}"
     temp_path = upload_dir / temp_filename
 
+    # Chunked async file upload for large files
+    chunk_size = settings.MAX_UPLOAD_CHUNK_SIZE
+    total_bytes = 0
+    
     try:
-        with temp_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        async with aiofiles.open(temp_path, "wb") as async_file:
+            while chunk := await file.read(chunk_size):
+                await async_file.write(chunk)
+                total_bytes += len(chunk)
+                
+                # Check file size limit if configured
+                if settings.MAX_UPLOAD_SIZE and total_bytes > settings.MAX_UPLOAD_SIZE:
+                    await async_file.close()
+                    temp_path.unlink(missing_ok=True)
+                    logger.warning(
+                        "Upload rejected: file size exceeds limit filename=%s size=%d limit=%d",
+                        file.filename,
+                        total_bytes,
+                        settings.MAX_UPLOAD_SIZE,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File size exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE} bytes",
+                    )
+        
+        logger.debug(
+            "Persisted uploaded file to temporary path: temp_path=%s size_bytes=%d",
+            temp_path,
+            total_bytes,
+        )
+    except HTTPException:
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.exception(
             "Failed to persist uploaded file: original=%s temp_path=%s",
@@ -99,7 +129,6 @@ async def upload_contacts_import(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to store uploaded file",
         ) from exc
-    logger.debug("Persisted uploaded file to temporary path: temp_path=%s", temp_path)
 
     file_size = temp_path.stat().st_size
     if file_size == 0:
@@ -124,31 +153,9 @@ async def upload_contacts_import(
             detail="Failed to create import job",
         ) from exc
 
-    try:
-        process_contacts_import.delay(job.job_id, str(temp_path))
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Failed to enqueue import job: job_id=%s", job.job_id)
-        temp_path.unlink(missing_ok=True)
-        try:
-            await service.set_status(
-                session,
-                job.job_id,
-                status=ImportJobStatus.failed,
-                message="Failed to enqueue background import task",
-            )
-        except Exception as status_exc:  # noqa: BLE001
-            logger.exception(
-                "Failed to mark import job as failed after enqueue error: job_id=%s",
-                job.job_id,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to enqueue import job",
-            ) from status_exc
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to enqueue import job",
-        ) from exc
+    # Add background task to process the import
+    background_tasks.add_task(process_contacts_import, job.job_id, str(temp_path))
+    logger.info("Import job queued for background processing: job_id=%s", job.job_id)
     logger.info(
         "Enqueued contacts import: job_id=%s filename=%s stored_path=%s size_bytes=%d",
         job.job_id,

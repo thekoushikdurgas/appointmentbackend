@@ -108,24 +108,6 @@ class ApolloContactsSearchResponse(BaseModel, Generic[T]):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ApolloWebSocketRequest(BaseModel):
-    """Schema for WebSocket request messages."""
-
-    action: str = Field(..., description="Action to perform: analyze, search_contacts, count_contacts, get_uuids")
-    request_id: str = Field(..., description="Client-generated request ID for tracking responses")
-    data: dict[str, Any] = Field(..., description="Request payload matching REST API structure")
-
-
-class ApolloWebSocketResponse(BaseModel):
-    """Schema for WebSocket response messages."""
-
-    request_id: str = Field(..., description="Echo of client's request_id")
-    action: str = Field(..., description="Echo of action from request")
-    status: str = Field(..., description="Response status: success or error")
-    data: Optional[dict[str, Any]] = Field(None, description="Response payload (present when status=success)")
-    error: Optional[dict[str, Any]] = Field(None, description="Error details (present when status=error)")
-
-
 class ParameterValueWithCount(BaseModel):
     """Schema for a parameter value with its contact count."""
 
