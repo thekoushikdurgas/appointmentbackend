@@ -56,8 +56,8 @@ async def list_chats(
     Default ordering is by -created_at (newest first).
     """
     logger.info(
-        "List chats request: user_id=%s limit=%d offset=%d ordering=%s",
-        current_user.id,
+        "List chats request: user_uuid=%s limit=%d offset=%d ordering=%s",
+        current_user.uuid,
         limit,
         offset,
         ordering,
@@ -73,14 +73,14 @@ async def list_chats(
         
         result = await service.list_chats(
             session,
-            current_user.id,
+            current_user.uuid,
             filters=filters,
             limit=resolved_limit,
             offset=resolved_offset,
             ordering=resolved_ordering,
             request_url=str(request.url),
         )
-        logger.info("Listed chats: user_id=%s count=%d", current_user.id, result.count)
+        logger.info("Listed chats: user_uuid=%s count=%d", current_user.uuid, result.count)
         return result
     except HTTPException:
         raise
@@ -107,11 +107,11 @@ async def create_chat(
     The chat ID is a UUID generated automatically.
     Messages can be empty initially and added later via update.
     """
-    logger.info("Create chat request: user_id=%s", current_user.id)
+    logger.info("Create chat request: user_uuid=%s", current_user.uuid)
 
     try:
-        result = await service.create_chat(session, current_user.id, chat_data)
-        logger.info("Chat created: id=%s user_id=%s", result.id, current_user.id)
+        result = await service.create_chat(session, current_user.uuid, chat_data)
+        logger.info("Chat created: uuid=%s user_uuid=%s", result.uuid, current_user.uuid)
         return result
     except HTTPException:
         raise
@@ -136,11 +136,11 @@ async def get_chat(
     
     Only the chat owner can access their chats.
     """
-    logger.debug("Get chat request: id=%s user_id=%s", chat_id, current_user.id)
+    logger.debug("Get chat request: uuid=%s user_uuid=%s", chat_id, current_user.uuid)
 
     try:
-        result = await service.get_chat(session, chat_id, current_user.id)
-        logger.debug("Chat retrieved: id=%s", chat_id)
+        result = await service.get_chat(session, chat_id, current_user.uuid)
+        logger.debug("Chat retrieved: uuid=%s", chat_id)
         return result
     except HTTPException:
         raise
@@ -168,11 +168,11 @@ async def update_chat(
     When updating messages, provide the complete messages array (it replaces existing messages).
     Only the chat owner can update their chats.
     """
-    logger.info("Update chat request: id=%s user_id=%s", chat_id, current_user.id)
+    logger.info("Update chat request: uuid=%s user_uuid=%s", chat_id, current_user.uuid)
 
     try:
-        result = await service.update_chat(session, chat_id, current_user.id, update_data)
-        logger.info("Chat updated: id=%s", chat_id)
+        result = await service.update_chat(session, chat_id, current_user.uuid, update_data)
+        logger.info("Chat updated: uuid=%s", chat_id)
         return result
     except HTTPException:
         raise
@@ -200,16 +200,16 @@ async def send_message(
     using Gemini, and returns the updated chat with both messages.
     Only the chat owner can send messages.
     """
-    logger.info("Send message request: chat_id=%s user_id=%s", chat_id, current_user.id)
+    logger.info("Send message request: chat_uuid=%s user_uuid=%s", chat_id, current_user.uuid)
 
     try:
         result = await service.send_message(
             session,
             chat_id,
-            current_user.id,
+            current_user.uuid,
             message_data.message,
         )
-        logger.info("Message sent and AI response generated: chat_id=%s", chat_id)
+        logger.info("Message sent and AI response generated: chat_uuid=%s", chat_id)
         return result
     except HTTPException:
         raise
@@ -235,11 +235,11 @@ async def delete_chat(
     Only the chat owner can delete their chats.
     Deletion is permanent and cannot be undone.
     """
-    logger.info("Delete chat request: id=%s user_id=%s", chat_id, current_user.id)
+    logger.info("Delete chat request: uuid=%s user_uuid=%s", chat_id, current_user.uuid)
 
     try:
-        await service.delete_chat(session, chat_id, current_user.id)
-        logger.info("Chat deleted: id=%s", chat_id)
+        await service.delete_chat(session, chat_id, current_user.uuid)
+        logger.info("Chat deleted: uuid=%s", chat_id)
     except HTTPException:
         raise
     except Exception as exc:

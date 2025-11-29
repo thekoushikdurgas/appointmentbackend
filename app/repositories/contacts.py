@@ -1094,7 +1094,7 @@ class ContactRepository(AsyncRepository[Contact]):
         session.add(contact)
         await session.flush()
         await session.refresh(contact)
-        logger.debug("Created contact: id=%s uuid=%s", contact.id, contact.uuid)
+        logger.debug("Created contact: uuid=%s", contact.uuid)
         return contact
 
     def _apply_filters_with_exists(

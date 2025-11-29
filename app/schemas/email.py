@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Optional, Union
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.schemas.companies import CompanyDB, CompanyMetadataOut
 from app.schemas.contacts import ContactDB
@@ -244,6 +244,105 @@ class AllListsResponse(BaseModel):
     lists: list[EmailListInfo] = Field(
         default_factory=list,
         description="List of all uploaded email lists",
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EmailExportContact(BaseModel):
+    """Schema for a single contact in email export request."""
+
+    first_name: str = Field(..., description="Contact first name")
+    last_name: str = Field(..., description="Contact last name")
+    domain: Optional[str] = Field(None, description="Company domain or website URL (can use website parameter instead)")
+    website: Optional[str] = Field(None, description="Company website URL (alias for domain parameter)")
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def validate_names(cls, v: str) -> str:
+        """Validate and normalize name fields."""
+        if not v or not isinstance(v, str):
+            raise ValueError("Name fields must be non-empty strings")
+        return v.strip()
+
+    @field_validator("domain", "website")
+    @classmethod
+    def validate_domain_or_website(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize domain/website fields."""
+        return v.strip() if v and isinstance(v, str) else None
+
+    @model_validator(mode="after")
+    def validate_domain_or_website_provided(self):
+        """Validate that at least domain or website is provided."""
+        if not self.domain and not self.website:
+            raise ValueError("Either domain or website must be provided")
+        return self
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EmailExportRequest(BaseModel):
+    """Request schema for email export endpoint."""
+
+    contacts: list[EmailExportContact] = Field(
+        ...,
+        min_length=1,
+        description="List of contacts to export (minimum: 1)",
+    )
+
+    @field_validator("contacts")
+    @classmethod
+    def validate_contacts(cls, v: list[EmailExportContact]) -> list[EmailExportContact]:
+        """Validate contacts list is not empty."""
+        if not v:
+            raise ValueError("contacts list cannot be empty")
+        return v
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SingleEmailRequest(BaseModel):
+    """Request schema for single email endpoint."""
+
+    first_name: str = Field(..., description="Contact first name")
+    last_name: str = Field(..., description="Contact last name")
+    domain: Optional[str] = Field(None, description="Company domain or website URL (can use website parameter instead)")
+    website: Optional[str] = Field(None, description="Company website URL (alias for domain parameter)")
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def validate_names(cls, v: str) -> str:
+        """Validate and normalize name fields."""
+        if not v or not isinstance(v, str):
+            raise ValueError("Name fields must be non-empty strings")
+        return v.strip()
+
+    @field_validator("domain", "website")
+    @classmethod
+    def validate_domain_or_website(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize domain/website fields."""
+        return v.strip() if v and isinstance(v, str) else None
+
+    @model_validator(mode="after")
+    def validate_domain_or_website_provided(self):
+        """Validate that at least domain or website is provided."""
+        if not self.domain and not self.website:
+            raise ValueError("Either domain or website must be provided")
+        return self
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SingleEmailResponse(BaseModel):
+    """Response schema for single email endpoint."""
+
+    email: Optional[str] = Field(
+        None,
+        description="The email address found, or None if no email was found",
+    )
+    source: Optional[str] = Field(
+        None,
+        description="Source of the email: 'finder' (database), 'verifier' (email verification), or None if not found",
     )
 
     model_config = ConfigDict(from_attributes=True)

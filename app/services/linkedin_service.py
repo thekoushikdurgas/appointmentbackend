@@ -596,7 +596,7 @@ class LinkedInService:
         if not normalized_urls:
             return [], [], []
         
-        # Search all URLs in parallel
+        # Search all URLs sequentially to avoid concurrent session operations
         async def search_single_url(url: str) -> tuple[str, LinkedInSearchResponse]:
             """Search a single URL and return the URL with results."""
             try:
@@ -607,8 +607,11 @@ class LinkedInService:
                 # Return empty result for failed searches
                 return url, LinkedInSearchResponse(contacts=[], companies=[], total_contacts=0, total_companies=0)
         
-        # Execute all searches in parallel
-        search_results = await asyncio.gather(*[search_single_url(url) for url in normalized_urls])
+        # Execute all searches sequentially to avoid concurrent session operations
+        search_results = []
+        for url in normalized_urls:
+            result = await search_single_url(url)
+            search_results.append(result)
         
         # Collect unique UUIDs and track unmatched URLs
         contact_uuids_set: set[str] = set()

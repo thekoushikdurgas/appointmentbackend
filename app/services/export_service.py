@@ -60,7 +60,7 @@ class ExportService:
                 linkedin_urls=linkedin_urls,
                 status=ExportStatus.pending,
             )
-        else:  # companies
+        elif export_type == ExportType.companies:
             logger.info(
                 "Creating company export: user_id=%s company_count=%d",
                 user_id,
@@ -72,6 +72,18 @@ class ExportService:
                 company_uuids=company_uuids or [],
                 company_count=len(company_uuids) if company_uuids else 0,
                 linkedin_urls=linkedin_urls,
+                status=ExportStatus.pending,
+            )
+        else:  # emails
+            logger.info(
+                "Creating email export: user_id=%s",
+                user_id,
+            )
+            export = UserExport(
+                user_id=user_id,
+                export_type=export_type,
+                contact_uuids=[],
+                company_uuids=[],
                 status=ExportStatus.pending,
             )
         
@@ -568,7 +580,90 @@ class ExportService:
             file_path = exports_dir / f"{export_id}.csv"
             with file_path.open("wb") as f:
                 f.write(csv_content)
-            logger.debug("Company CSV saved locally: file_path=%s", file_path)
+                logger.debug("Company CSV saved locally: file_path=%s", file_path)
+                return str(file_path)
+
+    async def generate_email_export_csv(
+        self,
+        session: AsyncSession,
+        export_id: str,
+        contacts_data: list[dict],
+    ) -> str:
+        """
+        Generate CSV file for email export from processed contact data.
+        
+        Args:
+            session: Database session
+            export_id: Export ID
+            contacts_data: List of dictionaries with keys: first_name, last_name, domain, email
+            
+        Returns:
+            S3 key or local file path to the generated CSV file
+        """
+        logger.info("Generating email export CSV: export_id=%s contact_count=%d", export_id, len(contacts_data))
+        
+        # Generate CSV in memory
+        import io
+        csv_buffer = io.StringIO()
+        
+        # Define CSV fieldnames
+        fieldnames = ["first_name", "last_name", "domain", "email"]
+        
+        # Write CSV
+        writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        for contact in contacts_data:
+            try:
+                row_data = {
+                    "first_name": contact.get("first_name", ""),
+                    "last_name": contact.get("last_name", ""),
+                    "domain": contact.get("domain", ""),
+                    "email": contact.get("email", ""),
+                }
+                writer.writerow(row_data)
+            except Exception as exc:
+                logger.exception(
+                    "Failed to write contact row: contact=%s error=%s",
+                    contact,
+                    str(exc),
+                )
+                # Continue with next contact even if one fails
+                continue
+        
+        # Get CSV content as bytes
+        csv_content = csv_buffer.getvalue().encode("utf-8")
+        csv_buffer.close()
+        
+        # Upload to S3 if configured, otherwise save locally
+        if settings.S3_BUCKET_NAME:
+            try:
+                s3_key = f"{self.s3_service.exports_prefix}{export_id}.csv"
+                await self.s3_service.upload_file(
+                    file_content=csv_content,
+                    s3_key=s3_key,
+                    content_type="text/csv",
+                )
+                logger.debug("Email export CSV uploaded to S3: key=%s size=%d", s3_key, len(csv_content))
+                return s3_key
+            except Exception as exc:
+                logger.exception("Failed to upload email export CSV to S3: export_id=%s", export_id)
+                # Fallback to local storage
+                exports_dir = Path(settings.UPLOAD_DIR) / "exports"
+                exports_dir.mkdir(parents=True, exist_ok=True)
+                file_path = exports_dir / f"{export_id}.csv"
+                async with aiofiles.open(file_path, "wb") as async_file:
+                    await async_file.write(csv_content)
+                logger.debug("Email export CSV saved locally (S3 upload failed): file_path=%s", file_path)
+                return str(file_path)
+        else:
+            # Save locally
+            exports_dir = Path(settings.UPLOAD_DIR) / "exports"
+            exports_dir.mkdir(parents=True, exist_ok=True)
+            file_path = exports_dir / f"{export_id}.csv"
+            async with aiofiles.open(file_path, "wb") as async_file:
+                await async_file.write(csv_content)
+            logger.debug("Email export CSV saved locally: file_path=%s", file_path)
             return str(file_path)
 
     async def list_user_exports(

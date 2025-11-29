@@ -62,10 +62,10 @@ async def register(
         response = RegisterResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            user={"id": user.id, "email": user.email},
+            user={"uuid": user.uuid, "email": user.email},
             message="Registration successful! Please check your email to verify your account."
         )
-        logger.info("Registration successful: user_id=%s email=%s", user.id, user.email)
+        logger.info("Registration successful: user_uuid=%s email=%s", user.uuid, user.email)
         return response
     except HTTPException:
         raise
@@ -98,15 +98,15 @@ async def login(
         await session.refresh(user)
         
         # Extract user attributes immediately to avoid lazy loading issues
-        user_id = user.id
+        user_uuid = user.uuid
         user_email = user.email
         
         response = TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            user={"id": user_id, "email": user_email}
+            user={"uuid": user_uuid, "email": user_email}
         )
-        logger.info("Login successful: user_id=%s email=%s", user_id, user_email)
+        logger.info("Login successful: user_uuid=%s email=%s", user_uuid, user_email)
         return response
     except HTTPException:
         raise
@@ -132,7 +132,7 @@ async def logout(
     If a refresh_token is provided, it will be blacklisted to prevent reuse.
     Logout succeeds even if refresh token is not provided.
     """
-    logger.info("Logout request: user_id=%s", current_user.id)
+    logger.info("Logout request: user_uuid=%s", current_user.uuid)
     
     # Blacklist refresh token if provided
     if logout_data.refresh_token:
@@ -143,20 +143,20 @@ async def logout(
                 await blacklist_repo.create_blacklist_entry(
                     session,
                     logout_data.refresh_token,
-                    current_user.id,
+                    current_user.uuid,
                 )
                 await session.commit()
-                logger.info("Refresh token blacklisted: user_id=%s", current_user.id)
+                logger.info("Refresh token blacklisted: user_uuid=%s", current_user.uuid)
             else:
-                logger.debug("Refresh token already blacklisted: user_id=%s", current_user.id)
+                logger.debug("Refresh token already blacklisted: user_uuid=%s", current_user.uuid)
         except Exception as exc:
             # Log error but don't fail logout - blacklisting is best effort
-            logger.warning("Failed to blacklist refresh token: user_id=%s error=%s", current_user.id, exc)
+            logger.warning("Failed to blacklist refresh token: user_uuid=%s error=%s", current_user.uuid, exc)
             # Rollback the blacklist operation but continue with logout
             await session.rollback()
     
     response = LogoutResponse(message="Logout successful")
-    logger.info("Logout successful: user_id=%s", current_user.id)
+    logger.info("Logout successful: user_uuid=%s", current_user.uuid)
     return response
 
 
@@ -171,16 +171,16 @@ async def get_session(
     
     Useful for checking token validity.
     """
-    logger.debug("Session request: user_id=%s", current_user.id)
+    logger.debug("Session request: user_uuid=%s", current_user.uuid)
     
     response = SessionResponse(
         user={
-            "id": current_user.id,
+            "uuid": current_user.uuid,
             "email": current_user.email,
             "last_sign_in_at": current_user.last_sign_in_at
         }
     )
-    logger.debug("Session response: user_id=%s", current_user.id)
+    logger.debug("Session response: user_uuid=%s", current_user.uuid)
     return response
 
 

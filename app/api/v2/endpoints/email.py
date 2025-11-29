@@ -1,46 +1,65 @@
 """Email finder API endpoints."""
 
 import asyncio
+import csv
+import io
+import json
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
-from app.models.user import User
+from app.models.exports import ExportStatus, ExportType
+from app.models.user import ActivityServiceType, ActivityStatus, User
+from app.repositories.user import UserProfileRepository
+from app.services.activity_service import ActivityService
+from app.services.credit_service import CreditService
 from app.schemas.email import (
     AllListsResponse,
     BulkEmailVerifierRequest,
     BulkEmailVerifierResponse,
     CreditsResponse,
+    EmailExportRequest,
     EmailListInfo,
     EmailVerificationStatus,
     EmailVerifierRequest,
     EmailVerifierResponse,
     SimpleEmailFinderResponse,
+    SingleEmailRequest,
+    SingleEmailResponse,
     SingleEmailVerifierFindResponse,
     SingleEmailVerifierRequest,
     SingleEmailVerifierResponse,
     VerifiedEmailResult,
 )
+from app.schemas.exports import EmailExportResponse
 from app.services.bulkmailverifier_service import BulkMailVerifierService
 from app.services.email_finder_service import EmailFinderService
+from app.services.export_service import ExportService
 from app.utils.domain import extract_domain_from_url
 from app.utils.email_generator import generate_email_combinations
+from app.utils.signed_url import generate_signed_url
 
 settings = get_settings()
 
 router = APIRouter(prefix="/email", tags=["Email"])
 logger = get_logger(__name__)
 service = EmailFinderService()
+export_service = ExportService()
+activity_service = ActivityService()
+credit_service = CreditService()
+profile_repo = UserProfileRepository()
 
 
 @router.get("/finder/", response_model=SimpleEmailFinderResponse)
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def find_emails(
+    http_request: Request,
     first_name: str = Query(..., description="Contact first name (case-insensitive partial match)"),
     last_name: str = Query(..., description="Contact last name (case-insensitive partial match)"),
     domain: Optional[str] = Query(None, description="Company domain or website URL (can use website parameter instead)"),
@@ -77,7 +96,7 @@ async def find_emails(
         last_name,
         domain,
         website,
-        current_user.id,
+        current_user.uuid,
     )
     
     try:
@@ -104,11 +123,73 @@ async def find_emails(
             result.total,
             [{"uuid": e.uuid, "email": e.email} for e in result.emails[:3]] if result.emails else [],
         )
+        
+        # Log activity
+        await activity_service.log_search_activity(
+            session=session,
+            user_id=current_user.uuid,
+            service_type=ActivityServiceType.EMAIL,
+            request_params={
+                "first_name": first_name,
+                "last_name": last_name,
+                "domain": domain or website,
+            },
+            result_count=result.total,
+            result_summary={"emails_found": result.total},
+            status=ActivityStatus.SUCCESS,
+            request=http_request,
+        )
+        
+        # Deduct credits for FreeUser and ProUser (after successful search)
+        try:
+            profile = await profile_repo.get_by_user_id(session, current_user.uuid)
+            if profile:
+                user_role = profile.role or "FreeUser"
+                if credit_service.should_deduct_credits(user_role):
+                    new_balance = await credit_service.deduct_credits(
+                        session, current_user.uuid, amount=1
+                    )
+                    logger.info(
+                        "Credits deducted for email search: user_id=%s role=%s new_balance=%d",
+                        current_user.uuid,
+                        user_role,
+                        new_balance,
+                    )
+                else:
+                    logger.debug(
+                        "Credits not deducted (unlimited credits): user_id=%s role=%s",
+                        current_user.uuid,
+                        user_role,
+                    )
+        except Exception as credit_exc:
+            # Log error but don't fail the request
+            logger.exception("Failed to deduct credits for email search: %s", credit_exc)
+        
         return result
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("Error finding emails: %s", exc)
+        
+        # Log failed activity
+        try:
+            await activity_service.log_search_activity(
+                session=session,
+                user_id=current_user.uuid,
+                service_type=ActivityServiceType.EMAIL,
+                request_params={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "domain": domain or website,
+                },
+                result_count=0,
+                status=ActivityStatus.FAILED,
+                error_message=str(exc),
+                request=http_request,
+            )
+        except Exception as log_exc:
+            logger.exception("Failed to log activity: %s", log_exc)
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to find emails",
@@ -389,7 +470,7 @@ async def start_email_verification(
         request.last_name,
         request.domain,
         request.website,
-        current_user.id,
+        current_user.uuid,
     )
     
     try:
@@ -730,7 +811,7 @@ async def start_single_email_verification(
         request.last_name,
         request.domain,
         request.website,
-        current_user.id,
+        current_user.uuid,
     )
     
     try:
@@ -1328,7 +1409,7 @@ async def bulk_email_verifier(
     logger.info(
         "POST /email/bulk/verifier/ request received: email_count=%d user_id=%s",
         len(request.emails),
-        current_user.id,
+        current_user.uuid,
     )
     
     try:
@@ -1427,7 +1508,7 @@ async def single_email_verifier(
     logger.info(
         "POST /email/single/verifier/ request received: email=%s user_id=%s",
         request.email,
-        current_user.id,
+        current_user.uuid,
     )
     
     try:
@@ -1500,7 +1581,7 @@ async def check_credits(
     """
     logger.info(
         "POST /email/bulk/credits/ request received: user_id=%s",
-        current_user.id,
+        current_user.uuid,
     )
     
     try:
@@ -1525,7 +1606,7 @@ async def check_credits(
         
         logger.info(
             "Credits check completed: user_id=%s",
-            current_user.id,
+            current_user.uuid,
         )
         
         # Return response - handle both JSON and text responses
@@ -1560,7 +1641,7 @@ async def get_all_lists(
     """
     logger.info(
         "POST /email/bulk/lists/ request received: user_id=%s",
-        current_user.id,
+        current_user.uuid,
     )
     
     try:
@@ -1590,7 +1671,7 @@ async def get_all_lists(
         
         logger.info(
             "Get all lists completed: user_id=%s lists_count=%d",
-            current_user.id,
+            current_user.uuid,
             len(lists),
         )
         
@@ -1638,7 +1719,7 @@ async def download_result_file(
         "GET /email/bulk/download/%s/%s/ request received: user_id=%s",
         file_type,
         slug,
-        current_user.id,
+        current_user.uuid,
     )
     
     try:
@@ -1665,7 +1746,7 @@ async def download_result_file(
             "File download completed: file_type=%s slug=%s user_id=%s size=%d bytes",
             file_type,
             slug,
-            current_user.id,
+            current_user.uuid,
             len(csv_content),
         )
         
@@ -1685,5 +1766,370 @@ async def download_result_file(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to download file",
+        ) from exc
+
+
+@router.post("/export", response_model=EmailExportResponse, status_code=status.HTTP_201_CREATED)
+@log_function_call(logger=logger, log_arguments=True, log_result=True)
+async def export_emails(
+    background_tasks: BackgroundTasks,
+    request: EmailExportRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> EmailExportResponse:
+    """
+    Export emails for a list of contacts to CSV.
+    
+    Creates an export job that processes a list of contacts and attempts to find their email addresses by:
+    1. First trying to find emails in the database using the email finder service
+    2. If not found, trying email verification using the single email verifier
+    3. If still not found, leaving email empty
+    
+    Returns export metadata with download_url. The CSV file is generated asynchronously and available via download_url once processing completes.
+    
+    Args:
+        request: EmailExportRequest with list of contacts
+        current_user: Current authenticated user
+        session: Database session
+        background_tasks: FastAPI background tasks for async processing
+        
+    Returns:
+        EmailExportResponse with export_id, download_url, expires_at, contact_count, company_count, and status
+    """
+    logger.info(
+        "POST /email/export request received: contact_count=%d user_id=%s",
+        len(request.contacts),
+        current_user.uuid,
+    )
+    
+    if not request.contacts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one contact is required",
+        )
+    
+    try:
+        # Serialize contacts to JSON for storage
+        contacts_data = [
+            {
+                "first_name": contact.first_name,
+                "last_name": contact.last_name,
+                "domain": contact.domain,
+                "website": contact.website,
+            }
+            for contact in request.contacts
+        ]
+        contacts_json = json.dumps(contacts_data)
+        
+        # Create export record with status "pending"
+        export = await export_service.create_export(
+            session,
+            current_user.uuid,
+            ExportType.emails,
+            contact_uuids=[],  # No contact UUIDs for email exports
+            company_uuids=[],
+        )
+        
+        # Store email contacts JSON data
+        export.email_contacts_json = contacts_json
+        export.contact_count = len(request.contacts)
+        export.total_records = len(request.contacts)
+        await session.commit()
+        
+        # Log export activity
+        activity_id = await activity_service.log_export_activity(
+            session=session,
+            user_id=current_user.uuid,
+            service_type=ActivityServiceType.EMAIL,
+            request_params={
+                "email_count": len(request.contacts),
+            },
+            export_id=export.export_id,
+            result_count=0,  # Will be updated when export completes
+            status=ActivityStatus.SUCCESS,
+            request=http_request,
+        )
+        
+        # Import background task function
+        from app.tasks.export_tasks import process_email_export
+        
+        # Enqueue background task with activity_id for updating
+        background_tasks.add_task(process_email_export, export.export_id, contacts_data, activity_id)
+        
+        # Deduct credits for FreeUser and ProUser (after export is queued successfully)
+        # Deduct 1 credit per contact
+        try:
+            profile = await profile_repo.get_by_user_id(session, current_user.uuid)
+            if profile:
+                user_role = profile.role or "FreeUser"
+                if credit_service.should_deduct_credits(user_role):
+                    credit_amount = len(request.contacts)
+                    new_balance = await credit_service.deduct_credits(
+                        session, current_user.uuid, amount=credit_amount
+                    )
+                    logger.info(
+                        "Credits deducted for email export: user_id=%s role=%s amount=%d new_balance=%d",
+                        current_user.uuid,
+                        user_role,
+                        credit_amount,
+                        new_balance,
+                    )
+                else:
+                    logger.debug(
+                        "Credits not deducted (unlimited credits): user_id=%s role=%s contact_count=%d",
+                        current_user.uuid,
+                        user_role,
+                        len(request.contacts),
+                    )
+        except Exception as credit_exc:
+            # Log error but don't fail the request
+            logger.exception("Failed to deduct credits for email export: %s", credit_exc)
+        
+        logger.info(
+            "Email export queued: export_id=%s user_id=%s contact_count=%d",
+            export.export_id,
+            current_user.uuid,
+            len(request.contacts),
+        )
+        
+        # Set expiration to 24 hours from creation
+        expires_at = export.created_at + timedelta(hours=24)
+        
+        # Generate initial download URL with signed token
+        download_token = generate_signed_url(export.export_id, current_user.uuid, expires_at)
+        base_url = settings.BASE_URL.rstrip("/")
+        download_url = f"{base_url}/api/v2/exports/{export.export_id}/download?token={download_token}"
+        
+        return EmailExportResponse(
+            export_id=export.export_id,
+            download_url=download_url,
+            expires_at=expires_at,
+            contact_count=len(request.contacts),
+            company_count=0,
+            status=export.status,
+        )
+            
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Export creation failed: %s", exc)
+        
+        # Log failed activity
+        try:
+            await activity_service.log_export_activity(
+                session=session,
+                user_id=current_user.uuid,
+                service_type=ActivityServiceType.EMAIL,
+                request_params={
+                    "email_count": len(request.contacts) if hasattr(request, 'contacts') else 0,
+                },
+                export_id="",  # No export_id if creation failed
+                result_count=0,
+                status=ActivityStatus.FAILED,
+                error_message=str(exc),
+                request=http_request,
+            )
+        except Exception as log_exc:
+            logger.exception("Failed to log activity: %s", log_exc)
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create export",
+        ) from exc
+
+
+@router.post("/single/", response_model=SingleEmailResponse)
+@log_function_call(logger=logger, log_arguments=True, log_result=True)
+async def get_single_email(
+    request: SingleEmailRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> SingleEmailResponse:
+    """
+    Get a single email address for a contact using two-step approach.
+    
+    Attempts to find an email address for a single contact by:
+    1. First trying to find emails in the database using the email finder service
+    2. If not found, trying email verification using the single email verifier
+    3. If still not found, returns None
+    
+    Args:
+        request: SingleEmailRequest with first_name, last_name, and domain/website
+        current_user: Current authenticated user
+        session: Database session
+        
+    Returns:
+        SingleEmailResponse with email address and source, or None if not found
+    """
+    logger.info(
+        "POST /email/single/ request received: first_name=%s last_name=%s domain=%s website=%s user_id=%s",
+        request.first_name,
+        request.last_name,
+        request.domain,
+        request.website,
+        current_user.uuid,
+    )
+    
+    try:
+        # Normalize inputs
+        first_name = request.first_name.strip()
+        last_name = request.last_name.strip()
+        domain_input = request.domain or request.website
+        
+        if not domain_input:
+            logger.warning("Validation failed: Neither domain nor website parameter provided")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either domain or website parameter is required",
+            )
+        
+        domain_input = domain_input.strip()
+        if not domain_input:
+            logger.warning("Validation failed: Domain/website is empty after stripping")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Domain or website cannot be empty",
+            )
+        
+        # Extract normalized domain
+        logger.debug("Domain extraction: input=%s", domain_input)
+        extracted_domain = extract_domain_from_url(domain_input)
+        if not extracted_domain:
+            logger.warning("Domain extraction failed: Could not extract valid domain from input=%s", domain_input)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Could not extract valid domain from: {domain_input}",
+            )
+        logger.info("Domain extraction: output=%s (input=%s)", extracted_domain, domain_input)
+        
+        # Initialize services
+        email_finder_service = EmailFinderService()
+        bulk_verifier_service = BulkMailVerifierService() if (
+            settings.BULKMAILVERIFIER_EMAIL and settings.BULKMAILVERIFIER_PASSWORD
+        ) else None
+        
+        email_found = None
+        source = None
+        
+        # Step 1: Try email finder (database search)
+        try:
+            logger.debug(
+                "Trying email finder: first_name=%s last_name=%s domain=%s",
+                first_name,
+                last_name,
+                extracted_domain,
+            )
+            finder_result = await email_finder_service.find_emails(
+                session=session,
+                first_name=first_name,
+                last_name=last_name,
+                domain=extracted_domain,
+            )
+            
+            if finder_result.emails and len(finder_result.emails) > 0:
+                email_found = finder_result.emails[0].email
+                source = "finder"
+                logger.info(
+                    "Email found via finder: email=%s",
+                    email_found,
+                )
+                return SingleEmailResponse(email=email_found, source=source)
+            else:
+                logger.debug("No emails found via finder")
+        except HTTPException as http_exc:
+            if http_exc.status_code == status.HTTP_404_NOT_FOUND:
+                # Expected - no emails found in database
+                logger.debug("No emails found in database (404), will try verifier")
+            else:
+                # Unexpected error, log and continue to verifier
+                logger.warning(
+                    "Email finder error: %s, will try verifier",
+                    str(http_exc.detail),
+                )
+        except Exception as e:
+            logger.warning(
+                "Email finder exception: %s, will try verifier",
+                str(e),
+            )
+        
+        # Step 2: If not found, try email verifier
+        if not email_found and bulk_verifier_service:
+            try:
+                logger.debug(
+                    "Trying email verifier: first_name=%s last_name=%s domain=%s",
+                    first_name,
+                    last_name,
+                    extracted_domain,
+                )
+                
+                # Use the same logic as start_single_email_verification
+                email_count = 1000
+                max_retries = settings.BULKMAILVERIFIER_MAX_RETRIES
+                
+                batch_number = 1
+                found_valid = False
+                
+                while batch_number <= max_retries and not found_valid:
+                    # Generate emails for this batch
+                    batch_emails = generate_email_combinations(
+                        first_name=first_name,
+                        last_name=last_name,
+                        domain=extracted_domain,
+                        count=email_count,
+                    )
+                    
+                    # Verify emails sequentially until first valid is found
+                    valid_email, _ = await _verify_emails_sequential_until_valid(
+                        emails=batch_emails,
+                        service=bulk_verifier_service,
+                    )
+                    
+                    if valid_email:
+                        email_found = valid_email
+                        source = "verifier"
+                        found_valid = True
+                        logger.info(
+                            "Email found via verifier: email=%s (batch %d)",
+                            email_found,
+                            batch_number,
+                        )
+                        break
+                    
+                    batch_number += 1
+                
+                if not found_valid:
+                    logger.debug(
+                        "No valid email found via verifier after %d batches",
+                        max_retries,
+                    )
+            except HTTPException as http_exc:
+                logger.warning(
+                    "Email verifier HTTP error: %s",
+                    str(http_exc.detail),
+                )
+            except Exception as e:
+                logger.warning(
+                    "Email verifier exception: %s",
+                    str(e),
+                )
+        elif not email_found and not bulk_verifier_service:
+            logger.debug("Email verifier not available (credentials not configured)")
+        
+        # Return result
+        logger.info(
+            "Single email lookup completed: email=%s source=%s",
+            email_found,
+            source,
+        )
+        return SingleEmailResponse(email=email_found, source=source)
+        
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error getting single email: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get email",
         ) from exc
 

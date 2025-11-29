@@ -376,7 +376,7 @@ class CompanyRepository(AsyncRepository[Company]):
         session.add(company)
         await session.flush()
         await session.refresh(company)
-        logger.debug("Created company: id=%s uuid=%s", company.id, company.uuid)
+        logger.debug("Created company: uuid=%s", company.uuid)
         return company
 
     async def update_company(
@@ -393,7 +393,7 @@ class CompanyRepository(AsyncRepository[Company]):
                 setattr(company, key, value)
         await session.flush()
         await session.refresh(company)
-        logger.debug("Updated company: id=%s uuid=%s", company.id, company.uuid)
+        logger.debug("Updated company: uuid=%s", company.uuid)
         return company
 
     async def delete_company(self, session: AsyncSession, company_uuid: str) -> bool:

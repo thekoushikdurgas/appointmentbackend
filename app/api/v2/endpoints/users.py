@@ -56,11 +56,11 @@ async def get_profile(
     
     If a profile doesn't exist, it will be automatically created with default values.
     """
-    logger.debug("Get profile request: user_id=%s", current_user.id)
+    logger.debug("Get profile request: user_uuid=%s", current_user.uuid)
     
     try:
-        profile = await service.get_user_profile(session, current_user.id)
-        logger.debug("Profile retrieved: user_id=%s", current_user.id)
+        profile = await service.get_user_profile(session, current_user.uuid)
+        logger.debug("Profile retrieved: user_uuid=%s", current_user.uuid)
         return profile
     except HTTPException:
         raise
@@ -86,11 +86,11 @@ async def update_profile(
     All fields are optional - only provided fields will be updated (partial update).
     The notifications field is merged with existing preferences, not replaced.
     """
-    logger.info("Update profile request: user_id=%s fields=%s", current_user.id, list(update_data.model_dump(exclude_none=True).keys()))
+    logger.info("Update profile request: user_uuid=%s fields=%s", current_user.uuid, list(update_data.model_dump(exclude_none=True).keys()))
     
     try:
-        profile = await service.update_user_profile(session, current_user.id, update_data)
-        logger.info("Profile updated: user_id=%s", current_user.id)
+        profile = await service.update_user_profile(session, current_user.uuid, update_data)
+        logger.info("Profile updated: user_uuid=%s", current_user.uuid)
         return profile
     except HTTPException:
         raise
@@ -120,17 +120,17 @@ async def upload_avatar(
     - Maximum Size: 5MB
     - Validation: Both file extension and file content (magic bytes) are validated
     """
-    logger.info("Avatar upload request: user_id=%s filename=%s", current_user.id, avatar.filename)
+    logger.info("Avatar upload request: user_uuid=%s filename=%s", current_user.uuid, avatar.filename)
     
     try:
-        avatar_url, profile = await service.upload_avatar(session, current_user.id, avatar)
+        avatar_url, profile = await service.upload_avatar(session, current_user.uuid, avatar)
         
         response = AvatarUploadResponse(
             avatar_url=avatar_url,
             profile=profile,
             message="Avatar uploaded successfully"
         )
-        logger.info("Avatar uploaded: user_id=%s filename=%s", current_user.id, avatar.filename)
+        logger.info("Avatar uploaded: user_uuid=%s filename=%s", current_user.uuid, avatar.filename)
         return response
     except HTTPException:
         raise
@@ -155,11 +155,11 @@ async def promote_to_admin(
     This endpoint allows authenticated users to change their role to "Admin".
     The operation is logged for audit purposes.
     """
-    logger.info("Promote to admin request: user_id=%s", current_user.id)
+    logger.info("Promote to admin request: user_uuid=%s", current_user.uuid)
     
     try:
-        profile = await service.promote_user_to_admin(session, current_user.id)
-        logger.info("User promoted to admin: user_id=%s", current_user.id)
+        profile = await service.promote_user_to_admin(session, current_user.uuid)
+        logger.info("User promoted to admin: user_uuid=%s", current_user.uuid)
         return profile
     except HTTPException:
         raise
@@ -189,11 +189,11 @@ async def promote_to_super_admin(
     - Super Admin role for the requesting user
     - user_id query parameter specifying the target user
     """
-    logger.info("Promote to super admin request: target_user_id=%s admin_id=%s", user_id, current_user.id)
+    logger.info("Promote to super admin request: target_user_uuid=%s admin_id=%s", user_id, current_user.uuid)
     
     try:
         profile = await service.promote_user_to_super_admin(session, user_id)
-        logger.info("User promoted to super admin: user_id=%s promoted_by=%s", user_id, current_user.id)
+        logger.info("User promoted to super admin: user_uuid=%s promoted_by=%s", user_id, current_user.uuid)
         return profile
     except HTTPException:
         raise
@@ -220,7 +220,7 @@ async def list_all_users(
     
     Returns paginated list of all users with their profiles.
     """
-    logger.info("List all users request: user_id=%s limit=%d offset=%d", current_user.id, limit, offset)
+    logger.info("List all users request: user_uuid=%s limit=%d offset=%d", current_user.uuid, limit, offset)
     
     try:
         user_repo = UserRepository()
@@ -231,9 +231,9 @@ async def list_all_users(
         # Get profiles for all users
         user_list = []
         for user in users:
-            profile = await profile_repo.get_by_user_id(session, user.id)
+            profile = await profile_repo.get_by_user_id(session, user.uuid)
             user_list.append(UserListItem(
-                id=user.id,
+                uuid=user.uuid,
                 email=user.email,
                 name=user.name,
                 role=profile.role if profile else None,
@@ -272,8 +272,8 @@ async def update_user_role(
     
     Valid roles: SuperAdmin, Admin, FreeUser, ProUser
     """
-    logger.info("Update user role request: user_id=%s new_role=%s admin_id=%s", 
-               user_id, request.role, current_user.id)
+    logger.info("Update user role request: user_uuid=%s new_role=%s admin_id=%s", 
+               user_id, request.role, current_user.uuid)
     
     if request.role not in VALID_ROLES:
         raise HTTPException(
@@ -308,9 +308,9 @@ async def update_user_role(
         from app.schemas.user import NotificationPreferences
         notifications = profile.notifications or {}
         
-        logger.info("User role updated: user_id=%s new_role=%s", user_id, request.role)
+        logger.info("User role updated: user_uuid=%s new_role=%s", user_id, request.role)
         return ProfileResponse(
-            id=user.id,
+            uuid=user.uuid,
             name=user.name,
             email=user.email,
             role=profile.role,
@@ -345,8 +345,8 @@ async def update_user_credits(
     """
     Update a user's credits (Super Admin only).
     """
-    logger.info("Update user credits request: user_id=%s new_credits=%d admin_id=%s", 
-               user_id, request.credits, current_user.id)
+    logger.info("Update user credits request: user_uuid=%s new_credits=%d admin_id=%s", 
+               user_id, request.credits, current_user.uuid)
     
     try:
         profile_repo = UserProfileRepository()
@@ -375,9 +375,9 @@ async def update_user_credits(
         from app.schemas.user import NotificationPreferences
         notifications = profile.notifications or {}
         
-        logger.info("User credits updated: user_id=%s new_credits=%d", user_id, request.credits)
+        logger.info("User credits updated: user_uuid=%s new_credits=%d", user_id, request.credits)
         return ProfileResponse(
-            id=user.id,
+            uuid=user.uuid,
             name=user.name,
             email=user.email,
             role=profile.role,
@@ -413,9 +413,9 @@ async def delete_user(
     
     This will cascade delete the user's profile and all related data.
     """
-    logger.info("Delete user request: user_id=%s admin_id=%s", user_id, current_user.id)
+    logger.info("Delete user request: user_uuid=%s admin_id=%s", user_id, current_user.uuid)
     
-    if user_id == current_user.id:
+    if user_id == current_user.uuid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete your own account"
@@ -433,7 +433,7 @@ async def delete_user(
         await user_repo.delete_user(session, user)
         await session.commit()
         
-        logger.info("User deleted: user_id=%s", user_id)
+        logger.info("User deleted: user_uuid=%s", user_id)
     except HTTPException:
         raise
     except Exception as exc:
@@ -456,7 +456,7 @@ async def get_user_stats(
     
     Returns aggregated statistics about users.
     """
-    logger.info("Get user stats request: user_id=%s", current_user.id)
+    logger.info("Get user stats request: user_uuid=%s", current_user.uuid)
     
     try:
         from sqlalchemy import func
@@ -464,7 +464,7 @@ async def get_user_stats(
         
         # Check if user is admin or super admin
         profile_repo = UserProfileRepository()
-        admin_profile = await profile_repo.get_by_user_id(session, current_user.id)
+        admin_profile = await profile_repo.get_by_user_id(session, current_user.uuid)
         if not admin_profile or admin_profile.role not in ["Admin", "SuperAdmin"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -531,8 +531,8 @@ async def get_user_history(
     Returns paginated list of user registration and login events with IP geolocation data.
     Supports filtering by user_id (UUID format) and event_type.
     """
-    logger.info("Get user history request: user_id=%s event_type=%s limit=%d offset=%d admin_id=%s",
-               user_id, event_type, limit, offset, current_user.id)
+    logger.info("Get user history request: user_uuid=%s event_type=%s limit=%d offset=%d admin_id=%s",
+               user_id, event_type, limit, offset, current_user.uuid)
     
     # Validate user_id is a valid UUID format if provided
     if user_id is not None and not is_valid_uuid(user_id):

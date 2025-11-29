@@ -666,7 +666,7 @@ async def analyze_apollo_url(
     """
     logger.info(
         "Apollo URL analysis request: user_id=%s url_length=%d",
-        current_user.id,
+        current_user.uuid,
         len(request_data.url),
     )
 
@@ -674,7 +674,7 @@ async def analyze_apollo_url(
         result = await service.analyze_url(request_data.url)
         logger.info(
             "Apollo URL analyzed successfully: user_id=%s total_params=%d categories=%d",
-            current_user.id,
+            current_user.uuid,
             result.statistics.total_parameters,
             result.statistics.categories_used,
         )
@@ -767,7 +767,7 @@ async def analyze_apollo_url_with_counts(
     """
     logger.info(
         "Apollo URL analysis with counts request: user_id=%s url_length=%d",
-        current_user.id,
+        current_user.uuid,
         len(request_data.url),
     )
     
@@ -776,7 +776,7 @@ async def analyze_apollo_url_with_counts(
         result = await service.analyze_url(request_data.url)
         logger.info(
             "Apollo URL analyzed successfully: user_id=%s total_params=%d categories=%d",
-            current_user.id,
+            current_user.uuid,
             result.statistics.total_parameters,
             result.statistics.categories_used,
         )
@@ -1101,7 +1101,7 @@ async def analyze_apollo_url_with_counts(
         
         logger.info(
             "Apollo URL analyzed with counts: user_id=%s total_params=%d categories=%d",
-            current_user.id,
+            current_user.uuid,
             result.statistics.total_parameters,
             result.statistics.categories_used,
         )
@@ -1185,7 +1185,7 @@ async def search_contacts_from_apollo_url(
     """
     logger.info(
         "Apollo contacts search request: user_id=%s url_length=%d",
-        current_user.id,
+        current_user.uuid,
         len(request_data.url),
     )
 
@@ -1383,7 +1383,7 @@ async def search_contacts_from_apollo_url(
             sample_titles = [getattr(result, 'title', None) for result in page.results[:10] if hasattr(result, 'title')]
             logger.info(
                 "Apollo contacts search completed: user_id=%s returned=%d has_next=%s offset_used=%d limit_used=%s",
-                current_user.id,
+                current_user.uuid,
                 len(page.results),
                 bool(page.next),
                 resolved_offset,
@@ -1406,7 +1406,7 @@ async def search_contacts_from_apollo_url(
         else:
             logger.info(
                 "Apollo contacts search completed: user_id=%s returned=0 has_next=%s offset_used=%d limit_used=%s",
-                current_user.id,
+                current_user.uuid,
                 bool(page.next),
                 resolved_offset,
                 page_limit if page_limit is not None else "unlimited",
@@ -1560,7 +1560,7 @@ async def count_contacts_from_apollo_url(
     """
     logger.info(
         "Apollo contacts count request: user_id=%s url_length=%d",
-        current_user.id,
+        current_user.uuid,
         len(request_data.url),
     )
 
@@ -1648,7 +1648,7 @@ async def count_contacts_from_apollo_url(
 
         logger.info(
             "Apollo contacts count completed: user_id=%s count=%d",
-            current_user.id,
+            current_user.uuid,
             count_response.count,
         )
 
@@ -1728,7 +1728,7 @@ async def get_contact_uuids_from_apollo_url(
     """
     logger.info(
         "Apollo contacts UUID request: user_id=%s url_length=%d offset=%d limit=%s",
-        current_user.id,
+        current_user.uuid,
         len(request_data.url),
         offset,
         limit,
@@ -1799,7 +1799,7 @@ async def get_contact_uuids_from_apollo_url(
 
         logger.info(
             "Apollo contacts UUID completed: user_id=%s count=%d",
-            current_user.id,
+            current_user.uuid,
             len(uuids),
         )
 

@@ -102,9 +102,9 @@ class AIChatService:
             messages=messages_dict,
         )
 
-        logger.info("Chat created: id=%s user_id=%s", chat.id, chat.user_id)
+        logger.info("Chat created: uuid=%s user_id=%s", chat.uuid, chat.user_id)
         return AIChatResponse(
-            id=chat.id,
+            uuid=chat.uuid,
             user_id=chat.user_id,
             title=chat.title or "",
             messages=chat.messages or [],
@@ -121,25 +121,25 @@ class AIChatService:
         """Get a specific chat with ownership verification."""
         logger.debug("Getting chat: id=%s user_id=%s", chat_id, user_id)
 
-        chat = await self.repository.get_by_id_and_user_id(session, chat_id, user_id)
+        chat = await self.repository.get_by_uuid_and_user_uuid(session, chat_id, user_id)
         if not chat:
             # Check if chat exists but belongs to another user
-            existing_chat = await self.repository.get_by_id(session, chat_id)
+            existing_chat = await self.repository.get_by_uuid(session, chat_id)
             if existing_chat:
-                logger.warning("Access denied: chat belongs to different user: id=%s", chat_id)
+                logger.warning("Access denied: chat belongs to different user: uuid=%s", chat_id)
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permission to access this chat."
                 )
-            logger.warning("Chat not found: id=%s", chat_id)
+            logger.warning("Chat not found: uuid=%s", chat_id)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Not found."
             )
 
-        logger.debug("Chat retrieved: id=%s", chat_id)
+        logger.debug("Chat retrieved: uuid=%s", chat_id)
         return AIChatResponse(
-            id=chat.id,
+            uuid=chat.uuid,
             user_id=chat.user_id,
             title=chat.title or "",
             messages=chat.messages or [],
@@ -204,7 +204,7 @@ class AIChatService:
         # Convert to list items
         results = [
             AIChatListItem(
-                id=chat.id,
+                uuid=chat.uuid,
                 title=chat.title or "",
                 created_at=chat.created_at,
                 updated_at=chat.updated_at,
@@ -237,17 +237,17 @@ class AIChatService:
         logger.debug("Updating chat: id=%s user_id=%s", chat_id, user_id)
 
         # Get chat with ownership check
-        chat = await self.repository.get_by_id_and_user_id(session, chat_id, user_id)
+        chat = await self.repository.get_by_uuid_and_user_uuid(session, chat_id, user_id)
         if not chat:
             # Check if chat exists but belongs to another user
-            existing_chat = await self.repository.get_by_id(session, chat_id)
+            existing_chat = await self.repository.get_by_uuid(session, chat_id)
             if existing_chat:
-                logger.warning("Update denied: chat belongs to different user: id=%s", chat_id)
+                logger.warning("Update denied: chat belongs to different user: uuid=%s", chat_id)
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permission to update this chat."
                 )
-            logger.warning("Chat not found: id=%s", chat_id)
+            logger.warning("Chat not found: uuid=%s", chat_id)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Not found."
@@ -269,9 +269,9 @@ class AIChatService:
             await self.repository.update_chat(session, chat, **update_dict)
             await session.refresh(chat)
 
-        logger.info("Chat updated: id=%s", chat_id)
+        logger.info("Chat updated: uuid=%s", chat_id)
         return AIChatResponse(
-            id=chat.id,
+            uuid=chat.uuid,
             user_id=chat.user_id,
             title=chat.title or "",
             messages=chat.messages or [],
@@ -289,17 +289,17 @@ class AIChatService:
         logger.debug("Deleting chat: id=%s user_id=%s", chat_id, user_id)
 
         # Get chat with ownership check
-        chat = await self.repository.get_by_id_and_user_id(session, chat_id, user_id)
+        chat = await self.repository.get_by_uuid_and_user_uuid(session, chat_id, user_id)
         if not chat:
             # Check if chat exists but belongs to another user
-            existing_chat = await self.repository.get_by_id(session, chat_id)
+            existing_chat = await self.repository.get_by_uuid(session, chat_id)
             if existing_chat:
-                logger.warning("Delete denied: chat belongs to different user: id=%s", chat_id)
+                logger.warning("Delete denied: chat belongs to different user: uuid=%s", chat_id)
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permission to delete this chat."
                 )
-            logger.warning("Chat not found: id=%s", chat_id)
+            logger.warning("Chat not found: uuid=%s", chat_id)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Not found."
@@ -307,7 +307,7 @@ class AIChatService:
 
         # Delete chat
         await self.repository.delete_chat(session, chat)
-        logger.info("Chat deleted: id=%s", chat_id)
+        logger.info("Chat deleted: uuid=%s", chat_id)
 
     async def send_message(
         self,
@@ -331,17 +331,17 @@ class AIChatService:
         logger.debug("Sending message: chat_id=%s user_id=%s", chat_id, user_id)
         
         # Get chat with ownership check
-        chat = await self.repository.get_by_id_and_user_id(session, chat_id, user_id)
+        chat = await self.repository.get_by_uuid_and_user_uuid(session, chat_id, user_id)
         if not chat:
             # Check if chat exists but belongs to another user
-            existing_chat = await self.repository.get_by_id(session, chat_id)
+            existing_chat = await self.repository.get_by_uuid(session, chat_id)
             if existing_chat:
-                logger.warning("Message denied: chat belongs to different user: id=%s", chat_id)
+                logger.warning("Message denied: chat belongs to different user: uuid=%s", chat_id)
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permission to send messages in this chat."
                 )
-            logger.warning("Chat not found: id=%s", chat_id)
+            logger.warning("Chat not found: uuid=%s", chat_id)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Not found."
@@ -375,9 +375,9 @@ class AIChatService:
         await self.repository.update_chat(session, chat, messages=updated_messages)
         await session.refresh(chat)
         
-        logger.info("Message sent and AI response generated: chat_id=%s", chat_id)
+        logger.info("Message sent and AI response generated: chat_uuid=%s", chat_id)
         return AIChatResponse(
-            id=chat.id,
+            uuid=chat.uuid,
             user_id=chat.user_id,
             title=chat.title or "",
             messages=chat.messages or [],

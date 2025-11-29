@@ -58,11 +58,11 @@ async def get_billing_info(
     
     Returns credits, subscription status, and usage information.
     """
-    logger.debug("Get billing info request: user_id=%s", current_user.id)
+    logger.debug("Get billing info request: user_id=%s", current_user.uuid)
     
     try:
-        billing_info = await service.get_billing_info(session, current_user.id)
-        logger.debug("Billing info retrieved: user_id=%s", current_user.id)
+        billing_info = await service.get_billing_info(session, current_user.uuid)
+        logger.debug("Billing info retrieved: user_id=%s", current_user.uuid)
         return BillingInfoResponse(**billing_info)
     except HTTPException:
         raise
@@ -140,12 +140,12 @@ async def subscribe_to_plan(
     with a payment processor like Stripe to handle actual payments.
     """
     logger.info("Subscribe to plan request: user_id=%s tier=%s period=%s", 
-               current_user.id, request.tier, request.period)
+               current_user.uuid, request.tier, request.period)
     
     try:
-        result = await service.subscribe_to_plan(session, current_user.id, request.tier, request.period)
+        result = await service.subscribe_to_plan(session, current_user.uuid, request.tier, request.period)
         logger.info("User subscribed to plan: user_id=%s tier=%s period=%s", 
-                   current_user.id, request.tier, request.period)
+                   current_user.uuid, request.tier, request.period)
         return SubscribeResponse(**result)
     except HTTPException:
         raise
@@ -172,11 +172,11 @@ async def purchase_addon(
     This is a simplified implementation. In production, you would integrate
     with a payment processor like Stripe to handle actual payments.
     """
-    logger.info("Purchase addon request: user_id=%s package=%s", current_user.id, request.package_id)
+    logger.info("Purchase addon request: user_id=%s package=%s", current_user.uuid, request.package_id)
     
     try:
-        result = await service.purchase_addon_credits(session, current_user.id, request.package_id)
-        logger.info("Addon purchased: user_id=%s package=%s", current_user.id, request.package_id)
+        result = await service.purchase_addon_credits(session, current_user.uuid, request.package_id)
+        logger.info("Addon purchased: user_id=%s package=%s", current_user.uuid, request.package_id)
         return AddonPurchaseResponse(**result)
     except HTTPException:
         raise
@@ -200,11 +200,11 @@ async def cancel_subscription(
     
     The subscription will remain active until the end of the current billing period.
     """
-    logger.info("Cancel subscription request: user_id=%s", current_user.id)
+    logger.info("Cancel subscription request: user_id=%s", current_user.uuid)
     
     try:
-        result = await service.cancel_subscription(session, current_user.id)
-        logger.info("Subscription cancelled: user_id=%s", current_user.id)
+        result = await service.cancel_subscription(session, current_user.uuid)
+        logger.info("Subscription cancelled: user_id=%s", current_user.uuid)
         return CancelSubscriptionResponse(**result)
     except HTTPException:
         raise
@@ -230,11 +230,11 @@ async def get_invoices(
     
     Returns paginated list of invoices with status and amounts.
     """
-    logger.debug("Get invoices request: user_id=%s limit=%d offset=%d", current_user.id, limit, offset)
+    logger.debug("Get invoices request: user_id=%s limit=%d offset=%d", current_user.uuid, limit, offset)
     
     try:
-        result = await service.get_invoices(session, current_user.id, limit, offset)
-        logger.debug("Invoices retrieved: user_id=%s count=%d", current_user.id, result["total"])
+        result = await service.get_invoices(session, current_user.uuid, limit, offset)
+        logger.debug("Invoices retrieved: user_id=%s count=%d", current_user.uuid, result["total"])
         return InvoiceListResponse(**result)
     except HTTPException:
         raise

@@ -227,7 +227,7 @@ class UserService:
         # Create default profile with FREE_USER role and 50 initial credits
         await self.profile_repo.create_profile(
             session,
-            user_id=user.id,
+            user_id=user.uuid,
             notifications={"weeklyReports": True, "newLeadAlerts": True},
             role=DEFAULT_ROLE,
             credits=INITIAL_FREE_CREDITS,
@@ -236,7 +236,7 @@ class UserService:
         )
         
         # Generate tokens
-        token_data = {"sub": user.id}
+        token_data = {"sub": user.uuid}
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
         
@@ -246,7 +246,7 @@ class UserService:
                 geolocation = register_data.geolocation
                 await self.history_repo.create_history(
                     session,
-                    user_id=user.id,
+                    user_id=user.uuid,
                     event_type=UserHistoryEventType.REGISTRATION,
                     ip=geolocation.ip,
                     continent=geolocation.continent,
@@ -270,18 +270,18 @@ class UserService:
                     proxy=geolocation.proxy,
                     hosting=geolocation.hosting,
                 )
-                logger.debug("User history created for registration: user_id=%s", user.id)
+                logger.debug("User history created for registration: user_uuid=%s", user.uuid)
             except Exception as exc:
                 # Log error but don't fail registration
                 event_type_info = f"enum={UserHistoryEventType.REGISTRATION.name} value={UserHistoryEventType.REGISTRATION.value}"
                 logger.warning(
-                    "Failed to create user history for registration: user_id=%s event_type=%s error=%s",
-                    user.id,
+                    "Failed to create user history for registration: user_uuid=%s event_type=%s error=%s",
+                    user.uuid,
                     event_type_info,
                     exc,
                 )
         
-        logger.info("User registered successfully: id=%s email=%s", user.id, user.email)
+        logger.info("User registered successfully: uuid=%s email=%s", user.uuid, user.email)
         return user, access_token, refresh_token
 
     async def authenticate_user(
@@ -324,12 +324,12 @@ class UserService:
         await session.flush()
         
         # Generate tokens
-        token_data = {"sub": user.id}
+        token_data = {"sub": user.uuid}
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
         
-        # Store user.id before try block to avoid lazy loading issues if session is rolled back
-        user_id = user.id
+        # Store user.uuid before try block to avoid lazy loading issues if session is rolled back
+        user_uuid = user.uuid
         user_email = user.email
         
         # Create user history record if geolocation data is available
@@ -342,7 +342,7 @@ class UserService:
                 async with session.begin_nested():
                     await self.history_repo.create_history(
                         session,
-                        user_id=user_id,
+                        user_id=user_uuid,
                         event_type=UserHistoryEventType.LOGIN,
                         ip=geolocation.ip,
                         continent=geolocation.continent,
@@ -366,19 +366,19 @@ class UserService:
                         proxy=geolocation.proxy,
                         hosting=geolocation.hosting,
                     )
-                logger.debug("User history created for login: user_id=%s", user_id)
+                logger.debug("User history created for login: user_uuid=%s", user_uuid)
             except Exception as exc:
                 # Log error but don't fail login - history creation is non-critical
                 # The savepoint rollback ensures main transaction (user update) is preserved
                 event_type_info = f"enum={UserHistoryEventType.LOGIN.name} value={UserHistoryEventType.LOGIN.value}"
                 logger.warning(
-                    "Failed to create user history for login: user_id=%s event_type=%s error=%s",
-                    user_id,
+                    "Failed to create user history for login: user_uuid=%s event_type=%s error=%s",
+                    user_uuid,
                     event_type_info,
                     exc,
                 )
         
-        logger.info("User authenticated successfully: id=%s email=%s", user_id, user_email)
+        logger.info("User authenticated successfully: uuid=%s email=%s", user_uuid, user_email)
         return user, access_token, refresh_token
 
     async def refresh_access_token(
@@ -427,11 +427,11 @@ class UserService:
             )
         
         # Generate new tokens (token rotation)
-        token_data = {"sub": user.id}
+        token_data = {"sub": user.uuid}
         new_access_token = create_access_token(token_data)
         new_refresh_token = create_refresh_token(token_data)
         
-        logger.info("Access token refreshed successfully: user_id=%s", user_id)
+        logger.info("Access token refreshed successfully: user_uuid=%s", user_id)
         return new_access_token, new_refresh_token
 
     async def get_user_profile(
@@ -467,7 +467,7 @@ class UserService:
         # Build response
         notifications = profile.notifications or {}
         return ProfileResponse(
-            id=user.id,
+            uuid=user.uuid,
             name=user.name,
             email=user.email,
             role=profile.role or "Member",
@@ -536,7 +536,7 @@ class UserService:
         # Build response
         notifications = profile.notifications or {}
         return ProfileResponse(
-            id=user.id,
+            uuid=user.uuid,
             name=user.name,
             email=user.email,
             role=profile.role or "Member",
@@ -753,7 +753,7 @@ class UserService:
         await session.refresh(user)
         notifications = profile.notifications or {}
         profile_response = ProfileResponse(
-            id=user.id,
+            id=user.uuid,
             name=user.name,
             email=user.email,
             role=profile.role or "Member",
@@ -823,9 +823,9 @@ class UserService:
         
         # Build response
         notifications = profile.notifications or {}
-        logger.info("User promoted to admin successfully: user_id=%s email=%s", user_id, user.email)
+        logger.info("User promoted to admin successfully: user_uuid=%s email=%s", user_id, user.email)
         return ProfileResponse(
-            id=user.id,
+            id=user.uuid,
             name=user.name,
             email=user.email,
             role=profile.role or "Admin",
@@ -892,9 +892,9 @@ class UserService:
         
         # Build response
         notifications = profile.notifications or {}
-        logger.info("User promoted to super admin successfully: user_id=%s email=%s", user_id, user.email)
+        logger.info("User promoted to super admin successfully: user_uuid=%s email=%s", user_id, user.email)
         return ProfileResponse(
-            id=user.id,
+            id=user.uuid,
             name=user.name,
             email=user.email,
             role=profile.role or "SuperAdmin",

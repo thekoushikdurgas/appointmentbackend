@@ -2,13 +2,16 @@
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.logging import get_logger, log_function_call
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import ActivityServiceType, ActivityStatus, User
+from app.repositories.user import UserProfileRepository
+from app.services.activity_service import ActivityService
+from app.services.credit_service import CreditService
 from app.schemas.linkedin import (
     LinkedInExportRequest,
     LinkedInExportResponse,
@@ -26,12 +29,16 @@ router = APIRouter(prefix="/linkedin", tags=["LinkedIn"])
 logger = get_logger(__name__)
 service = LinkedInService()
 export_service = ExportService()
+activity_service = ActivityService()
+credit_service = CreditService()
+profile_repo = UserProfileRepository()
 
 
 @router.post("/", response_model=LinkedInSearchResponse)
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def search_by_linkedin_url(
     request: LinkedInSearchRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> LinkedInSearchResponse:
@@ -49,7 +56,7 @@ async def search_by_linkedin_url(
         Combined results with contacts and companies, including their metadata
         and relationships.
     """
-    logger.info("POST /linkedin search request: url=%s user_id=%s", request.url, current_user.id)
+    logger.info("POST /linkedin search request: url=%s user_id=%s", request.url, current_user.uuid)
     
     if not request.url or not request.url.strip():
         raise HTTPException(
@@ -64,9 +71,67 @@ async def search_by_linkedin_url(
             result.total_contacts,
             result.total_companies,
         )
+        
+        # Log activity
+        total_results = result.total_contacts + result.total_companies
+        await activity_service.log_search_activity(
+            session=session,
+            user_id=current_user.uuid,
+            service_type=ActivityServiceType.LINKEDIN,
+            request_params={"url": request.url.strip()},
+            result_count=total_results,
+            result_summary={
+                "contacts": result.total_contacts,
+                "companies": result.total_companies,
+            },
+            status=ActivityStatus.SUCCESS,
+            request=http_request,
+        )
+        
+        # Deduct credits for FreeUser and ProUser (after successful search)
+        try:
+            profile = await profile_repo.get_by_user_id(session, current_user.uuid)
+            if profile:
+                user_role = profile.role or "FreeUser"
+                if credit_service.should_deduct_credits(user_role):
+                    new_balance = await credit_service.deduct_credits(
+                        session, current_user.uuid, amount=1
+                    )
+                    logger.info(
+                        "Credits deducted for LinkedIn search: user_id=%s role=%s new_balance=%d",
+                        current_user.uuid,
+                        user_role,
+                        new_balance,
+                    )
+                else:
+                    logger.debug(
+                        "Credits not deducted (unlimited credits): user_id=%s role=%s",
+                        current_user.uuid,
+                        user_role,
+                    )
+        except Exception as credit_exc:
+            # Log error but don't fail the request
+            logger.exception("Failed to deduct credits for LinkedIn search: %s", credit_exc)
+        
         return result
     except Exception as exc:
         logger.exception("Error searching by LinkedIn URL: %s", exc)
+        
+        # Log failed activity
+        try:
+            await activity_service.log_search_activity(
+                session=session,
+                user_id=current_user.uuid,
+                service_type=ActivityServiceType.LINKEDIN,
+                request_params={"url": request.url.strip()},
+                result_count=0,
+                status=ActivityStatus.FAILED,
+                error_message=str(exc),
+                request=http_request,
+            )
+        except Exception as log_exc:
+            logger.exception("Failed to log activity: %s", log_exc)
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to search by LinkedIn URL",
@@ -99,7 +164,7 @@ async def upsert_by_linkedin_url(
     logger.info(
         "POST /linkedin upsert request: url=%s user_id=%s",
         request.url,
-        current_user.id,
+        current_user.uuid,
     )
     
     if not request.url or not request.url.strip():
@@ -139,6 +204,7 @@ async def upsert_by_linkedin_url(
 @log_function_call(logger=logger, log_arguments=True, log_result=True)
 async def create_linkedin_export(
     request: LinkedInExportRequest,
+    http_request: Request,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
@@ -156,7 +222,7 @@ async def create_linkedin_export(
     """
     logger.info(
         "Received LinkedIn export request: user_id=%s url_count=%d",
-        current_user.id,
+        current_user.uuid,
         len(request.urls),
     )
     
@@ -179,7 +245,7 @@ async def create_linkedin_export(
         # Use ExportType.contacts since it's a combined export but we'll track both counts
         export = await export_service.create_export(
             session,
-            current_user.id,
+            current_user.uuid,
             ExportType.contacts,  # Using contacts type for LinkedIn exports
             contact_uuids=[],  # Will be populated by background task
             company_uuids=[],  # Will be populated by background task
@@ -190,14 +256,59 @@ async def create_linkedin_export(
         export.total_records = len(valid_urls)
         await session.commit()
         
-        # Enqueue background task
-        background_tasks.add_task(process_linkedin_export, export.export_id, valid_urls)
+        # Log export activity
+        activity_id = await activity_service.log_export_activity(
+            session=session,
+            user_id=current_user.uuid,
+            service_type=ActivityServiceType.LINKEDIN,
+            request_params={
+                "urls": valid_urls,
+                "url_count": len(valid_urls),
+            },
+            export_id=export.export_id,
+            result_count=0,  # Will be updated when export completes
+            status=ActivityStatus.SUCCESS,
+            request=http_request,
+        )
+        
+        # Enqueue background task with activity_id for updating
+        background_tasks.add_task(process_linkedin_export, export.export_id, valid_urls, activity_id)
+        
+        # Deduct credits for FreeUser and ProUser (after export is queued successfully)
+        # Deduct 1 credit per URL
+        try:
+            profile = await profile_repo.get_by_user_id(session, current_user.uuid)
+            if profile:
+                user_role = profile.role or "FreeUser"
+                if credit_service.should_deduct_credits(user_role):
+                    credit_amount = len(valid_urls)
+                    new_balance = await credit_service.deduct_credits(
+                        session, current_user.uuid, amount=credit_amount
+                    )
+                    logger.info(
+                        "Credits deducted for LinkedIn export: user_id=%s role=%s amount=%d new_balance=%d",
+                        current_user.uuid,
+                        user_role,
+                        credit_amount,
+                        new_balance,
+                    )
+                else:
+                    logger.debug(
+                        "Credits not deducted (unlimited credits): user_id=%s role=%s url_count=%d",
+                        current_user.uuid,
+                        user_role,
+                        len(valid_urls),
+                    )
+        except Exception as credit_exc:
+            # Log error but don't fail the request
+            logger.exception("Failed to deduct credits for LinkedIn export: %s", credit_exc)
         
         logger.info(
-            "LinkedIn export queued: export_id=%s user_id=%s url_count=%d",
+            "LinkedIn export queued: export_id=%s user_id=%s url_count=%d activity_id=%s",
             export.export_id,
-            current_user.id,
+            current_user.uuid,
             len(valid_urls),
+            activity_id,
         )
         
         # Generate initial download URL (will be updated when export completes)
@@ -206,7 +317,7 @@ async def create_linkedin_export(
         
         settings = get_settings()
         expires_at = export.expires_at or (datetime.now(timezone.utc) + timedelta(hours=24))
-        download_token = generate_signed_url(export.export_id, current_user.id, expires_at)
+        download_token = generate_signed_url(export.export_id, current_user.uuid, expires_at)
         base_url = settings.BASE_URL.rstrip("/")
         download_url = f"{base_url}/api/v2/exports/{export.export_id}/download?token={download_token}"
         
@@ -222,6 +333,26 @@ async def create_linkedin_export(
         raise
     except Exception as exc:
         logger.exception("Error creating LinkedIn export: %s", exc)
+        
+        # Log failed activity
+        try:
+            await activity_service.log_export_activity(
+                session=session,
+                user_id=current_user.uuid,
+                service_type=ActivityServiceType.LINKEDIN,
+                request_params={
+                    "urls": valid_urls if 'valid_urls' in locals() else [],
+                    "url_count": len(valid_urls) if 'valid_urls' in locals() else 0,
+                },
+                export_id="",  # No export_id if creation failed
+                result_count=0,
+                status=ActivityStatus.FAILED,
+                error_message=str(exc),
+                request=http_request,
+            )
+        except Exception as log_exc:
+            logger.exception("Failed to log activity: %s", log_exc)
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create LinkedIn export",

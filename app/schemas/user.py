@@ -78,7 +78,7 @@ class RefreshTokenResponse(BaseModel):
 class UserResponse(BaseModel):
     """Schema for user information in responses (for login/register)."""
 
-    id: str = Field(..., description="User UUID")
+    uuid: str = Field(..., description="User UUID")
     email: str
 
     model_config = ConfigDict(from_attributes=True)
@@ -87,7 +87,7 @@ class UserResponse(BaseModel):
 class SessionUserResponse(BaseModel):
     """Schema for user information in session responses (includes last_sign_in_at)."""
 
-    id: str = Field(..., description="User UUID")
+    uuid: str = Field(..., description="User UUID")
     email: str
     last_sign_in_at: Optional[datetime] = None
 
@@ -105,7 +105,7 @@ class NotificationPreferences(BaseModel):
 class ProfileResponse(BaseModel):
     """Schema for full user profile response."""
 
-    id: str = Field(..., description="User UUID")
+    uuid: str = Field(..., description="User UUID")
     name: Optional[str] = None
     email: str
     role: Optional[str] = "Member"
@@ -178,7 +178,7 @@ class AvatarUploadResponse(BaseModel):
 class UserListItem(BaseModel):
     """Schema for user list item (for Super Admin)."""
 
-    id: str = Field(..., description="User UUID")
+    uuid: str = Field(..., description="User UUID")
     email: str
     name: Optional[str] = None
     role: Optional[str] = None
@@ -263,3 +263,42 @@ class UserHistoryListResponse(BaseModel):
     total: int = Field(..., description="Total number of records")
     limit: int = Field(..., description="Limit applied")
     offset: int = Field(..., description="Offset applied")
+
+
+# User Activity Schemas
+class UserActivityItem(BaseModel):
+    """Schema for a single user activity record."""
+
+    id: int
+    user_id: str = Field(..., description="User ID (UUID format)")
+    service_type: str = Field(..., description="Service type: linkedin or email")
+    action_type: str = Field(..., description="Action type: search or export")
+    status: str = Field(..., description="Status: success, failed, or partial")
+    request_params: Optional[dict] = Field(None, description="Request parameters as JSON object")
+    result_count: int = Field(default=0, description="Number of results returned")
+    result_summary: Optional[dict] = Field(None, description="Summary of results as JSON object")
+    error_message: Optional[str] = Field(None, description="Error message if the activity failed")
+    ip_address: Optional[str] = Field(None, description="IP address of the user")
+    user_agent: Optional[str] = Field(None, description="User-Agent string from the request")
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class UserActivityListResponse(BaseModel):
+    """Schema for paginated user activity list response."""
+
+    items: list[UserActivityItem] = Field(default_factory=list, description="List of user activity records")
+    total: int = Field(..., description="Total number of records")
+    limit: int = Field(..., description="Limit applied")
+    offset: int = Field(..., description="Offset applied")
+
+
+class ActivityStatsResponse(BaseModel):
+    """Schema for user activity statistics."""
+
+    total_activities: int = Field(..., description="Total number of activities")
+    by_service_type: dict[str, int] = Field(default_factory=dict, description="Count by service type")
+    by_action_type: dict[str, int] = Field(default_factory=dict, description="Count by action type")
+    by_status: dict[str, int] = Field(default_factory=dict, description="Count by status")
+    recent_activities: int = Field(default=0, description="Activities in the last 24 hours")

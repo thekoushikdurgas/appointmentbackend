@@ -117,7 +117,7 @@ class ContactsService:
         # self.logger.info("Service creating contact: uuid=%s email=%s", data["uuid"], data.get("email"))
         contact = await self.repository.create_contact(session, data)
         await session.commit()
-        self.logger.debug("Created contact persisted: id=%s uuid=%s", contact.id, contact.uuid)
+        self.logger.debug("Created contact persisted: uuid=%s", contact.uuid)
         
         # Invalidate contacts list cache on creation
         if settings.ENABLE_QUERY_CACHING:
@@ -306,7 +306,6 @@ class ContactsService:
             location_value = location if any([location.city, location.state, location.country]) else None
             simple_results.append(
                 ContactSimpleItem(
-                    id=contact.id,
                     uuid=contact.uuid,
                     first_name=normalize_text(contact.first_name),
                     last_name=normalize_text(contact.last_name),

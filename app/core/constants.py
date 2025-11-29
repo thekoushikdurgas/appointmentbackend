@@ -15,3 +15,6 @@ INITIAL_FREE_CREDITS = 50
 # All valid roles
 VALID_ROLES = [SUPER_ADMIN, ADMIN, FREE_USER, PRO_USER]
 
+# Roles with unlimited credits (no deduction)
+UNLIMITED_CREDITS_ROLES = [SUPER_ADMIN, ADMIN]
+

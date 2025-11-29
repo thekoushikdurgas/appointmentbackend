@@ -104,3 +104,16 @@ class ChunkedExportResponse(BaseModel):
     status: ExportStatus
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class EmailExportResponse(BaseModel):
+    """Response schema for email export creation."""
+
+    export_id: str
+    download_url: str
+    expires_at: datetime
+    contact_count: int
+    company_count: int
+    status: ExportStatus
+
+    model_config = ConfigDict(from_attributes=True)

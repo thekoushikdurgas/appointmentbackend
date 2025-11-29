@@ -26,27 +26,27 @@ class AIChatRepository(AsyncRepository[AIChat]):
         super().__init__(AIChat)
         logger.debug("Exiting AIChatRepository.__init__")
 
-    async def get_by_id(self, session: AsyncSession, chat_id: str) -> Optional[AIChat]:
-        """Retrieve a chat by its ID (UUID string)."""
-        logger.debug("Getting chat by ID: id=%s", chat_id)
-        stmt: Select[tuple[AIChat]] = select(self.model).where(self.model.id == chat_id)
+    async def get_by_uuid(self, session: AsyncSession, chat_uuid: str) -> Optional[AIChat]:
+        """Retrieve a chat by its UUID."""
+        logger.debug("Getting chat by UUID: uuid=%s", chat_uuid)
+        stmt: Select[tuple[AIChat]] = select(self.model).where(self.model.uuid == chat_uuid)
         result = await session.execute(stmt)
         chat = result.scalar_one_or_none()
-        logger.debug("Chat %sfound for id=%s", "" if chat else "not ", chat_id)
+        logger.debug("Chat %sfound for uuid=%s", "" if chat else "not ", chat_uuid)
         return chat
 
-    async def get_by_id_and_user_id(
-        self, session: AsyncSession, chat_id: str, user_id: str
+    async def get_by_uuid_and_user_uuid(
+        self, session: AsyncSession, chat_uuid: str, user_uuid: str
     ) -> Optional[AIChat]:
-        """Retrieve a chat by ID and user ID (for ownership verification)."""
-        logger.debug("Getting chat by ID and user_id: id=%s user_id=%s", chat_id, user_id)
+        """Retrieve a chat by UUID and user UUID (for ownership verification)."""
+        logger.debug("Getting chat by UUID and user_uuid: chat_uuid=%s user_uuid=%s", chat_uuid, user_uuid)
         stmt: Select[tuple[AIChat]] = select(self.model).where(
-            self.model.id == chat_id, self.model.user_id == user_id
+            self.model.uuid == chat_uuid, self.model.user_id == user_uuid
         )
         result = await session.execute(stmt)
         chat = result.scalar_one_or_none()
         logger.debug(
-            "Chat %sfound for id=%s user_id=%s", "" if chat else "not ", chat_id, user_id
+            "Chat %sfound for chat_uuid=%s user_uuid=%s", "" if chat else "not ", chat_uuid, user_uuid
         )
         return chat
 
@@ -174,7 +174,7 @@ class AIChatRepository(AsyncRepository[AIChat]):
         session.add(chat)
         await session.flush()
         await session.refresh(chat)
-        logger.debug("Created chat: id=%s user_id=%s", chat.id, chat.user_id)
+        logger.debug("Created chat: uuid=%s user_id=%s", chat.uuid, chat.user_id)
         return chat
 
     async def update_chat(
@@ -184,19 +184,19 @@ class AIChatRepository(AsyncRepository[AIChat]):
         **kwargs
     ) -> AIChat:
         """Update chat fields."""
-        logger.debug("Updating chat: id=%s fields=%s", chat.id, list(kwargs.keys()))
+        logger.debug("Updating chat: uuid=%s fields=%s", chat.uuid, list(kwargs.keys()))
         for key, value in kwargs.items():
             if value is not None:
                 setattr(chat, key, value)
         await session.flush()
         await session.refresh(chat)
-        logger.debug("Updated chat: id=%s", chat.id)
+        logger.debug("Updated chat: uuid=%s", chat.uuid)
         return chat
 
     async def delete_chat(self, session: AsyncSession, chat: AIChat) -> None:
         """Delete a chat."""
-        logger.debug("Deleting chat: id=%s", chat.id)
+        logger.debug("Deleting chat: uuid=%s", chat.uuid)
         await session.delete(chat)
         await session.flush()
-        logger.debug("Deleted chat: id=%s", chat.id)
+        logger.debug("Deleted chat: uuid=%s", chat.uuid)
 

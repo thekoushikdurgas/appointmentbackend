@@ -32,6 +32,7 @@ class ExportType(str, PyEnum):
 
     contacts = "contacts"
     companies = "companies"
+    emails = "emails"
 
 
 class UserExport(Base):
@@ -49,7 +50,7 @@ class UserExport(Base):
     )
     user_id: Mapped[str] = mapped_column(
         Text,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("users.uuid", ondelete="CASCADE"),
         index=True,
         nullable=False,
     )
@@ -69,6 +70,11 @@ class UserExport(Base):
         StringList(), 
         default=None,
         comment="LinkedIn URLs used for LinkedIn exports. Only populated for exports created via POST /api/v2/linkedin/export."
+    )
+    email_contacts_json: Mapped[Optional[str]] = mapped_column(
+        Text,
+        default=None,
+        comment="JSON string of email contacts data. Only populated for exports created via POST /api/v2/email/export."
     )
     status: Mapped[ExportStatus] = mapped_column(
         SQLEnum(ExportStatus, name="export_status"),

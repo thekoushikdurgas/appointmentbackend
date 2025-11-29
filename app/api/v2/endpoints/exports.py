@@ -15,6 +15,8 @@ from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models.exports import ExportStatus, ExportType, UserExport
 from app.models.user import User
+from app.repositories.user import UserProfileRepository
+from app.services.credit_service import CreditService
 from app.schemas.exports import (
     ChunkedExportRequest,
     ChunkedExportResponse,
@@ -36,6 +38,8 @@ router = APIRouter()
 logger = get_logger(__name__)
 service = ExportService()
 s3_service = S3Service()
+credit_service = CreditService()
+profile_repo = UserProfileRepository()
 
 
 async def resolve_export_filters(request: Request) -> ExportFilterParams:
@@ -67,7 +71,7 @@ async def create_contact_export(
     """
     logger.info(
         "Received contact export request: user_id=%s contact_count=%d",
-        current_user.id,
+        current_user.uuid,
         len(request.contact_uuids),
     )
     
@@ -81,7 +85,7 @@ async def create_contact_export(
         # Create export record with status "pending"
         export = await service.create_export(
             session,
-            current_user.id,
+            current_user.uuid,
             ExportType.contacts,
             contact_uuids=request.contact_uuids,
         )
@@ -93,10 +97,39 @@ async def create_contact_export(
         # Enqueue background task
         background_tasks.add_task(process_contact_export, export.export_id, request.contact_uuids)
         
+        # Deduct credits for FreeUser and ProUser (after export is queued successfully)
+        # Deduct 1 credit per contact UUID
+        try:
+            profile = await profile_repo.get_by_user_id(session, current_user.uuid)
+            if profile:
+                user_role = profile.role or "FreeUser"
+                if credit_service.should_deduct_credits(user_role):
+                    credit_amount = len(request.contact_uuids)
+                    new_balance = await credit_service.deduct_credits(
+                        session, current_user.uuid, amount=credit_amount
+                    )
+                    logger.info(
+                        "Credits deducted for contact export: user_id=%s role=%s amount=%d new_balance=%d",
+                        current_user.uuid,
+                        user_role,
+                        credit_amount,
+                        new_balance,
+                    )
+                else:
+                    logger.debug(
+                        "Credits not deducted (unlimited credits): user_id=%s role=%s contact_count=%d",
+                        current_user.uuid,
+                        user_role,
+                        len(request.contact_uuids),
+                    )
+        except Exception as credit_exc:
+            # Log error but don't fail the request
+            logger.exception("Failed to deduct credits for contact export: %s", credit_exc)
+        
         logger.info(
             "Contact export queued: export_id=%s user_id=%s contact_count=%d",
             export.export_id,
-            current_user.id,
+            current_user.uuid,
             len(request.contact_uuids),
         )
         
@@ -134,12 +167,12 @@ async def get_export_status(
     Returns detailed status information including progress percentage, estimated time
     remaining, error messages, and download URL if available.
     """
-    logger.info("Status request: export_id=%s user_id=%s", export_id, current_user.id)
+    logger.info("Status request: export_id=%s user_id=%s", export_id, current_user.uuid)
     
     try:
-        export = await service.get_export(session, export_id, current_user.id)
+        export = await service.get_export(session, export_id, current_user.uuid)
         if not export:
-            logger.warning("Export not found or access denied: export_id=%s user_id=%s", export_id, current_user.id)
+            logger.warning("Export not found or access denied: export_id=%s user_id=%s", export_id, current_user.uuid)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Export not found or access denied",
@@ -196,16 +229,16 @@ async def list_exports(
     Returns all exports created by the authenticated user, ordered by creation date
     (newest first). Includes both contact and company exports.
     """
-    logger.info("Listing exports for user: user_id=%s", current_user.id)
+    logger.info("Listing exports for user: user_id=%s", current_user.uuid)
     
     try:
         exports = await service.list_user_exports(
-            session, current_user.id, filters=filters
+            session, current_user.uuid, filters=filters
         )
         
         export_details = [UserExportDetail.model_validate(export) for export in exports]
         
-        logger.info("Found %d exports for user: user_id=%s", len(export_details), current_user.id)
+        logger.info("Found %d exports for user: user_id=%s", len(export_details), current_user.uuid)
         
         return ExportListResponse(
             exports=export_details,
@@ -233,7 +266,7 @@ async def download_export(
     The token must be valid and the export must belong to the requesting user.
     The export must not have expired.
     """
-    logger.info("Download request: export_id=%s user_id=%s", export_id, current_user.id)
+    logger.info("Download request: export_id=%s user_id=%s", export_id, current_user.uuid)
     
     # Verify signed URL token
     token_payload = verify_signed_url(token)
@@ -245,11 +278,11 @@ async def download_export(
         )
     
     # Verify token matches export and user
-    if token_payload.get("export_id") != export_id or token_payload.get("user_id") != current_user.id:
+    if token_payload.get("export_id") != export_id or token_payload.get("user_id") != current_user.uuid:
         logger.warning(
             "Token mismatch: export_id=%s user_id=%s token_export_id=%s token_user_id=%s",
             export_id,
-            current_user.id,
+            current_user.uuid,
             token_payload.get("export_id"),
             token_payload.get("user_id"),
         )
@@ -259,9 +292,9 @@ async def download_export(
         )
     
     # Get export record
-    export = await service.get_export(session, export_id, current_user.id)
+    export = await service.get_export(session, export_id, current_user.uuid)
     if not export:
-        logger.warning("Export not found or access denied: export_id=%s user_id=%s", export_id, current_user.id)
+        logger.warning("Export not found or access denied: export_id=%s user_id=%s", export_id, current_user.uuid)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Export not found or access denied",
@@ -366,7 +399,7 @@ async def create_company_export(
     """
     logger.info(
         "Received company export request: user_id=%s company_count=%d",
-        current_user.id,
+        current_user.uuid,
         len(request.company_uuids),
     )
     
@@ -380,7 +413,7 @@ async def create_company_export(
         # Create export record with status "pending"
         export = await service.create_export(
             session,
-            current_user.id,
+            current_user.uuid,
             ExportType.companies,
             company_uuids=request.company_uuids,
         )
@@ -392,10 +425,39 @@ async def create_company_export(
         # Enqueue background task
         background_tasks.add_task(process_company_export, export.export_id, request.company_uuids)
         
+        # Deduct credits for FreeUser and ProUser (after export is queued successfully)
+        # Deduct 1 credit per company UUID
+        try:
+            profile = await profile_repo.get_by_user_id(session, current_user.uuid)
+            if profile:
+                user_role = profile.role or "FreeUser"
+                if credit_service.should_deduct_credits(user_role):
+                    credit_amount = len(request.company_uuids)
+                    new_balance = await credit_service.deduct_credits(
+                        session, current_user.uuid, amount=credit_amount
+                    )
+                    logger.info(
+                        "Credits deducted for company export: user_id=%s role=%s amount=%d new_balance=%d",
+                        current_user.uuid,
+                        user_role,
+                        credit_amount,
+                        new_balance,
+                    )
+                else:
+                    logger.debug(
+                        "Credits not deducted (unlimited credits): user_id=%s role=%s company_count=%d",
+                        current_user.uuid,
+                        user_role,
+                        len(request.company_uuids),
+                    )
+        except Exception as credit_exc:
+            # Log error but don't fail the request
+            logger.exception("Failed to deduct credits for company export: %s", credit_exc)
+        
         logger.info(
             "Company export queued: export_id=%s user_id=%s company_count=%d",
             export.export_id,
-            current_user.id,
+            current_user.uuid,
             len(request.company_uuids),
         )
         
@@ -436,7 +498,7 @@ async def create_chunked_contact_export(
     """
     logger.info(
         "Received chunked contact export request: user_id=%s chunk_count=%d merge=%s",
-        current_user.id,
+        current_user.uuid,
         len(request.chunks),
         request.merge,
     )
@@ -460,7 +522,7 @@ async def create_chunked_contact_export(
         all_uuids = [uuid for chunk in request.chunks for uuid in chunk]
         main_export = await service.create_export(
             session,
-            current_user.id,
+            current_user.uuid,
             ExportType.contacts,
             contact_uuids=all_uuids,
         )
@@ -479,7 +541,7 @@ async def create_chunked_contact_export(
             # Create chunk export record
             chunk_export = await service.create_export(
                 session,
-                current_user.id,
+                current_user.uuid,
                 ExportType.contacts,
                 contact_uuids=chunk_uuids,
             )
@@ -501,6 +563,35 @@ async def create_chunked_contact_export(
         # If merge is requested, we would need additional logic to merge the CSV files
         # For now, we'll just create separate exports and return the main export ID
         # TODO: Implement CSV merging logic if needed
+        
+        # Deduct credits for FreeUser and ProUser (after chunked export is created successfully)
+        # Deduct credits for total count across all chunks (1 credit per contact UUID)
+        try:
+            profile = await profile_repo.get_by_user_id(session, current_user.uuid)
+            if profile:
+                user_role = profile.role or "FreeUser"
+                if credit_service.should_deduct_credits(user_role):
+                    credit_amount = total_count
+                    new_balance = await credit_service.deduct_credits(
+                        session, current_user.uuid, amount=credit_amount
+                    )
+                    logger.info(
+                        "Credits deducted for chunked contact export: user_id=%s role=%s amount=%d new_balance=%d",
+                        current_user.uuid,
+                        user_role,
+                        credit_amount,
+                        new_balance,
+                    )
+                else:
+                    logger.debug(
+                        "Credits not deducted (unlimited credits): user_id=%s role=%s total_count=%d",
+                        current_user.uuid,
+                        user_role,
+                        total_count,
+                    )
+        except Exception as credit_exc:
+            # Log error but don't fail the request
+            logger.exception("Failed to deduct credits for chunked contact export: %s", credit_exc)
         
         logger.info(
             "Chunked export created: main_export_id=%s chunk_count=%d total_count=%d",
@@ -539,12 +630,12 @@ async def cancel_export(
     Sets the export status to "cancelled" and cleans up any partial resources.
     Cannot cancel exports that are already completed or failed.
     """
-    logger.info("Cancel request: export_id=%s user_id=%s", export_id, current_user.id)
+    logger.info("Cancel request: export_id=%s user_id=%s", export_id, current_user.uuid)
     
     try:
-        export = await service.get_export(session, export_id, current_user.id)
+        export = await service.get_export(session, export_id, current_user.uuid)
         if not export:
-            logger.warning("Export not found or access denied: export_id=%s user_id=%s", export_id, current_user.id)
+            logger.warning("Export not found or access denied: export_id=%s user_id=%s", export_id, current_user.uuid)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Export not found or access denied",
@@ -576,7 +667,7 @@ async def cancel_export(
         export.error_message = "Export cancelled by user"
         await session.commit()
         
-        logger.info("Export cancelled: export_id=%s user_id=%s", export_id, current_user.id)
+        logger.info("Export cancelled: export_id=%s user_id=%s", export_id, current_user.uuid)
         
         return {
             "message": "Export cancelled successfully",
@@ -605,7 +696,7 @@ async def delete_all_csv_files(
     This endpoint deletes all CSV files in the exports directory and optionally
     cleans up expired export records from the database.
     """
-    logger.info("Admin CSV cleanup request: user_id=%s", current_user.id)
+    logger.info("Admin CSV cleanup request: user_id=%s", current_user.uuid)
     
     try:
         deleted_count = await service.delete_all_csv_files(session)

@@ -1,5 +1,6 @@
 """Shared base repository implementation for async SQLAlchemy access."""
 
+import warnings
 from typing import Generic, Optional, Type, TypeVar
 
 from sqlalchemy import Select, select
@@ -24,7 +25,22 @@ class AsyncRepository(Generic[ModelType]):
         logger.debug("Initialized AsyncRepository model=%s", self.model.__name__)
 
     async def get(self, session: AsyncSession, id: int) -> Optional[ModelType]:
-        """Retrieve a record by its integer primary key."""
+        """
+        Retrieve a record by its integer primary key.
+        
+        DEPRECATED: This method is deprecated. Use get_by_uuid() instead.
+        This method is kept for backward compatibility only.
+        """
+        warnings.warn(
+            f"AsyncRepository.get() is deprecated for {self.model.__name__}. "
+            "Use get_by_uuid() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        logger.warning(
+            "Using deprecated get() method for %s. Use get_by_uuid() instead.",
+            self.model.__name__
+        )
         logger.debug("Entering AsyncRepository.get model=%s id=%d", self.model.__name__, id)
         stmt: Select[tuple[ModelType]] = select(self.model).where(self.model.id == id)
         result = await session.execute(stmt)

@@ -63,7 +63,7 @@ class AIChatMessageRequest(BaseModel):
 class AIChatListItem(BaseModel):
     """Schema for AI chat in list responses."""
 
-    id: str = Field(..., description="Chat UUID")
+    uuid: str = Field(..., description="Chat UUID")
     title: str = Field(..., description="Chat title")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
@@ -74,7 +74,7 @@ class AIChatListItem(BaseModel):
 class AIChatResponse(BaseModel):
     """Schema for full AI chat response."""
 
-    id: str = Field(..., description="Chat UUID")
+    uuid: str = Field(..., description="Chat UUID")
     user_id: str = Field(..., description="User UUID who owns this chat")
     title: str = Field(..., description="Chat title")
     messages: list[dict[str, Any]] = Field(..., description="List of messages as JSON objects")

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import Select, Text, and_, func, or_, select
+from sqlalchemy import Select, Text, and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -14,6 +14,7 @@ from app.models.contacts import Contact, ContactMetadata
 from app.repositories.base import AsyncRepository
 from app.utils.batch_lookup import (
     batch_fetch_companies_by_uuids,
+    batch_fetch_company_metadata_by_uuids,
     batch_fetch_contact_metadata_by_uuids,
 )
 
@@ -433,7 +434,7 @@ class EmailFinderRepository(AsyncRepository):
         diagnostic_stmt = select(
             func.count(Contact.uuid).label("total_contacts"),
             func.sum(
-                func.case(
+                case(
                     (and_(
                         Contact.first_name.isnot(None),
                         Contact.first_name.ilike(f"%{first_name}%"),
@@ -442,7 +443,7 @@ class EmailFinderRepository(AsyncRepository):
                 )
             ).label("first_name_count"),
             func.sum(
-                func.case(
+                case(
                     (and_(
                         Contact.last_name.isnot(None),
                         Contact.last_name.ilike(f"%{last_name}%"),
@@ -451,7 +452,7 @@ class EmailFinderRepository(AsyncRepository):
                 )
             ).label("last_name_count"),
             func.sum(
-                func.case(
+                case(
                     (and_(
                         Contact.first_name.isnot(None),
                         Contact.first_name.ilike(f"%{first_name}%"),
@@ -462,7 +463,7 @@ class EmailFinderRepository(AsyncRepository):
                 )
             ).label("both_names_count"),
             func.sum(
-                func.case(
+                case(
                     (and_(
                         Contact.email.isnot(None),
                         func.trim(Contact.email) != "",

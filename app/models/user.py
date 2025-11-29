@@ -23,6 +23,25 @@ class UserHistoryEventType(str, enum.Enum):
     LOGIN = "login"
 
 
+class ActivityServiceType(str, enum.Enum):
+    """Service types for user activities."""
+    LINKEDIN = "linkedin"
+    EMAIL = "email"
+
+
+class ActivityActionType(str, enum.Enum):
+    """Action types for user activities."""
+    SEARCH = "search"
+    EXPORT = "export"
+
+
+class ActivityStatus(str, enum.Enum):
+    """Status types for user activities."""
+    SUCCESS = "success"
+    FAILED = "failed"
+    PARTIAL = "partial"
+
+
 class User(Base):
     """User model for authentication."""
 
@@ -64,6 +83,11 @@ class User(Base):
     )
     history: Mapped[list["UserHistory"]] = relationship(
         "UserHistory",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    activities: Mapped[list["UserActivity"]] = relationship(
+        "UserActivity",
         back_populates="user",
         cascade="all, delete-orphan"
     )
@@ -113,7 +137,8 @@ class UserProfile(Base):
 
     user: Mapped["User"] = relationship(
         "User",
-        back_populates="profile"
+        back_populates="profile",
+        primaryjoin="foreign(UserProfile.user_id) == User.uuid"
     )
 
     __table_args__ = (
@@ -173,7 +198,8 @@ class UserHistory(Base):
 
     user: Mapped["User"] = relationship(
         "User",
-        back_populates="history"
+        back_populates="history",
+        primaryjoin="foreign(UserHistory.user_id) == User.uuid"
     )
 
     __table_args__ = (
@@ -181,3 +207,67 @@ class UserHistory(Base):
         Index("idx_user_history_event_type", "event_type"),
         Index("idx_user_history_created_at", "created_at"),
     )
+
+
+class UserActivity(Base):
+    """
+    User activity model for tracking LinkedIn and email service activities.
+    
+    Tracks search and export operations with detailed metadata including
+    request parameters, result counts, and status information.
+    
+    Note: user_id must be a valid UUID format (stored as text).
+    """
+
+    __tablename__ = "user_activities"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # User UUID (UUID format stored as text)
+    user_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("users.uuid", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    service_type: Mapped[str] = mapped_column(
+        EnumValue(ActivityServiceType, "activity_service_type"),
+        nullable=False,
+        index=True
+    )
+    action_type: Mapped[str] = mapped_column(
+        EnumValue(ActivityActionType, "activity_action_type"),
+        nullable=False,
+        index=True
+    )
+    status: Mapped[str] = mapped_column(
+        EnumValue(ActivityStatus, "activity_status"),
+        nullable=False,
+        index=True
+    )
+    request_params: Mapped[Optional[dict]] = mapped_column(JSON, default=None)
+    result_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    result_summary: Mapped[Optional[dict]] = mapped_column(JSON, default=None)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45))  # IPv6 max length
+    user_agent: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="activities",
+        primaryjoin="foreign(UserActivity.user_id) == User.uuid"
+    )
+
+    __table_args__ = (
+        Index("idx_user_activities_user_id", "user_id"),
+        Index("idx_user_activities_service_type", "service_type"),
+        Index("idx_user_activities_action_type", "action_type"),
+        Index("idx_user_activities_created_at", "created_at"),
+        Index("idx_user_activities_status", "status"),
+        Index("idx_user_activities_user_service_action_created", "user_id", "service_type", "action_type", "created_at"),
+    )
+

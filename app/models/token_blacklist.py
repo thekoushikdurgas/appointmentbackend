@@ -29,7 +29,7 @@ class TokenBlacklist(Base):
     )
     user_id: Mapped[str] = mapped_column(
         Text,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("users.uuid", ondelete="CASCADE"),
         nullable=False,
         index=True
     )

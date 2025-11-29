@@ -71,7 +71,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    logger.debug("User authenticated: id=%s email=%s", user.id, user.email)
+    logger.debug("User authenticated: uuid=%s email=%s", user.uuid, user.email)
     return user
 
 
@@ -84,7 +84,7 @@ async def get_current_active_user(
     Raises HTTPException if user is inactive.
     """
     if not current_user.is_active:
-        logger.warning("Access denied: user is inactive: %s", current_user.id)
+        logger.warning("Access denied: user is inactive: %s", current_user.uuid)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"non_field_errors": ["User account is disabled"]}
@@ -104,6 +104,20 @@ def get_user_role(profile: Optional[object]) -> str:
     return FREE_USER
 
 
+def is_unlimited_credits_role(role: str) -> bool:
+    """
+    Check if a user role has unlimited credits (no deduction).
+    
+    Args:
+        role: User role string
+        
+    Returns:
+        True if role has unlimited credits (SuperAdmin/Admin), False otherwise
+    """
+    from app.core.constants import UNLIMITED_CREDITS_ROLES
+    return role in UNLIMITED_CREDITS_ROLES
+
+
 async def get_current_admin(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
@@ -115,18 +129,18 @@ async def get_current_admin(
     Raises HTTPException (403 Forbidden) if user is not an admin or super admin.
     """
     profile_repo = UserProfileRepository()
-    profile = await profile_repo.get_by_user_id(session, current_user.id)
+    profile = await profile_repo.get_by_user_id(session, current_user.uuid)
     
     user_role = get_user_role(profile)
     
     if user_role not in [ADMIN, SUPER_ADMIN]:
-        logger.warning("Access denied: user is not admin: user_id=%s role=%s", current_user.id, user_role)
+        logger.warning("Access denied: user is not admin: user_uuid=%s role=%s", current_user.uuid, user_role)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to perform this action. Admin role required."
         )
     
-    logger.debug("Admin access granted: user_id=%s email=%s", current_user.id, current_user.email)
+    logger.debug("Admin access granted: user_uuid=%s email=%s", current_user.uuid, current_user.email)
     return current_user
 
 
@@ -141,18 +155,18 @@ async def get_current_super_admin(
     Raises HTTPException (403 Forbidden) if user is not a super admin.
     """
     profile_repo = UserProfileRepository()
-    profile = await profile_repo.get_by_user_id(session, current_user.id)
+    profile = await profile_repo.get_by_user_id(session, current_user.uuid)
     
     user_role = get_user_role(profile)
     
     if user_role != SUPER_ADMIN:
-        logger.warning("Access denied: user is not super admin: user_id=%s role=%s", current_user.id, user_role)
+        logger.warning("Access denied: user is not super admin: user_uuid=%s role=%s", current_user.uuid, user_role)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to perform this action. Super Admin role required."
         )
     
-    logger.debug("Super admin access granted: user_id=%s email=%s", current_user.id, current_user.email)
+    logger.debug("Super admin access granted: user_uuid=%s email=%s", current_user.uuid, current_user.email)
     return current_user
 
 
@@ -179,18 +193,18 @@ async def get_current_pro_user(
     Raises HTTPException (403 Forbidden) if user is not a pro user.
     """
     profile_repo = UserProfileRepository()
-    profile = await profile_repo.get_by_user_id(session, current_user.id)
+    profile = await profile_repo.get_by_user_id(session, current_user.uuid)
     
     user_role = get_user_role(profile)
     
     if user_role != PRO_USER:
-        logger.warning("Access denied: user is not pro user: user_id=%s role=%s", current_user.id, user_role)
+        logger.warning("Access denied: user is not pro user: user_uuid=%s role=%s", current_user.uuid, user_role)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to perform this action. Pro User role required."
         )
     
-    logger.debug("Pro user access granted: user_id=%s email=%s", current_user.id, current_user.email)
+    logger.debug("Pro user access granted: user_uuid=%s email=%s", current_user.uuid, current_user.email)
     return current_user
 
 
@@ -205,18 +219,18 @@ async def get_current_free_or_pro_user(
     Raises HTTPException (403 Forbidden) if user is not a free or pro user.
     """
     profile_repo = UserProfileRepository()
-    profile = await profile_repo.get_by_user_id(session, current_user.id)
+    profile = await profile_repo.get_by_user_id(session, current_user.uuid)
     
     user_role = get_user_role(profile)
     
     if user_role not in [FREE_USER, PRO_USER]:
-        logger.warning("Access denied: user is not free or pro user: user_id=%s role=%s", current_user.id, user_role)
+        logger.warning("Access denied: user is not free or pro user: user_uuid=%s role=%s", current_user.uuid, user_role)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to perform this action. Free or Pro User role required."
         )
     
-    logger.debug("Free or pro user access granted: user_id=%s email=%s", current_user.id, current_user.email)
+    logger.debug("Free or pro user access granted: user_uuid=%s email=%s", current_user.uuid, current_user.email)
     return current_user
 
 
@@ -231,17 +245,17 @@ async def check_can_modify_resources(
     Pro users, Admin, and Super Admin can do full CRUD.
     """
     profile_repo = UserProfileRepository()
-    profile = await profile_repo.get_by_user_id(session, current_user.id)
+    profile = await profile_repo.get_by_user_id(session, current_user.uuid)
     
     user_role = get_user_role(profile)
     
     if user_role == FREE_USER:
-        logger.warning("Access denied: free user cannot modify resources: user_id=%s", current_user.id)
+        logger.warning("Access denied: free user cannot modify resources: user_uuid=%s", current_user.uuid)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Free users can only create and read resources. Upgrade to Pro for full access."
         )
     
-    logger.debug("Modify access granted: user_id=%s role=%s", current_user.id, user_role)
+    logger.debug("Modify access granted: user_uuid=%s role=%s", current_user.uuid, user_role)
     return current_user
 

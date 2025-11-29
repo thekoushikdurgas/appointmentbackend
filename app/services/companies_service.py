@@ -78,7 +78,7 @@ class CompaniesService:
         # self.logger.info("Service creating company: uuid=%s name=%s", data["uuid"], data.get("name"))
         company = await self.repository.create_company(session, data)
         await session.commit()
-        self.logger.debug("Created company persisted: id=%s uuid=%s", company.id, company.uuid)
+        self.logger.debug("Created company persisted: uuid=%s", company.uuid)
         
         # Invalidate companies list cache on creation
         if settings.ENABLE_QUERY_CACHING:
@@ -129,7 +129,7 @@ class CompaniesService:
             # self.logger.info("Company not found for update: company_uuid=%s", company_uuid)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         await session.commit()
-        self.logger.debug("Updated company persisted: id=%s uuid=%s", company.id, company.uuid)
+        self.logger.debug("Updated company persisted: uuid=%s", company.uuid)
         
         # Invalidate companies list cache on update
         if settings.ENABLE_QUERY_CACHING:

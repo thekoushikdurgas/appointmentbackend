@@ -53,7 +53,6 @@ class ContactDB(ContactBase):
 class ContactListItem(BaseModel):
     """Flattened contact representation used for list endpoints."""
 
-    id: int
     uuid: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -116,7 +115,6 @@ class ContactLocation(BaseModel):
 class ContactSimpleItem(BaseModel):
     """Simplified contact representation for view=simple."""
 
-    id: int
     uuid: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None

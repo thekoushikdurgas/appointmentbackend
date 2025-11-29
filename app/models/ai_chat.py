@@ -25,9 +25,16 @@ class AIChat(Base):
         default=lambda: str(uuid4()),
         nullable=False
     )
+    uuid: Mapped[str] = mapped_column(
+        Text,
+        unique=True,
+        index=True,
+        nullable=False,
+        default=lambda: str(uuid4())
+    )
     user_id: Mapped[str] = mapped_column(
         Text,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("users.uuid", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
@@ -45,11 +52,13 @@ class AIChat(Base):
 
     user: Mapped["User"] = relationship(
         "User",
-        backref="ai_chats"
+        backref="ai_chats",
+        primaryjoin="foreign(AIChat.user_id) == User.uuid"
     )
 
     __table_args__ = (
         Index("idx_ai_chats_user_id", "user_id"),
+        Index("idx_ai_chats_uuid", "uuid"),
         Index("idx_ai_chats_created_at", "created_at"),
         Index("idx_ai_chats_updated_at", "updated_at"),
     )
