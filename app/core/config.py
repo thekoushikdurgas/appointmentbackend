@@ -106,6 +106,7 @@ class Settings(BaseSettings):
         # Frontend EC2 IP (Contact360 frontend host)
         AnyHttpUrl("http://23.22.149.143"),
         AnyHttpUrl("http://23.22.149.143:3000"),
+        AnyHttpUrl("http://3.95.58.90"),
         # Production domain (Contact360)
         AnyHttpUrl("http://contact360.io"),
         AnyHttpUrl("https://contact360.io"),
@@ -114,6 +115,7 @@ class Settings(BaseSettings):
     ]
     TRUSTED_HOSTS: List[str] = [
         "54.87.173.234",
+        "3.95.58.90",
         "54.87.173.234:8000",
         "localhost",
         "127.0.0.1",
