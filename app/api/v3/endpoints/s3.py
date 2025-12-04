@@ -1,0 +1,141 @@
+"""S3 file operation endpoints for v3 API."""
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_user
+from app.core.config import get_settings
+from app.core.logging import get_logger, log_function_call
+from app.db.session import get_db
+from app.models.user import User
+from app.schemas.v3.s3 import S3FileDataResponse, S3FileDataRow, S3FileInfo, S3FileListResponse
+from app.services.s3_service import S3Service
+
+router = APIRouter(prefix="/s3/files", tags=["S3 Files"])
+logger = get_logger(__name__)
+s3_service = S3Service()
+settings = get_settings()
+V3_BUCKET_NAME = settings.S3_V3_BUCKET_NAME
+
+
+@router.get("", response_model=S3FileListResponse)
+@log_function_call(logger=logger, log_arguments=True, log_result=True)
+async def list_csv_files(
+    prefix: str = Query("", description="Optional prefix to filter files"),
+    current_user: User = Depends(get_current_user),
+) -> S3FileListResponse:
+    """
+    List all CSV files in the S3 bucket.
+    
+    Returns a list of all CSV files with their metadata (key, filename, size, last_modified).
+    """
+    logger.info(
+        "GET /v3/s3/files request received: prefix=%s user_id=%s",
+        prefix,
+        current_user.uuid,
+    )
+
+    try:
+        logger.debug("Listing CSV files: bucket=%s prefix=%s", V3_BUCKET_NAME, prefix)
+        files = await s3_service.list_csv_files(prefix=prefix, bucket_name=V3_BUCKET_NAME)
+        logger.info("Found %d CSV file(s) in bucket '%s' with prefix '%s'", len(files), V3_BUCKET_NAME, prefix)
+        
+        file_infos = [
+            S3FileInfo(
+                key=f["key"],
+                filename=f["filename"],
+                size=f.get("size"),
+                last_modified=f.get("last_modified"),
+                content_type=f.get("content_type"),
+            )
+            for f in files
+        ]
+        return S3FileListResponse(files=file_infos, total=len(file_infos))
+    except Exception as e:
+        logger.error(
+            "Error listing CSV files from S3: bucket=%s prefix=%s error=%s",
+            V3_BUCKET_NAME,
+            prefix,
+            str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list CSV files: {str(e)}",
+        ) from e
+
+
+@router.get("/{file_id:path}", response_class=Response)
+@log_function_call(logger=logger, log_arguments=True, log_result=False)
+async def get_csv_file(
+    file_id: str = Path(..., description="S3 object key (full path)"),
+    limit: int = Query(None, ge=1, le=1000, description="Maximum number of rows to return (for pagination)"),
+    offset: int = Query(None, ge=0, description="Number of rows to skip (for pagination)"),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    """
+    Get a CSV file from S3 bucket.
+    
+    If limit and offset are provided, returns paginated CSV data as JSON.
+    Otherwise, returns the full CSV file for download.
+    """
+    logger.info(
+        "GET /v3/s3/files/%s request received: limit=%s offset=%s user_id=%s bucket=%s",
+        file_id,
+        limit,
+        offset,
+        current_user.uuid,
+        V3_BUCKET_NAME,
+    )
+
+    try:
+        # If limit is provided, return paginated data as JSON
+        if limit is not None:
+            logger.debug("Using paginated mode: bucket=%s key=%s limit=%d offset=%d", V3_BUCKET_NAME, file_id, limit, offset or 0)
+            rows, total_rows = await s3_service.read_csv_paginated(
+                s3_key=file_id,
+                limit=limit,
+                offset=offset or 0,
+                bucket_name=V3_BUCKET_NAME,
+            )
+
+            response_data = S3FileDataResponse(
+                file_key=file_id,
+                rows=[S3FileDataRow(data=row) for row in rows],
+                limit=limit,
+                offset=offset or 0,
+                total_rows=total_rows,
+            )
+            return JSONResponse(content=response_data.model_dump())
+        
+        # Otherwise, return the full CSV file for download
+        logger.debug("Using download mode: bucket=%s key=%s", V3_BUCKET_NAME, file_id)
+        file_content = await s3_service.download_csv_file(s3_key=file_id, bucket_name=V3_BUCKET_NAME)
+        filename = file_id.split("/")[-1] if "/" in file_id else file_id
+        
+        return Response(
+            content=file_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+    except FileNotFoundError as e:
+        logger.warning("CSV file not found in S3: file_id=%s", file_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"CSV file not found: {str(e)}",
+        ) from e
+    except Exception as e:
+        logger.error(
+            "Error getting CSV file from S3: file_id=%s error=%s",
+            file_id,
+            str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get CSV file: {str(e)}",
+        ) from e
+
