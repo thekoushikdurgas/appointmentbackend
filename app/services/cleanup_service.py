@@ -436,6 +436,11 @@ class CleanupService:
                             setattr(metadata, field_name, cleaned_value)
                             fields_updated += 1
             
+            # Set status to "1" after successful cleanup
+            if contact.status != "1":
+                contact.status = "1"
+                fields_updated += 1
+            
             await session.commit()
             
             # #region agent log

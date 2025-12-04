@@ -45,6 +45,10 @@ class ContactFilterParams(BaseModel):
         default=None,
         description="Case-insensitive substring match against Contact.email_status.",
     )
+    status: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive exact match against Contact.status.",
+    )
     email: Optional[str] = Field(
         default=None,
         description="Case-insensitive substring match against Contact.email.",
@@ -515,6 +519,10 @@ class CompanyContactFilterParams(BaseModel):
     email_status: Optional[str] = Field(
         default=None,
         description="Case-insensitive substring match against Contact.email_status.",
+    )
+    status: Optional[str] = Field(
+        default=None,
+        description="Case-insensitive exact match against Contact.status.",
     )
     email: Optional[str] = Field(
         default=None,

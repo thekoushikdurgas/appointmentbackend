@@ -413,6 +413,7 @@ class ContactRepository(AsyncRepository[Contact]):
                 use_trigram_optimization=True
             )
         stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
+        stmt = apply_ilike_filter(stmt, Contact.status, filters.status)
         stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
         stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
         stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority)
@@ -5344,6 +5345,7 @@ class ContactRepository(AsyncRepository[Contact]):
         )
         stmt = self._apply_multi_value_filter(stmt, Contact.seniority, filters.seniority, dialect_name=dialect_name)
         stmt = apply_ilike_filter(stmt, Contact.email_status, filters.email_status)
+        stmt = apply_ilike_filter(stmt, Contact.status, filters.status)
         stmt = self._apply_multi_value_filter(stmt, Contact.email, filters.email)
         stmt = self._apply_multi_value_filter(stmt, Contact.text_search, filters.contact_location)
         

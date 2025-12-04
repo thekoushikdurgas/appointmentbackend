@@ -42,6 +42,7 @@ class Contact(Base):
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False))
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False))
     seniority: Mapped[Optional[str]] = mapped_column(Text, default="_", index=True)
+    status: Mapped[Optional[str]] = mapped_column(Text, default="_", index=True)
 
     company: Mapped[Optional["Company"]] = relationship(
         "Company",
@@ -95,6 +96,8 @@ class Contact(Base):
             postgresql_using="gin",
             postgresql_ops={"text_search": "gin_trgm_ops"},
         ),
+        Index("idx_contacts_status", "status"),
+        Index("idx_contacts_status_company_id", "status", "company_id"),
     )
 
 
