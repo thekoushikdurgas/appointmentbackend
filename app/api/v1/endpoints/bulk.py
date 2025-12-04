@@ -55,7 +55,7 @@ async def bulk_insert(
     - Uses `on_conflict_do_update` for upsert behavior (updates existing records)
     - Searches for existing records by LinkedIn URL before processing
     - Processes companies first, then contacts (contacts may reference companies)
-    - Applies same UUID generation logic as scripts/data for consistency
+    - Uses consistent UUID generation logic
     - Updates all fields in both main tables and metadata tables
     """
     logger.info(

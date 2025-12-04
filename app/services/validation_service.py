@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.models.companies import Company
 from app.models.contacts import Contact
+from app.utils.company_name_utils import is_valid_company_name
+from app.utils.keyword_utils import is_valid_keyword
+from app.utils.title_utils import is_valid_title
 
 logger = get_logger(__name__)
 
@@ -17,31 +20,10 @@ class ValidationService:
 
     def __init__(self):
         """Initialize validation service."""
-        # Import validation utilities from data scripts
-        try:
-            import sys
-            from pathlib import Path
-            
-            # Add scripts/data to path if not already there
-            scripts_path = Path(__file__).parent.parent.parent.parent / "scripts" / "data"
-            if str(scripts_path) not in sys.path:
-                sys.path.insert(0, str(scripts_path))
-            
-            from utils.cleaning import (
-                is_valid_company_name,
-                is_valid_keyword,
-                is_valid_title,
-            )
-            
-            self.is_valid_company_name = is_valid_company_name
-            self.is_valid_keyword = is_valid_keyword
-            self.is_valid_title = is_valid_title
-        except ImportError as e:
-            logger.warning("Could not import validation utilities from data scripts: %s", e)
-            # Fallback to basic validation
-            self.is_valid_company_name = lambda x: bool(x and len(x.strip()) > 0)
-            self.is_valid_keyword = lambda x: bool(x and len(x.strip()) > 0)
-            self.is_valid_title = lambda x: bool(x and len(x.strip()) > 0)
+        # Use validation utilities from app.utils
+        self.is_valid_company_name = is_valid_company_name
+        self.is_valid_keyword = is_valid_keyword
+        self.is_valid_title = is_valid_title
 
     async def validate_contact(
         self,

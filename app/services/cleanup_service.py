@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
+from app.utils.company_name_utils import clean_company_name
+from app.utils.keyword_utils import clean_keyword_array
+from app.utils.title_utils import clean_title
 
 logger = get_logger(__name__)
 
@@ -266,31 +269,10 @@ class CleanupService:
 
     def __init__(self):
         """Initialize cleanup service."""
-        # Import cleaning utilities from data scripts
-        try:
-            import sys
-            from pathlib import Path
-            
-            # Add scripts/data to path if not already there
-            scripts_path = Path(__file__).parent.parent.parent.parent / "scripts" / "data"
-            if str(scripts_path) not in sys.path:
-                sys.path.insert(0, str(scripts_path))
-            
-            from utils.cleaning import (
-                clean_company_name,
-                clean_keyword_array,
-                clean_title,
-            )
-            
-            self.clean_company_name = clean_company_name
-            self.clean_keyword_array = clean_keyword_array
-            self.clean_title = clean_title
-        except ImportError as e:
-            logger.warning("Could not import cleaning utilities from data scripts: %s", e)
-            # Fallback to basic cleaning
-            self.clean_company_name = lambda x: clean_text(x)
-            self.clean_keyword_array = clean_array
-            self.clean_title = clean_text
+        # Use cleaning utilities from app.utils
+        self.clean_company_name = clean_company_name
+        self.clean_keyword_array = clean_keyword_array
+        self.clean_title = clean_title
 
     async def clean_contact(
         self,

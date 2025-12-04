@@ -154,7 +154,8 @@ python -m app.tasks.import_tasks --help
 python -m app.tasks.import_tasks run --file data/data.csv
 
 # Clean database:
-python -m scripts.data.clean_database
+# NOTE: scripts/data dependencies have been removed
+# python -m scripts.data.clean_database
 
 # ========================================
 # DOCKER
