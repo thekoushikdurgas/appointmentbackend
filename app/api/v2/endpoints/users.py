@@ -399,7 +399,8 @@ async def delete_user(
             )
         
         await user_repo.delete_user(session, user)
-        await session.commit()
+        # Flush to persist changes without committing (transaction managed by get_db())
+        await session.flush()
         
     except HTTPException:
         raise

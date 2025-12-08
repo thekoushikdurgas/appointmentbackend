@@ -85,7 +85,8 @@ async def create_contact_export(
         
         # Set total_records for progress tracking
         export.total_records = len(request.contact_uuids)
-        await session.commit()
+        # Flush to persist changes without committing (transaction managed by get_db())
+        await session.flush()
         
         # Enqueue background task
         # Note: This is a long-running task that might be better suited for Celery in the future
@@ -381,7 +382,8 @@ async def create_company_export(
         
         # Set total_records for progress tracking
         export.total_records = len(request.company_uuids)
-        await session.commit()
+        # Flush to persist changes without committing (transaction managed by get_db())
+        await session.flush()
         
         # Enqueue background task
         # Note: This is a long-running task that might be better suited for Celery in the future
@@ -469,7 +471,8 @@ async def create_chunked_contact_export(
         
         # Set total_records for progress tracking
         main_export.total_records = total_count
-        await session.commit()
+        # Flush to persist changes without committing (transaction managed by get_db())
+        await session.flush()
         
         # Create chunk export records and enqueue tasks
         chunk_ids = []
@@ -486,7 +489,8 @@ async def create_chunked_contact_export(
                 contact_uuids=chunk_uuids,
             )
             chunk_export.total_records = len(chunk_uuids)
-            await session.commit()
+            # Flush to persist changes without committing (transaction managed by get_db())
+            await session.flush()
             
             chunk_ids.append(chunk_export.export_id)
             
@@ -591,7 +595,8 @@ async def cancel_export(
         # Update status to cancelled
         export.status = ExportStatus.cancelled
         export.error_message = "Export cancelled by user"
-        await session.commit()
+        # Flush to persist changes without committing (transaction managed by get_db())
+        await session.flush()
         
         return {
             "message": "Export cancelled successfully",

@@ -12,11 +12,13 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import AsyncSessionLocal
 from app.models.companies import Company, CompanyMetadata
 from app.models.contacts import Contact, ContactMetadata
 from app.repositories.companies import CompanyRepository
 from app.repositories.contacts import ContactRepository
 from app.repositories.linkedin import LinkedInRepository
+from app.repositories.user import UserProfileRepository
 from app.schemas.companies import CompanyDB, CompanyMetadataOut
 from app.schemas.contacts import ContactDB
 from app.schemas.linkedin import (
@@ -26,6 +28,7 @@ from app.schemas.linkedin import (
     LinkedInUpsertResponse,
 )
 from app.schemas.metadata import ContactMetadataOut
+from app.services.credit_service import CreditService
 from app.utils.normalization import PLACEHOLDER_VALUE, normalize_text
 
 # Performance optimization constants
@@ -41,17 +44,23 @@ class LinkedInService:
         linkedin_repo: Optional[LinkedInRepository] = None,
         contact_repo: Optional[ContactRepository] = None,
         company_repo: Optional[CompanyRepository] = None,
+        credit_service: Optional[CreditService] = None,
+        profile_repo: Optional[UserProfileRepository] = None,
     ) -> None:
         """Initialize the service with repository dependencies."""
         self.linkedin_repo = linkedin_repo or LinkedInRepository()
         self.contact_repo = contact_repo or ContactRepository()
         self.company_repo = company_repo or CompanyRepository()
+        self.credit_service = credit_service or CreditService()
+        self.profile_repo = profile_repo or UserProfileRepository()
 
     async def search_by_url(
-        self, session: AsyncSession, linkedin_url: str, use_parallel: bool = True
+        self, linkedin_url: str, user_id: Optional[str] = None, use_parallel: bool = False
     ) -> LinkedInSearchResponse:
         """
         Search for contacts and companies by LinkedIn URL using optimized sequential queries.
+        
+        Creates its own database session internally and handles credit deduction.
         
         Optimizations:
         - Parallel execution of contact and company searches
@@ -60,200 +69,399 @@ class LinkedInService:
         - Result size limits
         - Batch fetching of company contacts (eliminates N+1 problem)
         
+        Args:
+            linkedin_url: LinkedIn URL to search for
+            user_id: Optional user ID for credit deduction (FreeUser/ProUser only)
+            use_parallel: Whether to execute searches in parallel (default: True)
+        
         Returns all matches from both ContactMetadata and CompanyMetadata.
         """
-        start_time = time.time()
-        
-        # ========================================================================
-        # Parallel execution: Search contacts and companies simultaneously
-        # ========================================================================
-        async def search_contacts() -> tuple[list[ContactWithRelations], dict[str, Company], dict[str, CompanyMetadata]]:
-            """Search for contacts by LinkedIn URL using sequential queries."""
-            step_start = time.time()
-            
-            # Step 1: Find contact metadata by LinkedIn URL
-            contact_metadata_list = await self.linkedin_repo.find_contacts_metadata_by_linkedin_url(
-                session, linkedin_url
-            )
-            
-            # Apply result limit
-            if len(contact_metadata_list) > MAX_LINKEDIN_SEARCH_RESULTS:
-                contact_metadata_list = contact_metadata_list[:MAX_LINKEDIN_SEARCH_RESULTS]
-            
-            step_time = time.time() - step_start
-            
-            if not contact_metadata_list:
-                return [], {}, {}
-            
-            step_start = time.time()
-            # Step 2: Extract contact UUIDs and batch fetch contacts
-            contact_uuids = [cm.uuid for cm in contact_metadata_list]
-            contacts_dict = await self.linkedin_repo.find_contacts_by_uuids(
-                session, contact_uuids, batch_size=LINKEDIN_UUID_BATCH_SIZE
-            )
-            step_time = time.time() - step_start
-            
-            step_start = time.time()
-            # Step 3: Extract company UUIDs and batch fetch companies
-            company_uuids_from_contacts = [
-                contact.company_id
-                for contact in contacts_dict.values()
-                if contact.company_id
-            ]
-            # Remove duplicates
-            company_uuids_from_contacts = list(set(company_uuids_from_contacts))
-            
-            if company_uuids_from_contacts:
-                companies_dict = await self.linkedin_repo.find_companies_by_uuids(
-                    session, company_uuids_from_contacts,                     batch_size=LINKEDIN_UUID_BATCH_SIZE
-                )
-                step_time = time.time() - step_start
+        #region agent log
+        import json
+        log_path = "d:\\code\\ayan\\contact360\\.cursor\\debug.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_service_entry", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:79", "message": "service_entry", "data": {"linkedin_url": linkedin_url, "user_id": user_id, "use_parallel": use_parallel}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1,H2"}) + "\n")
+        except: pass
+        #endregion agent log
+        # Create internal session for database operations
+        #region agent log
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_session_create", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:80", "message": "before_session_create", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
+        except: pass
+        #endregion agent log
+        async with AsyncSessionLocal() as session:
+            #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_session_created", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:81", "message": "session_created", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
+            except: pass
+            #endregion agent log
+            try:
+                start_time = time.time()
                 
-                step_start = time.time()
-                # Step 4: Batch fetch company metadata
-                company_metadata_dict = await self.linkedin_repo.find_companies_metadata_by_uuids(
-                    session, company_uuids_from_contacts,                     batch_size=LINKEDIN_UUID_BATCH_SIZE
-                )
-                step_time = time.time() - step_start
-            else:
-                companies_dict = {}
-                company_metadata_dict = {}
-            
-            step_start = time.time()
-            # Step 5: Merge contact data
-            contacts: list[ContactWithRelations] = []
-            for contact_meta in contact_metadata_list:
-                contact = contacts_dict.get(contact_meta.uuid)
-                if not contact:
-                    # Skip if contact doesn't exist (orphaned metadata)
-                    continue
-                
-                # Get company and company metadata if contact has company_id
-                company = companies_dict.get(contact.company_id) if contact.company_id else None
-                company_meta = (
-                    company_metadata_dict.get(company.uuid) if company else None
-                )
-                
-                # Build ContactWithRelations
-                contact_data = ContactDB.model_validate(contact)
-                metadata_data = ContactMetadataOut.model_validate(contact_meta)
-                company_data = CompanyDB.model_validate(company) if company else None
-                company_meta_data = (
-                    CompanyMetadataOut.model_validate(company_meta) if company_meta else None
-                )
-                
-                contacts.append(
-                    ContactWithRelations(
-                        contact=contact_data,
-                        metadata=metadata_data,
-                        company=company_data,
-                        company_metadata=company_meta_data,
-                    )
-                )
-            step_time = time.time() - step_start
-            
-            return contacts, companies_dict, company_metadata_dict
-        
-        async def search_companies() -> list[CompanyWithRelations]:
-            """Search for companies by LinkedIn URL using sequential queries."""
-            step_start = time.time()
-            
-            # Step 1: Find company metadata by LinkedIn URL
-            company_metadata_list = await self.linkedin_repo.find_companies_metadata_by_linkedin_url(
-                session, linkedin_url
-            )
-            
-            # Apply result limit
-            if len(company_metadata_list) > MAX_LINKEDIN_SEARCH_RESULTS:
-                company_metadata_list = company_metadata_list[:MAX_LINKEDIN_SEARCH_RESULTS]
-            
-            step_time = time.time() - step_start
-            
-            if not company_metadata_list:
-                return []
-            
-            step_start = time.time()
-            # Step 2: Extract company UUIDs and batch fetch companies
-            company_uuids = [cm.uuid for cm in company_metadata_list]
-            companies_dict = await self.linkedin_repo.find_companies_by_uuids(
-                session, company_uuids, batch_size=LINKEDIN_UUID_BATCH_SIZE
-            )
-            step_time = time.time() - step_start
-            
-            step_start = time.time()
-            # Step 3: Batch fetch company contacts (eliminates N+1 problem)
-            contacts_by_company = await self.linkedin_repo.find_contacts_by_company_uuids(
-                session, company_uuids
-            )
-            step_time = time.time() - step_start
-            total_contacts = sum(len(contacts) for contacts in contacts_by_company.values())
-            
-            step_start = time.time()
-            # Step 4: Merge company data
-            companies: list[CompanyWithRelations] = []
-            for company_meta in company_metadata_list:
-                company = companies_dict.get(company_meta.uuid)
-                if not company:
-                    # Skip if company doesn't exist (orphaned metadata)
-                    continue
-                
-                company_data = CompanyDB.model_validate(company)
-                company_meta_data = CompanyMetadataOut.model_validate(company_meta)
-                
-                # Get contacts for this company (from batch fetch)
-                company_contacts_rows = contacts_by_company.get(company.uuid, [])
-                company_contacts: list[ContactWithRelations] = []
-                for contact, contact_meta in company_contacts_rows:
-                    contact_data = ContactDB.model_validate(contact)
-                    metadata_data = (
-                        ContactMetadataOut.model_validate(contact_meta) if contact_meta else None
-                    )
+                # ========================================================================
+                # Parallel execution: Search contacts and companies simultaneously
+                # ========================================================================
+                async def search_contacts() -> tuple[list[ContactWithRelations], dict[str, Company], dict[str, CompanyMetadata]]:
+                    """Search for contacts by LinkedIn URL using sequential queries."""
+                    step_start = time.time()
                     
-                    company_contacts.append(
-                        ContactWithRelations(
-                            contact=contact_data,
-                            metadata=metadata_data,
-                            company=company_data,
-                            company_metadata=company_meta_data,
+                    # Step 1: Find contact metadata by LinkedIn URL
+                    #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_contact_query", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:92", "message": "before_contact_query", "data": {"linkedin_url": linkedin_url}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H2"}) + "\n")
+                    except: pass
+                    #endregion agent log
+                    contact_metadata_list = await self.linkedin_repo.find_contacts_metadata_by_linkedin_url(
+                        session, linkedin_url
+                    )
+                    #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_after_contact_query", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:95", "message": "after_contact_query", "data": {"result_count": len(contact_metadata_list)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H2"}) + "\n")
+                    except: pass
+                    #endregion agent log
+                    
+                    # Apply result limit
+                    if len(contact_metadata_list) > MAX_LINKEDIN_SEARCH_RESULTS:
+                        contact_metadata_list = contact_metadata_list[:MAX_LINKEDIN_SEARCH_RESULTS]
+                    
+                    step_time = time.time() - step_start
+                    
+                    if not contact_metadata_list:
+                        return [], {}, {}
+                    
+                    step_start = time.time()
+                    # Step 2: Extract contact UUIDs and batch fetch contacts
+                    contact_uuids = [cm.uuid for cm in contact_metadata_list]
+                    contacts_dict = await self.linkedin_repo.find_contacts_by_uuids(
+                        session, contact_uuids, batch_size=LINKEDIN_UUID_BATCH_SIZE
+                    )
+                    step_time = time.time() - step_start
+                    
+                    step_start = time.time()
+                    # Step 3: Extract company UUIDs and batch fetch companies
+                    company_uuids_from_contacts = [
+                        contact.company_id
+                        for contact in contacts_dict.values()
+                        if contact.company_id
+                    ]
+                    # Remove duplicates
+                    company_uuids_from_contacts = list(set(company_uuids_from_contacts))
+                    
+                    if company_uuids_from_contacts:
+                        companies_dict = await self.linkedin_repo.find_companies_by_uuids(
+                            session, company_uuids_from_contacts, batch_size=LINKEDIN_UUID_BATCH_SIZE
                         )
-                    )
+                        step_time = time.time() - step_start
+                        
+                        step_start = time.time()
+                        # Step 4: Batch fetch company metadata
+                        company_metadata_dict = await self.linkedin_repo.find_companies_metadata_by_uuids(
+                            session, company_uuids_from_contacts, batch_size=LINKEDIN_UUID_BATCH_SIZE
+                        )
+                        step_time = time.time() - step_start
+                    else:
+                        companies_dict = {}
+                        company_metadata_dict = {}
+                    
+                    step_start = time.time()
+                    # Step 5: Merge contact data
+                    contacts: list[ContactWithRelations] = []
+                    for contact_meta in contact_metadata_list:
+                        contact = contacts_dict.get(contact_meta.uuid)
+                        if not contact:
+                            # Skip if contact doesn't exist (orphaned metadata)
+                            continue
+                        
+                        # Get company and company metadata if contact has company_id
+                        company = companies_dict.get(contact.company_id) if contact.company_id else None
+                        company_meta = (
+                            company_metadata_dict.get(company.uuid) if company else None
+                        )
+                        
+                        # Build ContactWithRelations
+                        contact_data = ContactDB.model_validate(contact)
+                        metadata_data = ContactMetadataOut.model_validate(contact_meta)
+                        company_data = CompanyDB.model_validate(company) if company else None
+                        company_meta_data = (
+                            CompanyMetadataOut.model_validate(company_meta) if company_meta else None
+                        )
+                        
+                        contacts.append(
+                            ContactWithRelations(
+                                contact=contact_data,
+                                metadata=metadata_data,
+                                company=company_data,
+                                company_metadata=company_meta_data,
+                            )
+                        )
+                    step_time = time.time() - step_start
+                    
+                    return contacts, companies_dict, company_metadata_dict
                 
-                companies.append(
-                    CompanyWithRelations(
-                        company=company_data,
-                        metadata=company_meta_data,
-                        contacts=company_contacts,
+                async def search_companies() -> list[CompanyWithRelations]:
+                    """Search for companies by LinkedIn URL using sequential queries."""
+                    step_start = time.time()
+                    
+                    # Step 1: Find company metadata by LinkedIn URL
+                    #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_company_query", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:179", "message": "before_company_query", "data": {"linkedin_url": linkedin_url}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H2"}) + "\n")
+                    except: pass
+                    #endregion agent log
+                    company_metadata_list = await self.linkedin_repo.find_companies_metadata_by_linkedin_url(
+                        session, linkedin_url
                     )
+                    #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_after_company_query", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:182", "message": "after_company_query", "data": {"result_count": len(company_metadata_list)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H2"}) + "\n")
+                    except: pass
+                    #endregion agent log
+                    
+                    # Apply result limit
+                    if len(company_metadata_list) > MAX_LINKEDIN_SEARCH_RESULTS:
+                        company_metadata_list = company_metadata_list[:MAX_LINKEDIN_SEARCH_RESULTS]
+                    
+                    step_time = time.time() - step_start
+                    
+                    if not company_metadata_list:
+                        return []
+                    
+                    step_start = time.time()
+                    # Step 2: Extract company UUIDs and batch fetch companies
+                    company_uuids = [cm.uuid for cm in company_metadata_list]
+                    companies_dict = await self.linkedin_repo.find_companies_by_uuids(
+                        session, company_uuids, batch_size=LINKEDIN_UUID_BATCH_SIZE
+                    )
+                    step_time = time.time() - step_start
+                    
+                    step_start = time.time()
+                    # Step 3: Batch fetch company contacts (eliminates N+1 problem)
+                    contacts_by_company = await self.linkedin_repo.find_contacts_by_company_uuids(
+                        session, company_uuids
+                    )
+                    step_time = time.time() - step_start
+                    total_contacts = sum(len(contacts) for contacts in contacts_by_company.values())
+                    
+                    step_start = time.time()
+                    # Step 4: Merge company data
+                    companies: list[CompanyWithRelations] = []
+                    for company_meta in company_metadata_list:
+                        company = companies_dict.get(company_meta.uuid)
+                        if not company:
+                            # Skip if company doesn't exist (orphaned metadata)
+                            continue
+                        
+                        company_data = CompanyDB.model_validate(company)
+                        company_meta_data = CompanyMetadataOut.model_validate(company_meta)
+                        
+                        # Get contacts for this company (from batch fetch)
+                        company_contacts_rows = contacts_by_company.get(company.uuid, [])
+                        company_contacts: list[ContactWithRelations] = []
+                        for contact, contact_meta in company_contacts_rows:
+                            contact_data = ContactDB.model_validate(contact)
+                            metadata_data = (
+                                ContactMetadataOut.model_validate(contact_meta) if contact_meta else None
+                            )
+                            
+                            company_contacts.append(
+                                ContactWithRelations(
+                                    contact=contact_data,
+                                    metadata=metadata_data,
+                                    company=company_data,
+                                    company_metadata=company_meta_data,
+                                )
+                            )
+                        
+                        companies.append(
+                            CompanyWithRelations(
+                                company=company_data,
+                                metadata=company_meta_data,
+                                contacts=company_contacts,
+                            )
+                        )
+                    step_time = time.time() - step_start
+                    
+                    return companies
+                
+                # Execute contact and company searches (parallel or sequential based on use_parallel flag)
+                #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_execution_mode", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:293", "message": "execution_mode", "data": {"use_parallel": use_parallel}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H5"}) + "\n")
+                except: pass
+                #endregion agent log
+                if use_parallel:
+                    parallel_start = time.time()
+                    (contacts_result, companies_dict_from_contacts, company_metadata_dict_from_contacts), companies = await asyncio.gather(
+                        search_contacts(),
+                        search_companies(),
+                    )
+                    contacts = contacts_result
+                    parallel_time = time.time() - parallel_start
+                else:
+                    # Sequential execution to avoid concurrent session operations
+                    sequential_start = time.time()
+                    #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_sequential_contacts", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:305", "message": "before_sequential_contacts", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H5"}) + "\n")
+                    except: pass
+                    #endregion agent log
+                    contacts_result, companies_dict_from_contacts, company_metadata_dict_from_contacts = await search_contacts()
+                    #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_after_sequential_contacts", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:306", "message": "after_sequential_contacts", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H5"}) + "\n")
+                    except: pass
+                    #endregion agent log
+                    #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_sequential_companies", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:307", "message": "before_sequential_companies", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H5"}) + "\n")
+                    except: pass
+                    #endregion agent log
+                    companies = await search_companies()
+                    contacts = contacts_result
+                    sequential_time = time.time() - sequential_start
+                
+                total_time = time.time() - start_time
+                
+                # Build response
+                #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_build_response", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:336", "message": "before_build_response", "data": {"contacts_count": len(contacts), "companies_count": len(companies)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
+                except: pass
+                #endregion agent log
+                response = LinkedInSearchResponse(
+                    contacts=contacts,
+                    companies=companies,
+                    total_contacts=len(contacts),
+                    total_companies=len(companies),
                 )
-            step_time = time.time() - step_start
-            
-            return companies
-        
-        # Execute contact and company searches (parallel or sequential based on use_parallel flag)
-        if use_parallel:
-            parallel_start = time.time()
-            (contacts_result, companies_dict_from_contacts, company_metadata_dict_from_contacts), companies = await asyncio.gather(
-                search_contacts(),
-                search_companies(),
-            )
-            contacts = contacts_result
-            parallel_time = time.time() - parallel_start
-        else:
-            # Sequential execution to avoid concurrent session operations
-            sequential_start = time.time()
-            contacts_result, companies_dict_from_contacts, company_metadata_dict_from_contacts = await search_contacts()
-            companies = await search_companies()
-            contacts = contacts_result
-            sequential_time = time.time() - sequential_start
-        
-        total_time = time.time() - start_time
-        
-        return LinkedInSearchResponse(
-            contacts=contacts,
-            companies=companies,
-            total_contacts=len(contacts),
-            total_companies=len(companies),
-        )
+                #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_response_built", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:343", "message": "response_built", "data": {"total_contacts": response.total_contacts, "total_companies": response.total_companies, "contacts_len": len(response.contacts), "companies_len": len(response.companies)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
+                except: pass
+                #endregion agent log
+                
+                # Deduct credits for FreeUser and ProUser (after successful search)
+                #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_credit_deduction", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:277", "message": "before_credit_deduction", "data": {"user_id": user_id}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3"}) + "\n")
+                except: pass
+                #endregion agent log
+                if user_id:
+                    try:
+                        #region agent log
+                        try:
+                            with open(log_path, "a", encoding="utf-8") as f:
+                                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_profile_lookup", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:279", "message": "before_profile_lookup", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3"}) + "\n")
+                        except: pass
+                        #endregion agent log
+                        profile = await self.profile_repo.get_by_user_id(session, user_id)
+                        #region agent log
+                        try:
+                            with open(log_path, "a", encoding="utf-8") as f:
+                                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_after_profile_lookup", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:280", "message": "after_profile_lookup", "data": {"profile_found": profile is not None, "role": profile.role if profile else None}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3"}) + "\n")
+                        except: pass
+                        #endregion agent log
+                        if profile:
+                            user_role = profile.role or "FreeUser"
+                            if self.credit_service.should_deduct_credits(user_role):
+                                #region agent log
+                                try:
+                                    with open(log_path, "a", encoding="utf-8") as f:
+                                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_deduct_credits", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:283", "message": "before_deduct_credits", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3"}) + "\n")
+                                except: pass
+                                #endregion agent log
+                                await self.credit_service.deduct_credits(session, user_id, amount=1)
+                                #region agent log
+                                try:
+                                    with open(log_path, "a", encoding="utf-8") as f:
+                                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_after_deduct_credits", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:284", "message": "after_deduct_credits", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3"}) + "\n")
+                                except: pass
+                                #endregion agent log
+                    except Exception as credit_exc:
+                        #region agent log
+                        try:
+                            with open(log_path, "a", encoding="utf-8") as f:
+                                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_credit_exception", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:285", "message": "credit_exception", "data": {"exception_type": type(credit_exc).__name__, "exception_msg": str(credit_exc)[:500]}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3"}) + "\n")
+                        except: pass
+                        #endregion agent log
+                        # Credit deduction failed but search continues
+                        # Rollback any pending changes from credit deduction
+                        try:
+                            await session.rollback()
+                        except Exception:
+                            pass
+                
+                # Commit transaction on success
+                #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_commit", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:293", "message": "before_commit", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4"}) + "\n")
+                except: pass
+                #endregion agent log
+                await session.commit()
+                #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_after_commit", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:294", "message": "after_commit", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4"}) + "\n")
+                except: pass
+                #endregion agent log
+                #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_return_response", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:422", "message": "before_return_response", "data": {"response_type": type(response).__name__, "total_contacts": response.total_contacts, "total_companies": response.total_companies}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
+                except Exception as log_exc:
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_log_error_return", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:422", "message": "log_error_return", "data": {"error": str(log_exc)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
+                    except: pass
+                #endregion agent log
+                return response
+                
+            except Exception as exc:
+                #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_service_exception", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:296", "message": "service_exception", "data": {"exception_type": type(exc).__name__, "exception_msg": str(exc)[:500], "exception_repr": repr(exc)[:500]}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1,H2,H3,H4,H5,H6"}) + "\n")
+                except: pass
+                #endregion agent log
+                # Rollback transaction on error
+                #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_rollback", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:298", "message": "before_rollback", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4"}) + "\n")
+                except: pass
+                #endregion agent log
+                try:
+                    await session.rollback()
+                    #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_after_rollback", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:300", "message": "after_rollback", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4"}) + "\n")
+                    except: pass
+                    #endregion agent log
+                except Exception as rollback_exc:
+                    #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_rollback_exception", "timestamp": int(time.time() * 1000), "location": "linkedin_service.py:302", "message": "rollback_exception", "data": {"exception_type": type(rollback_exc).__name__, "exception_msg": str(rollback_exc)[:500]}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4"}) + "\n")
+                    except: pass
+                    #endregion agent log
+                    pass
+                raise
 
     async def upsert_by_url(
         self,

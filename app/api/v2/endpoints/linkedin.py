@@ -36,9 +36,7 @@ profile_repo = UserProfileRepository()
 @router.post("/", response_model=LinkedInSearchResponse)
 async def search_by_linkedin_url(
     request: LinkedInSearchRequest,
-    http_request: Request,
     current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db),
 ) -> LinkedInSearchResponse:
     """
     Search for contacts and companies by LinkedIn URL.
@@ -46,6 +44,9 @@ async def search_by_linkedin_url(
     Searches both person LinkedIn URLs (ContactMetadata.linkedin_url) and
     company LinkedIn URLs (CompanyMetadata.linkedin_url), returning all
     matching records with their related data.
+    
+    The service manages its own database session internally and handles
+    credit deduction automatically for FreeUser and ProUser roles.
     
     Request body:
     - url: LinkedIn URL to search for (person or company) (required)
@@ -60,53 +61,50 @@ async def search_by_linkedin_url(
             detail="LinkedIn URL cannot be empty",
         )
     
+    #region agent log
+    import json
+    import time
+    log_path = "d:\\code\\ayan\\contact360\\.cursor\\debug.log"
     try:
-        result = await service.search_by_url(session, request.url.strip())
-        
-        # Log activity
-        total_results = result.total_contacts + result.total_companies
-        await activity_service.log_search_activity(
-            session=session,
-            user_id=current_user.uuid,
-            service_type=ActivityServiceType.LINKEDIN,
-            request_params={"url": request.url.strip()},
-            result_count=total_results,
-            result_summary={
-                "contacts": result.total_contacts,
-                "companies": result.total_companies,
-            },
-            status=ActivityStatus.SUCCESS,
-            request=http_request,
-        )
-        
-        # Deduct credits for FreeUser and ProUser (after successful search)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_endpoint_entry", "timestamp": int(time.time() * 1000), "location": "linkedin.py:64", "message": "endpoint_entry", "data": {"url": request.url.strip(), "user_id": current_user.uuid}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1,H2,H3,H4,H5,H6"}) + "\n")
+    except: pass
+    #endregion agent log
+    try:
+        #region agent log
         try:
-            profile = await profile_repo.get_by_user_id(session, current_user.uuid)
-            if profile:
-                user_role = profile.role or "FreeUser"
-                if credit_service.should_deduct_credits(user_role):
-                    await credit_service.deduct_credits(session, current_user.uuid, amount=1)
-        except Exception:
-            pass  # Credit deduction failed but search continues
-        
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_service_call", "timestamp": int(time.time() * 1000), "location": "linkedin.py:65", "message": "before_service_call", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1,H2"}) + "\n")
+        except: pass
+        #endregion agent log
+        result = await service.search_by_url(
+            linkedin_url=request.url.strip(),
+            user_id=current_user.uuid,
+        )
+        #region agent log
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_service_success", "timestamp": int(time.time() * 1000), "location": "linkedin.py:69", "message": "service_success", "data": {"total_contacts": result.total_contacts, "total_companies": result.total_companies, "contacts_len": len(result.contacts), "companies_len": len(result.companies)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
+        except Exception as log_exc:
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_log_error", "timestamp": int(time.time() * 1000), "location": "linkedin.py:69", "message": "log_error", "data": {"error": str(log_exc)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
+            except: pass
+        #endregion agent log
+        #region agent log
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_return", "timestamp": int(time.time() * 1000), "location": "linkedin.py:77", "message": "before_return", "data": {"result_type": type(result).__name__}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
+        except: pass
+        #endregion agent log
         return result
     except Exception as exc:
-        # Log failed activity
+        #region agent log
         try:
-            await activity_service.log_search_activity(
-                session=session,
-                user_id=current_user.uuid,
-                service_type=ActivityServiceType.LINKEDIN,
-                request_params={"url": request.url.strip()},
-                result_count=0,
-                status=ActivityStatus.FAILED,
-                error_message=str(exc),
-                request=http_request,
-            )
-        except Exception as log_exc:
-            # Failed to log activity
-            pass
-        
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_exception_caught", "timestamp": int(time.time() * 1000), "location": "linkedin.py:70", "message": "exception_caught", "data": {"exception_type": type(exc).__name__, "exception_msg": str(exc)[:500], "exception_repr": repr(exc)[:500]}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1,H2,H3,H4,H5,H6"}) + "\n")
+        except: pass
+        #endregion agent log
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to search by LinkedIn URL",
@@ -207,7 +205,10 @@ async def create_linkedin_export(
         
         # Set total_records for progress tracking (will be updated by task)
         export.total_records = len(valid_urls)
-        await session.commit()
+        # Flush to persist changes to database without committing the transaction
+        # The transaction will be committed automatically by get_db() dependency
+        # when the endpoint completes successfully
+        await session.flush()
         
         # Log export activity
         activity_id = await activity_service.log_export_activity(

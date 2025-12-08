@@ -130,7 +130,8 @@ async def logout(
                     logout_data.refresh_token,
                     current_user.uuid,
                 )
-                await session.commit()
+                # Flush to persist changes without committing (transaction managed by get_db())
+                await session.flush()
             else:
                 pass  # Refresh token already blacklisted
         except Exception as exc:

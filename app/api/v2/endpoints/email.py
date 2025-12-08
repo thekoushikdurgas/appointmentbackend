@@ -1747,7 +1747,8 @@ async def export_emails(
         export.email_contacts_json = contacts_json
         export.contact_count = len(request.contacts)
         export.total_records = len(request.contacts)
-        await session.commit()
+        # Flush to persist changes without committing (transaction managed by get_db())
+        await session.flush()
         
         # Log export activity
         activity_id = await activity_service.log_export_activity(
