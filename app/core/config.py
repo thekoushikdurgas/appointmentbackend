@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     # Allowed origins for browser-based clients (frontend applications)
     # - Local development (Next.js on port 3000)
     # - Backend API by IP (54.87.173.234)
-    # - Frontend EC2 IP (23.22.149.143)
+    # - Frontend EC2 IP (54.144.115.229)
     # - Production domain (contact360.io)
     ALLOWED_ORIGINS: List[AnyHttpUrl] = [
         # Local development
@@ -94,8 +94,8 @@ class Settings(BaseSettings):
         AnyHttpUrl("http://54.87.173.234"),
         AnyHttpUrl("http://54.87.173.234:8000"),
         # Frontend EC2 IP (Contact360 frontend host)
-        AnyHttpUrl("http://23.22.149.143"),
-        AnyHttpUrl("http://23.22.149.143:3000"),
+        AnyHttpUrl("http://54.144.115.229"),
+        AnyHttpUrl("http://54.144.115.229:3000"),
         AnyHttpUrl("http://3.95.58.90"),
         # Production domain (Contact360)
         AnyHttpUrl("http://contact360.io"),
