@@ -76,6 +76,11 @@ class UserExport(Base):
         default=None,
         comment="JSON string of email contacts data. Only populated for exports created via POST /api/v2/email/export."
     )
+    linkedin_urls_json: Mapped[Optional[str]] = mapped_column(
+        Text,
+        default=None,
+        comment="JSON string of LinkedIn URLs data with CSV context. Only populated for exports created via POST /api/v2/linkedin/export with CSV context."
+    )
     status: Mapped[ExportStatus] = mapped_column(
         SQLEnum(ExportStatus, name="export_status"),
         default=ExportStatus.pending,

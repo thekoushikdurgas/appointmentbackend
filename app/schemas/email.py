@@ -1,5 +1,6 @@
 """Pydantic schemas for email finder operations."""
 
+from datetime import datetime
 from enum import Enum
 from typing import Any, Optional, Union
 
@@ -77,6 +78,15 @@ class EmailVerifierRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class EmailVerificationStatus(str, Enum):
+    """Enumeration of email verification statuses."""
+
+    VALID = "valid"
+    INVALID = "invalid"
+    CATCHALL = "catchall"
+    UNKNOWN = "unknown"
+
+
 class EmailVerifierResponse(BaseModel):
     """Response schema for email verifier endpoint."""
 
@@ -85,6 +95,15 @@ class EmailVerifierResponse(BaseModel):
         description="List of verified valid email addresses",
     )
     total_valid: int = Field(0, description="Total number of valid emails found")
+    # First email found with status (valid, catchall, or risky)
+    first_email: Optional[str] = Field(
+        None,
+        description="First email found with status valid, catchall, or risky",
+    )
+    first_email_status: Optional["EmailVerificationStatus"] = Field(
+        None,
+        description="Status of the first email found (valid, catchall, or unknown for risky)",
+    )
     generated_emails: list[str] = Field(
         default_factory=list,
         description="List of all generated email addresses (for reference)",
@@ -95,20 +114,19 @@ class EmailVerifierResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class EmailVerificationStatus(str, Enum):
-    """Enumeration of email verification statuses."""
-
-    VALID = "valid"
-    INVALID = "invalid"
-    CATCHALL = "catchall"
-    UNKNOWN = "unknown"
-
-
 class VerifiedEmailResult(BaseModel):
     """Result for a single verified email with its status."""
 
     email: str = Field(..., description="Email address that was verified")
     status: EmailVerificationStatus = Field(..., description="Verification status of the email")
+    # Truelist-specific fields (optional, only present when using Truelist provider)
+    email_state: Optional[str] = Field(None, description="Truelist email_state (e.g., 'ok', 'risky', 'invalid')")
+    email_sub_state: Optional[str] = Field(None, description="Truelist email_sub_state (e.g., 'accept_all', 'disposable', 'role')")
+    domain: Optional[str] = Field(None, description="Domain extracted from email (Truelist)")
+    canonical: Optional[str] = Field(None, description="Canonical email format (Truelist)")
+    mx_record: Optional[str] = Field(None, description="MX record information (Truelist)")
+    verified_at: Optional[str] = Field(None, description="Timestamp when email was verified (Truelist)")
+    did_you_mean: Optional[str] = Field(None, description="Suggested email correction (Truelist)")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -122,6 +140,35 @@ class BulkEmailVerifierRequest(BaseModel):
         min_length=1,
         max_length=10000,
         description="List of email addresses to verify (minimum: 1, maximum: 10000)",
+    )
+
+    # Optional column mapping metadata from the original CSV file
+    mapping: Optional[dict] = Field(
+        default=None,
+        description=(
+            "Optional mapping metadata describing how the original CSV columns "
+            "map to the normalized email field."
+        ),
+    )
+
+    # Extended CSV context and field mappings
+    raw_headers: Optional[list[str]] = Field(
+        default=None,
+        description="Optional ordered list of all CSV headers from the original file.",
+    )
+    rows: Optional[list[dict[str, Any]]] = Field(
+        default=None,
+        description=(
+            "Optional raw rows from the CSV, keyed by header name. "
+            "If provided, len(rows) must equal len(emails) or emails will be extracted from rows."
+        ),
+    )
+    email_column: Optional[str] = Field(
+        default=None,
+        description=(
+            "Explicit column name containing email addresses. "
+            "If not provided, will auto-detect from raw_headers."
+        ),
     )
 
     @field_validator("emails")
@@ -140,6 +187,27 @@ class BulkEmailVerifierRequest(BaseModel):
             if not email or "@" not in email:
                 raise ValueError(f"Invalid email format: {email}")
         return [email.strip().lower() for email in v if email.strip()]
+
+    @model_validator(mode="after")
+    def validate_csv_context(self) -> "BulkEmailVerifierRequest":
+        """Validate consistency between emails, rows, and headers."""
+        if self.rows is not None and self.raw_headers is not None:
+            header_set = set(self.raw_headers)
+            # Ensure all row keys are known headers
+            for row in self.rows:
+                unknown_keys = set(row.keys()) - header_set
+                if unknown_keys:
+                    raise ValueError(
+                        f"rows contain keys not present in raw_headers: {sorted(unknown_keys)}"
+                    )
+
+            # Validate email_column if provided
+            if self.email_column is not None and self.email_column not in header_set:
+                raise ValueError(
+                    f"email_column '{self.email_column}' not found in raw_headers"
+                )
+
+        return self
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -173,6 +241,18 @@ class BulkEmailVerifierResponse(BaseModel):
     invalid_count: int = Field(0, description="Number of invalid emails")
     catchall_count: int = Field(0, description="Number of catchall emails")
     unknown_count: int = Field(0, description="Number of unknown emails")
+    download_url: Optional[str] = Field(
+        default=None,
+        description="Signed URL for downloading CSV file with verification results. Only present when CSV context provided.",
+    )
+    export_id: Optional[str] = Field(
+        default=None,
+        description="Export ID for tracking CSV file. Only present when CSV context provided.",
+    )
+    expires_at: Optional[datetime] = Field(
+        default=None,
+        description="Timestamp when the download URL expires. Only present when CSV context provided.",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -190,7 +270,11 @@ class SingleEmailVerifierFindResponse(BaseModel):
 
     valid_email: Optional[str] = Field(
         None,
-        description="The single valid email address found, or None if no valid email was found",
+        description="The first email address found (valid, catchall, or risky), or None if none found",
+    )
+    status: Optional["EmailVerificationStatus"] = Field(
+        None,
+        description="Status of the first email found (valid, catchall, or unknown for risky)",
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -421,7 +505,11 @@ class SingleEmailResponse(BaseModel):
     )
     source: Optional[str] = Field(
         None,
-        description="Source of the email: 'finder' (database), 'verifier' (email verification), or None if not found",
+        description="Source of the email: 'finder' (database), 'verifier' (email verification), 'cache', 'pattern_fallback', or None if not found",
+    )
+    status: Optional["EmailVerificationStatus"] = Field(
+        None,
+        description="Verification status of the email when found via verifier (valid, catchall, or unknown for risky). Only present when source is 'verifier'.",
     )
 
     model_config = ConfigDict(from_attributes=True)

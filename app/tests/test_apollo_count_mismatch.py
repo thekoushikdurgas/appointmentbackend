@@ -28,12 +28,7 @@ async def test_apollo_contacts_count_matches_pagination(async_client, db_session
     
     apollo_url = "https://app.apollo.io/#/people?page=1"
     
-    print("\n" + "="*80)
-    print("TESTING COUNT vs PAGINATION MISMATCH")
-    print("="*80)
-    
     # Step 1: Get count
-    print("\n--- Step 1: Get Count ---")
     count_response = await async_client.post(
         "/api/v2/apollo/contacts/count",
         json={"url": apollo_url}
@@ -41,10 +36,8 @@ async def test_apollo_contacts_count_matches_pagination(async_client, db_session
     assert count_response.status_code == 200
     count_data = count_response.json()
     total_count = count_data["count"]
-    print(f"Count endpoint reports: {total_count} contacts")
     
     # Step 2: Paginate through ALL contacts
-    print("\n--- Step 2: Paginate Through All Contacts ---")
     all_contacts = []
     offset = 0
     page_size = 5
@@ -60,10 +53,8 @@ async def test_apollo_contacts_count_matches_pagination(async_client, db_session
         data = response.json()
         
         results = data["results"]
-        print(f"Page {page_num} (offset={offset}): Got {len(results)} contacts")
         
         if not results:
-            print("No more results, stopping pagination")
             break
         
         # Collect UUIDs
@@ -72,7 +63,6 @@ async def test_apollo_contacts_count_matches_pagination(async_client, db_session
         
         # Check if we should continue
         if data["next"] is None or len(results) < page_size:
-            print("Last page reached")
             break
         
         offset += page_size
@@ -80,25 +70,11 @@ async def test_apollo_contacts_count_matches_pagination(async_client, db_session
         
         # Safety check to prevent infinite loop
         if page_num > 20:
-            print("WARNING: Too many pages, stopping")
             break
     
     # Step 3: Compare
-    print("\n" + "="*80)
-    print("RESULTS:")
-    print("="*80)
-    print(f"Count endpoint says: {total_count} contacts")
-    print(f"Pagination returned: {len(all_contacts)} contacts")
-    print(f"Expected (created): {len(contacts_created)} contacts")
-    
     # Check for duplicates
     unique_contacts = set(all_contacts)
-    if len(unique_contacts) != len(all_contacts):
-        print(f"\nWARNING: Found {len(all_contacts) - len(unique_contacts)} duplicate contacts in pagination!")
-        duplicates = [uuid for uuid in all_contacts if all_contacts.count(uuid) > 1]
-        print(f"Duplicate UUIDs: {set(duplicates)}")
-    
-    print("="*80)
     
     # Assertions
     assert total_count == len(contacts_created), (
@@ -139,10 +115,6 @@ async def test_apollo_contacts_with_filters_count_matches(async_client, db_sessi
     # Apollo URL with title filter
     apollo_url = "https://app.apollo.io/#/people?personTitles[]=CEO&page=1"
     
-    print("\n" + "="*80)
-    print("TESTING COUNT vs PAGINATION WITH FILTERS")
-    print("="*80)
-    
     # Get count
     count_response = await async_client.post(
         "/api/v2/apollo/contacts/count",
@@ -150,7 +122,6 @@ async def test_apollo_contacts_with_filters_count_matches(async_client, db_sessi
     )
     assert count_response.status_code == 200
     ceo_count = count_response.json()["count"]
-    print(f"Count says: {ceo_count} CEOs")
     
     # Paginate through all CEOs
     all_ceos = []
@@ -180,9 +151,6 @@ async def test_apollo_contacts_with_filters_count_matches(async_client, db_sessi
         
         offset += page_size
     
-    print(f"Pagination returned: {len(all_ceos)} CEOs")
-    print("="*80)
-    
     assert ceo_count == 10, f"Expected 10 CEOs, count says {ceo_count}"
     assert len(all_ceos) == 10, f"Expected 10 CEOs from pagination, got {len(all_ceos)}"
     assert ceo_count == len(all_ceos), (
@@ -205,10 +173,6 @@ async def test_apollo_contacts_uuids_endpoint_matches_list(async_client, db_sess
     
     apollo_url = "https://app.apollo.io/#/people?page=1"
     
-    print("\n" + "="*80)
-    print("TESTING /count/uuids vs /contacts CONSISTENCY")
-    print("="*80)
-    
     # Get UUIDs from /count/uuids endpoint
     uuids_response = await async_client.post(
         "/api/v2/apollo/contacts/count/uuids",
@@ -217,8 +181,6 @@ async def test_apollo_contacts_uuids_endpoint_matches_list(async_client, db_sess
     assert uuids_response.status_code == 200
     uuids_data = uuids_response.json()
     uuids_from_endpoint = set(uuids_data["uuids"])
-    
-    print(f"/count/uuids returned: {len(uuids_from_endpoint)} UUIDs")
     
     # Get UUIDs from pagination
     all_uuids_from_pagination = []
@@ -247,21 +209,10 @@ async def test_apollo_contacts_uuids_endpoint_matches_list(async_client, db_sess
         offset += page_size
     
     uuids_from_pagination = set(all_uuids_from_pagination)
-    print(f"/contacts pagination returned: {len(uuids_from_pagination)} UUIDs")
     
     # Compare
     only_in_uuids_endpoint = uuids_from_endpoint - uuids_from_pagination
     only_in_pagination = uuids_from_pagination - uuids_from_endpoint
-    
-    if only_in_uuids_endpoint:
-        print(f"\nWARNING: {len(only_in_uuids_endpoint)} UUIDs only in /count/uuids:")
-        print(f"  {only_in_uuids_endpoint}")
-    
-    if only_in_pagination:
-        print(f"\nWARNING: {len(only_in_pagination)} UUIDs only in pagination:")
-        print(f"  {only_in_pagination}")
-    
-    print("="*80)
     
     assert uuids_from_endpoint == uuids_from_pagination, (
         f"Mismatch between /count/uuids and /contacts:\n"
@@ -285,10 +236,6 @@ async def test_apollo_contacts_ordering_consistency(async_client, db_session):
     
     # Use default Apollo URL without sorting - our system will use default ordering
     apollo_url = "https://app.apollo.io/#/people?page=1"
-    
-    print("\n" + "="*80)
-    print("TESTING ORDERING CONSISTENCY")
-    print("="*80)
     
     # Get all contacts through pagination
     all_contacts = []
@@ -315,28 +262,14 @@ async def test_apollo_contacts_ordering_consistency(async_client, db_session):
                 "email": contact["email"]
             })
         
-        print(f"Page at offset={offset}: {[c['first_name'] for c in results]}")
-        
         if data["next"] is None or len(results) < page_size:
             break
         
         offset += page_size
     
-    print(f"\nTotal contacts retrieved: {len(all_contacts)}")
-    print(f"All names in order: {[c['name'] for c in all_contacts]}")
-    
     # Check for duplicates
     uuids = [c["uuid"] for c in all_contacts]
     unique_uuids = set(uuids)
-    
-    if len(unique_uuids) != len(uuids):
-        duplicates = [uuid for uuid in uuids if uuids.count(uuid) > 1]
-        print(f"\nERROR: Found {len(uuids) - len(unique_uuids)} duplicate contacts!")
-        for dup_uuid in set(duplicates):
-            dup_contacts = [c for c in all_contacts if c["uuid"] == dup_uuid]
-            print(f"  Duplicate UUID {dup_uuid}: appears {len(dup_contacts)} times")
-    
-    print("="*80)
     
     assert len(unique_uuids) == len(uuids), (
         f"Duplicate contacts in ordered pagination: {len(uuids) - len(unique_uuids)} duplicates"

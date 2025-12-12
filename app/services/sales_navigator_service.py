@@ -2,11 +2,40 @@
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
 from bs4 import BeautifulSoup
+from sqlalchemy import and_, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.utils.batch_lookup import (
+    batch_fetch_companies_by_uuids,
+    batch_fetch_company_metadata_by_uuids,
+    batch_fetch_contacts_by_uuids,
+    batch_fetch_contact_metadata_by_uuids,
+    fetch_companies_and_metadata_by_uuids,
+    fetch_company_metadata_by_uuid,
+    fetch_contact_metadata_by_uuid,
+)
+from app.models.companies import Company, CompanyMetadata
+from app.models.contacts import Contact, ContactMetadata
+from app.repositories.companies import CompanyRepository
+from app.repositories.contacts import ContactRepository
+from app.repositories.linkedin import LinkedInRepository
+from app.utils.normalization import PLACEHOLDER_VALUE, normalize_text
+from app.utils.sales_navigator_utils import (
+    convert_sales_nav_url_to_linkedin,
+    extract_departments_from_title_about,
+    generate_company_uuid,
+    generate_contact_uuid,
+    infer_seniority,
+    parse_location,
+    parse_name,
+)
 
 
 
@@ -538,7 +567,10 @@ def extract_recent_posts(profile_container) -> Optional[int]:
 
 
 def extract_profile_data(profile_element) -> Dict:
-    """Extract all profile data from a single profile element."""
+    """Extract all profile data from a single profile element.
+    
+    Optimized to cache parent elements and reduce DOM traversals.
+    """
     profile_data = {
         # Basic fields
         'name': None,
@@ -580,10 +612,18 @@ def extract_profile_data(profile_element) -> Dict:
         'shared_groups': []
     }
     
-    # Find the main lockup container
+    # Find the main lockup container (cache this)
     lockup = profile_element.find('div', class_='artdeco-entity-lockup')
     if not lockup:
         return profile_data
+    
+    # Cache parent container lookup early to avoid repeated traversals
+    parent_container = profile_element.find_parent('div', class_='flex')
+    if not parent_container:
+        # Try finding the parent li element
+        parent_li = profile_element.find_parent('li', class_='artdeco-list__item')
+        if parent_li:
+            parent_container = parent_li
     
     # Extract name
     name_elem = lockup.find('span', attrs={'data-anonymize': 'person-name'})
@@ -604,7 +644,7 @@ def extract_profile_data(profile_element) -> Dict:
         else:
             profile_data['profile_url'] = href
     
-    # Extract lead identifiers
+    # Extract lead identifiers (uses profile_element, not lockup)
     lead_ids = extract_lead_identifiers(profile_element, profile_data['profile_url'])
     profile_data.update(lead_ids)
     
@@ -613,18 +653,18 @@ def extract_profile_data(profile_element) -> Dict:
     if img and img.get('src'):
         profile_data['image_url'] = img.get('src')
     
-    # Extract connection degree and premium status
+    # Extract connection degree and premium status (cache badge lookup)
     badge = lockup.find('div', class_='artdeco-entity-lockup__badge')
     if badge:
         profile_data['connection_degree'] = extract_connection_degree(badge)
         profile_data['is_premium_member'] = extract_premium_status(badge)
     
-    # Extract activity status
+    # Extract activity status (uses lockup)
     activity = extract_activity_status(lockup)
     profile_data['is_reachable'] = activity['is_reachable']
     profile_data['last_active'] = activity['last_active']
     
-    # Extract viewed status
+    # Extract viewed status (uses lockup)
     profile_data['is_viewed'] = extract_viewed_status(lockup)
     
     # Extract title
@@ -645,7 +685,7 @@ def extract_profile_data(profile_element) -> Dict:
     if location_elem:
         profile_data['location'] = clean_text(location_elem.get_text())
     
-    # Extract time in role and company
+    # Extract time in role and company (cache metadata_elem)
     metadata_elem = lockup.find('div', class_='artdeco-entity-lockup__metadata')
     if metadata_elem:
         metadata_text = metadata_elem.get_text()
@@ -653,14 +693,7 @@ def extract_profile_data(profile_element) -> Dict:
         profile_data['time_in_role'] = time_in_role
         profile_data['time_in_company'] = time_in_company
     
-    # Extract about section and other data from parent container
-    parent_container = profile_element.find_parent('div', class_='flex')
-    if not parent_container:
-        # Try finding the parent li element
-        parent_li = profile_element.find_parent('li', class_='artdeco-list__item')
-        if parent_li:
-            parent_container = parent_li
-    
+    # Extract about section and other data from parent container (already cached)
     if parent_container:
         # Extract about section
         about_elem = parent_container.find('div', attrs={'data-anonymize': 'person-blurb'})
@@ -957,10 +990,21 @@ def scrape_sales_navigator_html(html_content: str, include_metadata: bool = True
     Returns:
         Tuple of (list of profile dictionaries, page metadata dictionary)
     """
-    try:
-        soup = BeautifulSoup(html_content, 'html.parser')
-    except Exception as e:
-        raise ValueError(f"Invalid HTML content: {e}")
+    soup = None
+    parser_used = None
+    parser_candidates = ['lxml', 'html.parser']
+    last_error = None
+    for parser_name in parser_candidates:
+        try:
+            soup = BeautifulSoup(html_content, parser_name)
+            parser_used = parser_name
+            break
+        except Exception as e:
+            last_error = str(e)
+            continue
+    
+    if soup is None:
+        raise ValueError(f"Invalid HTML content: {last_error}")
     
     # Find all profile entries using the data-x-search-result="LEAD" attribute
     profile_elements = soup.find_all('div', attrs={'data-x-search-result': 'LEAD'})
@@ -982,12 +1026,708 @@ def scrape_sales_navigator_html(html_content: str, include_metadata: bool = True
     
     # Extract profiles
     profiles = []
-    for idx, profile_elem in enumerate(profile_elements, 1):
+    for profile_elem in profile_elements:
         try:
             profile_data = extract_profile_data(profile_elem)
             profiles.append(profile_data)
-        except Exception as e:
+        except Exception:
             continue
     
     return profiles, page_metadata
+
+
+# ============================================================================
+# Database Mapping and Upsert Functions
+# ============================================================================
+
+def map_profile_to_contact_data(profile: Dict) -> Dict:
+    """
+    Map Sales Navigator profile to Contact model fields.
+    
+    Args:
+        profile: Sales Navigator profile dictionary
+        
+    Returns:
+        Dictionary with Contact model fields
+    """
+    # Parse name
+    first_name, last_name = parse_name(profile.get('name'))
+    
+    # Parse location for text_search
+    city, state, country = parse_location(profile.get('location'))
+    text_search = f"{city} {state} {country}".strip() if any([city, state, country]) else None
+    
+    # Infer seniority
+    seniority = infer_seniority(profile.get('title'))
+    
+    # Extract departments
+    departments = extract_departments_from_title_about(
+        profile.get('title'),
+        profile.get('about')
+    )
+    
+    # Get email (may not be in Sales Navigator data)
+    email = normalize_text(profile.get('email'), allow_placeholder=True)
+    
+    # Get title
+    title = normalize_text(profile.get('title'), allow_placeholder=True)
+    
+    # Get mobile phone (may not be in Sales Navigator data)
+    mobile_phone = normalize_text(profile.get('mobile_phone'), allow_placeholder=True)
+    
+    # Get email status (may not be in Sales Navigator data)
+    email_status = normalize_text(profile.get('email_status'), allow_placeholder=True)
+    
+    return {
+        'first_name': first_name if first_name != PLACEHOLDER_VALUE else None,
+        'last_name': last_name if last_name != PLACEHOLDER_VALUE else None,
+        'email': email if email and email != PLACEHOLDER_VALUE else None,
+        'title': title if title and title != PLACEHOLDER_VALUE else None,
+        'departments': departments if departments else None,
+        'mobile_phone': mobile_phone if mobile_phone and mobile_phone != PLACEHOLDER_VALUE else None,
+        'email_status': email_status if email_status and email_status != PLACEHOLDER_VALUE else None,
+        'text_search': text_search,
+        'seniority': seniority if seniority != PLACEHOLDER_VALUE else None,
+        'status': PLACEHOLDER_VALUE,
+    }
+
+
+def map_profile_to_contact_metadata(profile: Dict, linkedin_url: str) -> Dict:
+    """
+    Map Sales Navigator profile to ContactMetadata fields.
+    
+    Args:
+        profile: Sales Navigator profile dictionary
+        linkedin_url: Converted LinkedIn URL (standard format)
+        
+    Returns:
+        Dictionary with ContactMetadata fields
+    """
+    # Parse location
+    city, state, country = parse_location(profile.get('location'))
+    
+    # Get Sales Navigator URL
+    linkedin_sales_url = normalize_text(profile.get('profile_url'), allow_placeholder=True)
+    
+    # Get other fields (may not be in Sales Navigator data)
+    facebook_url = normalize_text(profile.get('facebook_url'), allow_placeholder=True)
+    twitter_url = normalize_text(profile.get('twitter_url'), allow_placeholder=True)
+    website = normalize_text(profile.get('website'), allow_placeholder=True)
+    work_direct_phone = normalize_text(profile.get('work_direct_phone'), allow_placeholder=True)
+    home_phone = normalize_text(profile.get('home_phone'), allow_placeholder=True)
+    other_phone = normalize_text(profile.get('other_phone'), allow_placeholder=True)
+    stage = normalize_text(profile.get('stage'), allow_placeholder=True)
+    
+    return {
+        'linkedin_url': linkedin_url if linkedin_url != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'linkedin_sales_url': linkedin_sales_url if linkedin_sales_url and linkedin_sales_url != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'facebook_url': facebook_url if facebook_url and facebook_url != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'twitter_url': twitter_url if twitter_url and twitter_url != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'website': website if website and website != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'work_direct_phone': work_direct_phone if work_direct_phone and work_direct_phone != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'home_phone': home_phone if home_phone and home_phone != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'city': city if city != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'state': state if state != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'country': country if country != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'other_phone': other_phone if other_phone and other_phone != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+        'stage': stage if stage and stage != PLACEHOLDER_VALUE else PLACEHOLDER_VALUE,
+    }
+
+
+def map_profile_to_company_data(profile: Dict) -> Dict:
+    """
+    Map Sales Navigator profile company info to Company model fields.
+    
+    Args:
+        profile: Sales Navigator profile dictionary
+        
+    Returns:
+        Dictionary with Company model fields
+    """
+    company_name = normalize_text(profile.get('company'), allow_placeholder=True)
+    
+    if not company_name or company_name == PLACEHOLDER_VALUE:
+        return {}
+    
+    # Extract technologies from about (if available)
+    technologies = []
+    about = profile.get('about')
+    if about:
+        # Simple technology extraction (can be enhanced)
+        tech_patterns = [
+            r'\b(python|java|javascript|typescript|react|vue|angular|node\.js|django|flask|spring)\b',
+            r'\b(aws|azure|gcp|docker|kubernetes|terraform)\b',
+            r'\b(mysql|postgresql|mongodb|redis|elasticsearch)\b',
+        ]
+        about_lower = about.lower()
+        for pattern in tech_patterns:
+            matches = re.findall(pattern, about_lower, re.IGNORECASE)
+            technologies.extend(matches)
+        technologies = list(set(technologies)) if technologies else []
+    
+    # Build text_search from company name
+    text_search = company_name
+    
+    return {
+        'name': company_name,
+        'employees_count': None,  # Not available in Sales Navigator
+        'industries': None,  # Not available in Sales Navigator
+        'keywords': None,  # Not available in Sales Navigator
+        'address': None,  # Not available in Sales Navigator
+        'annual_revenue': None,  # Not available in Sales Navigator
+        'total_funding': None,  # Not available in Sales Navigator
+        'technologies': technologies if technologies else None,
+        'text_search': text_search,
+    }
+
+
+def map_profile_to_company_metadata(profile: Dict) -> Dict:
+    """
+    Map Sales Navigator profile company info to CompanyMetadata fields.
+    
+    Args:
+        profile: Sales Navigator profile dictionary
+        
+    Returns:
+        Dictionary with CompanyMetadata fields
+    """
+    company_url = normalize_text(profile.get('company_url'), allow_placeholder=True)
+    company_name = normalize_text(profile.get('company'), allow_placeholder=True)
+    
+    return {
+        'linkedin_url': company_url if company_url and company_url != PLACEHOLDER_VALUE else None,
+        'linkedin_sales_url': company_url if company_url and company_url != PLACEHOLDER_VALUE else None,
+        'facebook_url': None,  # Not available in Sales Navigator
+        'twitter_url': None,  # Not available in Sales Navigator
+        'website': None,  # Not available in Sales Navigator
+        'company_name_for_emails': company_name if company_name and company_name != PLACEHOLDER_VALUE else None,
+        'phone_number': None,  # Not available in Sales Navigator
+        'latest_funding': None,  # Not available in Sales Navigator
+        'latest_funding_amount': None,  # Not available in Sales Navigator
+        'last_raised_at': None,  # Not available in Sales Navigator
+        'city': None,  # Not available in Sales Navigator
+        'state': None,  # Not available in Sales Navigator
+        'country': None,  # Not available in Sales Navigator
+    }
+
+
+async def upsert_contact_with_metadata(
+    session: AsyncSession,
+    profile: Dict,
+    company_uuid: Optional[str] = None
+) -> Tuple[Contact, ContactMetadata, bool]:
+    """
+    Upsert contact and metadata (check by UUID, update if exists, create if new).
+    
+    Args:
+        session: Database session
+        profile: Sales Navigator profile dictionary
+        company_uuid: Optional company UUID to link contact to
+        
+    Returns:
+        Tuple of (Contact, ContactMetadata, is_created)
+    """
+    # Convert Sales Navigator URL to LinkedIn URL
+    profile_url = profile.get('profile_url')
+    linkedin_url = convert_sales_nav_url_to_linkedin(profile_url)
+    
+    # If conversion failed, use Sales Navigator URL as fallback
+    if linkedin_url == PLACEHOLDER_VALUE:
+        linkedin_url = normalize_text(profile_url, allow_placeholder=True) or PLACEHOLDER_VALUE
+    
+    # Generate contact UUID
+    email = profile.get('email')
+    contact_uuid = generate_contact_uuid(linkedin_url, email)
+    
+    # Check if contact exists
+    contact_repo = ContactRepository()
+    existing_contact = await contact_repo.get_by_uuid(session, contact_uuid)
+    
+    now = datetime.now(UTC).replace(tzinfo=None)
+    is_created = False
+    
+    if existing_contact:
+        # Update existing contact
+        contact = existing_contact
+        contact_data = map_profile_to_contact_data(profile)
+        
+        # Update fields
+        for key, value in contact_data.items():
+            if hasattr(contact, key) and value is not None:
+                setattr(contact, key, value)
+        
+        # Update company_id if provided
+        if company_uuid:
+            contact.company_id = company_uuid
+        
+        contact.updated_at = now
+        await session.flush()
+    else:
+        # Create new contact
+        is_created = True
+        contact_data = map_profile_to_contact_data(profile)
+        
+        contact = Contact(
+            uuid=contact_uuid,
+            company_id=company_uuid,
+            created_at=now,
+            updated_at=now,
+            **contact_data
+        )
+        session.add(contact)
+        await session.flush()
+    
+    # Upsert contact metadata
+    contact_meta_data = map_profile_to_contact_metadata(profile, linkedin_url)
+    
+    # Check if metadata exists
+    existing_meta = await fetch_contact_metadata_by_uuid(session, contact_uuid)
+    
+    if existing_meta:
+        # Update existing metadata
+        contact_meta = existing_meta
+        for key, value in contact_meta_data.items():
+            if hasattr(contact_meta, key):
+                setattr(contact_meta, key, value)
+        await session.flush()
+    else:
+        # Create new metadata
+        contact_meta = ContactMetadata(
+            uuid=contact_uuid,
+            **contact_meta_data
+        )
+        session.add(contact_meta)
+        await session.flush()
+    
+    return contact, contact_meta, is_created
+
+
+async def upsert_company_with_metadata(
+    session: AsyncSession,
+    profile: Dict
+) -> Tuple[Optional[Company], Optional[CompanyMetadata], bool]:
+    """
+    Upsert company and metadata (check by name OR linkedin_url, update if exists, create if new).
+    
+    Args:
+        session: Database session
+        profile: Sales Navigator profile dictionary
+        
+    Returns:
+        Tuple of (Company, CompanyMetadata, is_created) or (None, None, False) if no company data
+    """
+    company_name = normalize_text(profile.get('company'), allow_placeholder=True)
+    company_url = normalize_text(profile.get('company_url'), allow_placeholder=True)
+    
+    if not company_name or company_name == PLACEHOLDER_VALUE:
+        return None, None, False
+    
+    # Generate company UUID
+    company_uuid = generate_company_uuid(company_name, company_url)
+    
+    # Check session's new objects first (companies added in this transaction but not yet committed)
+    existing_company = None
+    try:
+        # Check if there's a pending Company object with this UUID in the session
+        for obj in list(session.new):
+            if isinstance(obj, Company) and obj.uuid == company_uuid:
+                existing_company = obj
+                break
+    except Exception:
+        pass
+    
+    # If not found in new objects, check database
+    if not existing_company:
+        company_repo = CompanyRepository()
+        existing_company = await company_repo.get_by_uuid(session, company_uuid)
+    
+    # If not found by UUID, check by name OR linkedin_url
+    if not existing_company:
+        linkedin_repo = LinkedInRepository()
+        
+        # Try to find by LinkedIn URL
+        if company_url and company_url != PLACEHOLDER_VALUE:
+            company_match = await linkedin_repo.find_company_by_exact_linkedin_url(session, company_url)
+            if company_match:
+                existing_company, _ = company_match
+        
+        # If still not found, try to find by name (case-insensitive)
+        if not existing_company:
+            normalized_company_name = normalize_text(company_name, allow_placeholder=True)
+            if normalized_company_name and normalized_company_name != PLACEHOLDER_VALUE:
+                stmt = select(Company).where(Company.name.ilike(normalized_company_name)).limit(1)
+                result = await session.execute(stmt)
+                existing_company = result.scalar_one_or_none()
+    
+    now = datetime.now(UTC).replace(tzinfo=None)
+    is_created = False
+    
+    if existing_company:
+        # Update existing company
+        company = existing_company
+        company_data = map_profile_to_company_data(profile)
+        
+        # Update fields
+        for key, value in company_data.items():
+            if hasattr(company, key) and value is not None:
+                setattr(company, key, value)
+        
+        company.updated_at = now
+        await session.flush()
+        company_uuid = company.uuid  # Use existing UUID
+    else:
+        # Create new company
+        is_created = True
+        company_data = map_profile_to_company_data(profile)
+        
+        company = Company(
+            uuid=company_uuid,
+            created_at=now,
+            updated_at=now,
+            **company_data
+        )
+        session.add(company)
+        await session.flush()
+    
+    # Upsert company metadata
+    company_meta_data = map_profile_to_company_metadata(profile)
+    
+    # Check if metadata exists
+    existing_meta = await fetch_company_metadata_by_uuid(session, company_uuid)
+    
+    if existing_meta:
+        # Update existing metadata
+        company_meta = existing_meta
+        for key, value in company_meta_data.items():
+            if hasattr(company_meta, key) and value is not None:
+                setattr(company_meta, key, value)
+        await session.flush()
+    else:
+        # Create new metadata
+        company_meta = CompanyMetadata(
+            uuid=company_uuid,
+            **company_meta_data
+        )
+        session.add(company_meta)
+        await session.flush()
+    
+    return company, company_meta, is_created
+
+
+async def save_profiles_to_database(
+    session: AsyncSession,
+    profiles: List[Dict]
+) -> Dict:
+    """
+    Process all profiles, save to database using bulk operations, return saved records grouped by type.
+    
+    Optimized version that:
+    - Generates all UUIDs upfront
+    - Batch fetches all existing records
+    - Uses bulk insert/update operations
+    - Single flush at the end
+    
+    Args:
+        session: Database session
+        profiles: List of Sales Navigator profile dictionaries
+        
+    Returns:
+        Dictionary with saved records and summary:
+        {
+            'contacts': List[Contact],
+            'contacts_metadata': List[ContactMetadata],
+            'companies': List[Company],
+            'companies_metadata': List[CompanyMetadata],
+            'summary': {
+                'total_profiles': int,
+                'contacts_created': int,
+                'contacts_updated': int,
+                'companies_created': int,
+                'companies_updated': int,
+                'errors': List[str]
+            }
+        }
+    """
+    summary = {
+        'total_profiles': len(profiles),
+        'contacts_created': 0,
+        'contacts_updated': 0,
+        'companies_created': 0,
+        'companies_updated': 0,
+        'errors': []
+    }
+    
+    if not profiles:
+        return {
+            'contacts': [],
+            'contacts_metadata': [],
+            'companies': [],
+            'companies_metadata': [],
+            'summary': summary
+        }
+    
+    now = datetime.now(UTC).replace(tzinfo=None)
+    
+    # Step 1: Generate all UUIDs upfront and prepare data
+    company_uuid_map: Dict[str, Tuple[str, str]] = {}  # uuid -> (name, url)
+    contact_uuid_map: Dict[str, Tuple[Dict, Optional[str]]] = {}  # uuid -> (profile, company_uuid)
+    
+    for idx, profile in enumerate(profiles):
+        try:
+            # Generate company UUID if company exists
+            company_name = normalize_text(profile.get('company'), allow_placeholder=True)
+            company_url = normalize_text(profile.get('company_url'), allow_placeholder=True)
+            company_uuid = None
+            
+            if company_name and company_name != PLACEHOLDER_VALUE:
+                company_uuid = generate_company_uuid(company_name, company_url)
+                if company_uuid not in company_uuid_map:
+                    company_uuid_map[company_uuid] = (company_name, company_url)
+            
+            # Generate contact UUID
+            profile_url = profile.get('profile_url')
+            linkedin_url = convert_sales_nav_url_to_linkedin(profile_url)
+            if linkedin_url == PLACEHOLDER_VALUE:
+                linkedin_url = normalize_text(profile_url, allow_placeholder=True) or PLACEHOLDER_VALUE
+            
+            email = profile.get('email')
+            contact_uuid = generate_contact_uuid(linkedin_url, email)
+            contact_uuid_map[contact_uuid] = (profile, company_uuid)
+            
+        except Exception as e:
+            summary['errors'].append(f"Error preparing profile {idx + 1}: {str(e)}")
+            continue
+    
+    # Step 2: Batch fetch all existing records
+    company_uuids = list(company_uuid_map.keys())
+    contact_uuids = list(contact_uuid_map.keys())
+    
+    existing_companies = await batch_fetch_companies_by_uuids(session, set(company_uuids)) if company_uuids else {}
+    existing_company_metadata = await batch_fetch_company_metadata_by_uuids(session, set(company_uuids)) if company_uuids else {}
+    existing_contacts = await batch_fetch_contacts_by_uuids(session, set(contact_uuids)) if contact_uuids else {}
+    existing_contact_metadata = await batch_fetch_contact_metadata_by_uuids(session, set(contact_uuids)) if contact_uuids else {}
+    
+    # Step 3: Separate new vs existing records
+    new_companies: List[Dict] = []
+    update_companies: List[Dict] = []
+    new_company_metadata: List[Dict] = []
+    update_company_metadata: List[Dict] = []
+    
+    new_contacts: List[Dict] = []
+    update_contacts: List[Dict] = []
+    new_contact_metadata: List[Dict] = []
+    update_contact_metadata: List[Dict] = []
+    
+    # Process companies
+    for company_uuid, (company_name, company_url) in company_uuid_map.items():
+        # Find a profile with this company to get data
+        profile_with_company = None
+        for profile in profiles:
+            if profile.get('company'):
+                p_name = normalize_text(profile.get('company'), allow_placeholder=True)
+                p_url = normalize_text(profile.get('company_url'), allow_placeholder=True)
+                if p_name == company_name and generate_company_uuid(p_name, p_url) == company_uuid:
+                    profile_with_company = profile
+                    break
+        
+        if not profile_with_company:
+            continue
+        
+        company_data = map_profile_to_company_data(profile_with_company)
+        company_meta_data = map_profile_to_company_metadata(profile_with_company)
+        
+        if company_uuid in existing_companies:
+            # Update existing company
+            company_obj = existing_companies[company_uuid]
+            company_data['uuid'] = company_uuid
+            company_data['updated_at'] = now
+            update_companies.append(company_data)
+            summary['companies_updated'] += 1
+        else:
+            # New company
+            company_data['uuid'] = company_uuid
+            company_data['created_at'] = now
+            company_data['updated_at'] = now
+            new_companies.append(company_data)
+            summary['companies_created'] += 1
+        
+        # Handle metadata
+        if company_uuid in existing_company_metadata:
+            company_meta_data['uuid'] = company_uuid
+            update_company_metadata.append(company_meta_data)
+        else:
+            company_meta_data['uuid'] = company_uuid
+            new_company_metadata.append(company_meta_data)
+    
+    # Process contacts
+    for contact_uuid, (profile, company_uuid) in contact_uuid_map.items():
+        linkedin_url = convert_sales_nav_url_to_linkedin(profile.get('profile_url'))
+        if linkedin_url == PLACEHOLDER_VALUE:
+            linkedin_url = normalize_text(profile.get('profile_url'), allow_placeholder=True) or PLACEHOLDER_VALUE
+        
+        contact_data = map_profile_to_contact_data(profile)
+        contact_meta_data = map_profile_to_contact_metadata(profile, linkedin_url)
+        
+        if contact_uuid in existing_contacts:
+            # Update existing contact
+            contact_obj = existing_contacts[contact_uuid]
+            contact_data['uuid'] = contact_uuid
+            contact_data['company_id'] = company_uuid
+            contact_data['updated_at'] = now
+            update_contacts.append(contact_data)
+            summary['contacts_updated'] += 1
+        else:
+            # New contact
+            contact_data['uuid'] = contact_uuid
+            contact_data['company_id'] = company_uuid
+            contact_data['created_at'] = now
+            contact_data['updated_at'] = now
+            new_contacts.append(contact_data)
+            summary['contacts_created'] += 1
+        
+        # Handle metadata
+        if contact_uuid in existing_contact_metadata:
+            contact_meta_data['uuid'] = contact_uuid
+            update_contact_metadata.append(contact_meta_data)
+        else:
+            contact_meta_data['uuid'] = contact_uuid
+            new_contact_metadata.append(contact_meta_data)
+    
+    # Step 4: Execute bulk operations in a single transaction.
+    # If a transaction is already active on this session (e.g., upstream work),
+    # use a nested transaction to avoid "transaction already begun" errors.
+    existing_txn = session.in_transaction()
+    begin_ctx = session.begin_nested() if existing_txn else session.begin()
+
+    async with begin_ctx:
+        # Bulk insert new companies
+        if new_companies:
+            stmt = pg_insert(Company).on_conflict_do_update(
+                index_elements=["uuid"],
+                set_={
+                    "name": pg_insert(Company).excluded.name,
+                    "employees_count": pg_insert(Company).excluded.employees_count,
+                    "industries": pg_insert(Company).excluded.industries,
+                    "keywords": pg_insert(Company).excluded.keywords,
+                    "address": pg_insert(Company).excluded.address,
+                    "annual_revenue": pg_insert(Company).excluded.annual_revenue,
+                    "total_funding": pg_insert(Company).excluded.total_funding,
+                    "technologies": pg_insert(Company).excluded.technologies,
+                    "text_search": pg_insert(Company).excluded.text_search,
+                    "updated_at": pg_insert(Company).excluded.updated_at,
+                }
+            )
+            await session.execute(stmt, new_companies)
+        
+        # Bulk update existing companies
+        if update_companies:
+            for company_data in update_companies:
+                uuid = company_data.pop('uuid')
+                stmt = update(Company).where(Company.uuid == uuid).values(**company_data)
+                await session.execute(stmt)
+        
+        # Bulk insert new company metadata
+        if new_company_metadata:
+            stmt = pg_insert(CompanyMetadata).on_conflict_do_update(
+                index_elements=["uuid"],
+                set_={
+                    "linkedin_url": pg_insert(CompanyMetadata).excluded.linkedin_url,
+                    "linkedin_sales_url": pg_insert(CompanyMetadata).excluded.linkedin_sales_url,
+                    "facebook_url": pg_insert(CompanyMetadata).excluded.facebook_url,
+                    "twitter_url": pg_insert(CompanyMetadata).excluded.twitter_url,
+                    "website": pg_insert(CompanyMetadata).excluded.website,
+                    "company_name_for_emails": pg_insert(CompanyMetadata).excluded.company_name_for_emails,
+                    "phone_number": pg_insert(CompanyMetadata).excluded.phone_number,
+                    "latest_funding": pg_insert(CompanyMetadata).excluded.latest_funding,
+                    "latest_funding_amount": pg_insert(CompanyMetadata).excluded.latest_funding_amount,
+                    "last_raised_at": pg_insert(CompanyMetadata).excluded.last_raised_at,
+                    "city": pg_insert(CompanyMetadata).excluded.city,
+                    "state": pg_insert(CompanyMetadata).excluded.state,
+                    "country": pg_insert(CompanyMetadata).excluded.country,
+                }
+            )
+            await session.execute(stmt, new_company_metadata)
+        
+        # Bulk update existing company metadata
+        if update_company_metadata:
+            for meta_data in update_company_metadata:
+                uuid = meta_data.pop('uuid')
+                stmt = update(CompanyMetadata).where(CompanyMetadata.uuid == uuid).values(**meta_data)
+                await session.execute(stmt)
+        
+        # Bulk insert new contacts
+        if new_contacts:
+            stmt = pg_insert(Contact).on_conflict_do_update(
+                index_elements=["uuid"],
+                set_={
+                    "first_name": pg_insert(Contact).excluded.first_name,
+                    "last_name": pg_insert(Contact).excluded.last_name,
+                    "email": pg_insert(Contact).excluded.email,
+                    "title": pg_insert(Contact).excluded.title,
+                    "departments": pg_insert(Contact).excluded.departments,
+                    "mobile_phone": pg_insert(Contact).excluded.mobile_phone,
+                    "email_status": pg_insert(Contact).excluded.email_status,
+                    "text_search": pg_insert(Contact).excluded.text_search,
+                    "seniority": pg_insert(Contact).excluded.seniority,
+                    "status": pg_insert(Contact).excluded.status,
+                    "company_id": pg_insert(Contact).excluded.company_id,
+                    "updated_at": pg_insert(Contact).excluded.updated_at,
+                }
+            )
+            await session.execute(stmt, new_contacts)
+        
+        # Bulk update existing contacts
+        if update_contacts:
+            for contact_data in update_contacts:
+                uuid = contact_data.pop('uuid')
+                stmt = update(Contact).where(Contact.uuid == uuid).values(**contact_data)
+                await session.execute(stmt)
+        
+        # Bulk insert new contact metadata
+        if new_contact_metadata:
+            stmt = pg_insert(ContactMetadata).on_conflict_do_update(
+                index_elements=["uuid"],
+                set_={
+                    "linkedin_url": pg_insert(ContactMetadata).excluded.linkedin_url,
+                    "linkedin_sales_url": pg_insert(ContactMetadata).excluded.linkedin_sales_url,
+                    "facebook_url": pg_insert(ContactMetadata).excluded.facebook_url,
+                    "twitter_url": pg_insert(ContactMetadata).excluded.twitter_url,
+                    "website": pg_insert(ContactMetadata).excluded.website,
+                    "work_direct_phone": pg_insert(ContactMetadata).excluded.work_direct_phone,
+                    "home_phone": pg_insert(ContactMetadata).excluded.home_phone,
+                    "other_phone": pg_insert(ContactMetadata).excluded.other_phone,
+                    "city": pg_insert(ContactMetadata).excluded.city,
+                    "state": pg_insert(ContactMetadata).excluded.state,
+                    "country": pg_insert(ContactMetadata).excluded.country,
+                    "stage": pg_insert(ContactMetadata).excluded.stage,
+                }
+            )
+            await session.execute(stmt, new_contact_metadata)
+        
+        # Bulk update existing contact metadata
+        if update_contact_metadata:
+            for meta_data in update_contact_metadata:
+                uuid = meta_data.pop('uuid')
+                stmt = update(ContactMetadata).where(ContactMetadata.uuid == uuid).values(**meta_data)
+                await session.execute(stmt)
+        
+        # Single flush at the end
+        await session.flush()
+    
+    # Step 5: Fetch saved records for response
+    all_company_uuids = set(company_uuids)
+    all_contact_uuids = set(contact_uuids)
+    
+    saved_companies_list = await batch_fetch_companies_by_uuids(session, all_company_uuids) if all_company_uuids else {}
+    saved_company_metadata_list = await batch_fetch_company_metadata_by_uuids(session, all_company_uuids) if all_company_uuids else {}
+    saved_contacts_list = await batch_fetch_contacts_by_uuids(session, all_contact_uuids) if all_contact_uuids else {}
+    saved_contact_metadata_list = await batch_fetch_contact_metadata_by_uuids(session, all_contact_uuids) if all_contact_uuids else {}
+
+    return {
+        'contacts': list(saved_contacts_list.values()),
+        'contacts_metadata': list(saved_contact_metadata_list.values()),
+        'companies': list(saved_companies_list.values()),
+        'companies_metadata': list(saved_company_metadata_list.values()),
+        'summary': summary
+    }
 

@@ -4,9 +4,10 @@ This module provides async functions for processing exports in the background.
 These functions are designed to be used with FastAPI's BackgroundTasks.
 """
 
+import json
 import time
 from datetime import UTC, datetime
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 from uuid import uuid5, NAMESPACE_URL
 
 from sqlalchemy import insert, select
@@ -269,9 +270,13 @@ async def process_linkedin_export(export_id: str, linkedin_urls: list[str], acti
     It searches for contacts and companies by multiple LinkedIn URLs, then generates
     a combined CSV export with contacts, companies, and unmatched URLs.
     
+    Supports CSV context preservation: if linkedin_urls_json is present in the export,
+    it will preserve original CSV columns while enriching with LinkedIn data.
+    
     Args:
         export_id: The UUID of the export record
         linkedin_urls: List of LinkedIn URLs to search and export
+        activity_id: Optional activity ID for tracking
     """
     start_time = time.time()
     
@@ -284,6 +289,9 @@ async def process_linkedin_export(export_id: str, linkedin_urls: list[str], acti
             if export and export.status == ExportStatus.cancelled:
                 return
             
+            if not export:
+                return
+            
             # Update status to processing
             await _update_export_status(session, export_id, ExportStatus.processing)
             
@@ -292,10 +300,144 @@ async def process_linkedin_export(export_id: str, linkedin_urls: list[str], acti
             
             linkedin_service = LinkedInService()
             
-            # Search for contacts and companies by URLs
-            contact_uuids, company_uuids, unmatched_urls = await linkedin_service.search_by_multiple_urls(
-                session, linkedin_urls
-            )
+            # Check if CSV context exists
+            csv_context = None
+            csv_headers = None
+            linkedin_urls_data = None
+            contact_field_mappings = None
+            company_field_mappings = None
+            
+            if export.linkedin_urls_json:
+                try:
+                    csv_context = json.loads(export.linkedin_urls_json)
+                    linkedin_urls_data = csv_context.get("urls", [])
+                    csv_headers = csv_context.get("raw_headers")
+                    contact_field_mappings = csv_context.get("contact_field_mappings")
+                    company_field_mappings = csv_context.get("company_field_mappings")
+                except (json.JSONDecodeError, Exception):
+                    # Invalid JSON, fall back to standard processing
+                    csv_context = None
+            
+            # Process with CSV context if available
+            csv_rows = None
+            contact_uuids = []
+            company_uuids = []
+            unmatched_urls = []
+            
+            if csv_context and linkedin_urls_data and csv_headers:
+                # Process each LinkedIn URL individually to preserve CSV row mapping
+                csv_rows = []
+                from app.repositories.linkedin import LinkedInRepository
+                from app.repositories.contacts import ContactRepository
+                from app.repositories.companies import CompanyRepository
+                from app.utils.normalization import normalize_text
+                
+                linkedin_repo = LinkedInRepository()
+                contact_repo = ContactRepository()
+                company_repo = CompanyRepository()
+                
+                # Process each URL with its CSV row
+                for idx, url_data in enumerate(linkedin_urls_data):
+                    linkedin_url = url_data.get("linkedin_url", "")
+                    raw_row = url_data.get("raw_row", {})
+                    
+                    # Start with original CSV row
+                    row_for_csv: dict[str, Any] = {}
+                    if raw_row:
+                        row_for_csv.update(raw_row)
+                    
+                    # Normalize URL for search
+                    normalized_url = normalize_text(linkedin_url) if linkedin_url else ""
+                    
+                    # Search for this specific URL using repository methods
+                    contact_match = None
+                    company_match = None
+                    
+                    if normalized_url:
+                        try:
+                            contact_match = await linkedin_repo.find_contact_by_exact_linkedin_url(
+                                session, normalized_url
+                            )
+                            company_match = await linkedin_repo.find_company_by_exact_linkedin_url(
+                                session, normalized_url
+                            )
+                        except Exception:
+                            pass
+                    
+                    # Determine record type and enrich with LinkedIn data
+                    # Prefer contact over company if both found
+                    if contact_match:
+                        contact, contact_meta, company, company_meta = contact_match
+                        
+                        row_for_csv["record_type"] = "contact"
+                        row_for_csv["linkedin_url"] = linkedin_url
+                        if contact.uuid not in contact_uuids:
+                            contact_uuids.append(contact.uuid)
+                        
+                        # Map contact fields using field mappings
+                        if contact_field_mappings:
+                            for field, csv_col in contact_field_mappings.items():
+                                if csv_col and hasattr(contact, field):
+                                    value = getattr(contact, field)
+                                    if value is not None:
+                                        row_for_csv[csv_col] = str(value)
+                        
+                        # Add standard contact fields if not already present
+                        if "contact_uuid" not in row_for_csv:
+                            row_for_csv["contact_uuid"] = contact.uuid or ""
+                        if "contact_first_name" not in row_for_csv:
+                            row_for_csv["contact_first_name"] = contact.first_name or ""
+                        if "contact_last_name" not in row_for_csv:
+                            row_for_csv["contact_last_name"] = contact.last_name or ""
+                        if "contact_email" not in row_for_csv:
+                            row_for_csv["contact_email"] = contact.email or ""
+                        
+                        if company and company.uuid not in company_uuids:
+                            company_uuids.append(company.uuid)
+                            
+                    elif company_match:
+                        company, company_meta = company_match
+                        
+                        row_for_csv["record_type"] = "company"
+                        row_for_csv["linkedin_url"] = linkedin_url
+                        if company.uuid not in company_uuids:
+                            company_uuids.append(company.uuid)
+                        
+                        # Map company fields using field mappings
+                        if company_field_mappings:
+                            for field, csv_col in company_field_mappings.items():
+                                if csv_col and hasattr(company, field):
+                                    value = getattr(company, field)
+                                    if value is not None:
+                                        row_for_csv[csv_col] = str(value)
+                        
+                        # Add standard company fields if not already present
+                        if "company_uuid" not in row_for_csv:
+                            row_for_csv["company_uuid"] = company.uuid or ""
+                        if "company_name" not in row_for_csv:
+                            row_for_csv["company_name"] = company.name or ""
+                    else:
+                        # Not found
+                        row_for_csv["record_type"] = "not_found"
+                        row_for_csv["linkedin_url"] = linkedin_url
+                        unmatched_urls.append(linkedin_url)
+                    
+                    csv_rows.append(row_for_csv)
+                    
+                    # Update progress periodically
+                    if (idx + 1) % 10 == 0:
+                        await _update_export_progress(
+                            session,
+                            export_id,
+                            idx + 1,
+                            len(linkedin_urls_data),
+                            start_time,
+                        )
+            else:
+                # Standard processing: search all URLs at once
+                contact_uuids, company_uuids, unmatched_urls = await linkedin_service.search_by_multiple_urls(
+                    session, linkedin_urls
+                )
             
             # Ensure session is clean after search operations before any other database operations
             await session.commit()
@@ -325,6 +467,8 @@ async def process_linkedin_export(export_id: str, linkedin_urls: list[str], acti
                 contact_uuids,
                 company_uuids,
                 unmatched_urls,
+                csv_rows=csv_rows,
+                csv_headers=csv_headers,
             )
             
             # Update progress to 100% after completion

@@ -89,7 +89,13 @@ class ActivityService:
             )
         except Exception as exc:
             # Don't fail the main request if activity logging fails
-            pass
+            try:
+                await session.rollback()
+            except Exception:
+                # Session may already be in a failed state; ignore rollback errors
+                pass
+            # Swallow the logging exception to avoid impacting the main flow
+            return
 
     async def log_export_activity(
         self,
@@ -144,6 +150,11 @@ class ActivityService:
             return activity.id
         except Exception as exc:
             # Don't fail the main request if activity logging fails
+            try:
+                await session.rollback()
+            except Exception:
+                # Ignore rollback failures; the caller should still proceed
+                pass
             return None
 
     async def update_export_activity(
@@ -193,5 +204,9 @@ class ActivityService:
                 await self.activity_repo.update_activity(session, activity, **update_kwargs)
         except Exception as exc:
             # Don't fail the main request if activity update fails
-            pass
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            return
 

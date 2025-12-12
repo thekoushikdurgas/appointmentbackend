@@ -1,9 +1,9 @@
 """Pydantic schemas for LinkedIn URL-based CRUD operations."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.exports import ExportStatus
 from app.schemas.companies import CompanyDB, CompanyMetadataOut
@@ -78,6 +78,95 @@ class LinkedInExportRequest(BaseModel):
     """Request schema for exporting contacts and companies by LinkedIn URLs."""
 
     urls: list[str] = Field(..., description="List of LinkedIn URLs to export", min_length=1)
+
+    # Optional column mapping metadata from the original CSV file
+    mapping: Optional[dict] = Field(
+        default=None,
+        description=(
+            "Optional mapping metadata describing how the original CSV columns "
+            "map to the normalized LinkedIn URL field."
+        ),
+    )
+
+    # Extended CSV context and field mappings
+    raw_headers: Optional[list[str]] = Field(
+        default=None,
+        description="Optional ordered list of all CSV headers from the original file.",
+    )
+    rows: Optional[list[dict[str, Any]]] = Field(
+        default=None,
+        description=(
+            "Optional raw rows from the CSV, keyed by header name. "
+            "If provided, len(rows) must equal len(urls)."
+        ),
+    )
+    linkedin_url_column: Optional[str] = Field(
+        default=None,
+        description=(
+            "Explicit column name containing LinkedIn URLs. "
+            "If not provided, will auto-detect from raw_headers."
+        ),
+    )
+    contact_field_mappings: Optional[dict[str, Optional[str]]] = Field(
+        default=None,
+        description=(
+            "Optional mapping from logical contact fields (e.g. title, departments, mobile_phone) "
+            "to CSV column names."
+        ),
+    )
+    company_field_mappings: Optional[dict[str, Optional[str]]] = Field(
+        default=None,
+        description=(
+            "Optional mapping from logical company fields (e.g. company_name, employees_count, "
+            "industry, keywords) to CSV column names."
+        ),
+    )
+
+    @field_validator("urls")
+    @classmethod
+    def validate_urls(cls, v: list[str]) -> list[str]:
+        """Validate URLs list is not empty."""
+        if not v:
+            raise ValueError("urls list cannot be empty")
+        return v
+
+    @model_validator(mode="after")
+    def validate_csv_context(self) -> "LinkedInExportRequest":
+        """Validate consistency between urls, rows, and headers."""
+        if self.rows is not None and len(self.rows) != len(self.urls):
+            raise ValueError("rows length must match urls length when provided")
+
+        if self.raw_headers is not None:
+            header_set = set(self.raw_headers)
+            # Ensure all row keys are known headers
+            if self.rows is not None:
+                for row in self.rows:
+                    unknown_keys = set(row.keys()) - header_set
+                    if unknown_keys:
+                        raise ValueError(
+                            f"rows contain keys not present in raw_headers: {sorted(unknown_keys)}"
+                        )
+
+            # Ensure field mapping values reference known headers
+            for mapping in (self.contact_field_mappings, self.company_field_mappings):
+                if mapping:
+                    invalid = {
+                        col_name
+                        for col_name in mapping.values()
+                        if col_name is not None and col_name not in header_set
+                    }
+                    if invalid:
+                        raise ValueError(
+                            f"field mappings reference unknown headers: {sorted(invalid)}"
+                        )
+
+            # Validate linkedin_url_column if provided
+            if self.linkedin_url_column is not None and self.linkedin_url_column not in header_set:
+                raise ValueError(
+                    f"linkedin_url_column '{self.linkedin_url_column}' not found in raw_headers"
+                )
+
+        return self
 
 
 class LinkedInExportResponse(BaseModel):

@@ -1,9 +1,5 @@
 """Cleanup operation endpoints for v3 API."""
 
-import json
-import time
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, HTTPException, Path as FastAPIPath, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,11 +11,6 @@ from app.services.cleanup_service import CleanupService
 
 router = APIRouter(prefix="/cleanup", tags=["Cleanup"])
 cleanup_service = CleanupService()
-
-# #region agent log
-# Use relative path from project root instead of hardcoded Windows path
-DEBUG_LOG_PATH = Path(__file__).parent.parent.parent.parent.parent / ".cursor" / "debug.log"
-# #endregion
 
 
 @router.post("/contact/single/{uuid}", response_model=CleanupResult, status_code=status.HTTP_200_OK)
@@ -37,39 +28,8 @@ async def clean_contact_single(
     - Removes special characters from text fields
     - Converts placeholder values ("_", "") to NULL
     """
-    # Clean single contact endpoint
-
-    # #region agent log
-    endpoint_start = time.time()
     try:
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL", "location": "cleanup.py:40", "message": "endpoint entry", "data": {"uuid": uuid, "user_id": str(current_user.uuid)}, "timestamp": int(time.time() * 1000)}) + "\n")
-    except Exception: pass
-    # #endregion
-    try:
-        # #region agent log
-        service_start = time.time()
-        # #endregion
         result = await cleanup_service.clean_contact(session, uuid)
-        # #region agent log
-        service_time = (time.time() - service_start) * 1000
-        try:
-            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL", "location": "cleanup.py:41", "message": "cleanup_service.clean_contact completed", "data": {"service_time_ms": service_time}, "timestamp": int(time.time() * 1000)}) + "\n")
-        except Exception: pass
-        # #endregion
-        # #region agent log
-        commit_start = time.time()
-        # #endregion
-        # Note: commit happens in get_db dependency after this function returns
-        # #region agent log
-        commit_time = (time.time() - commit_start) * 1000
-        endpoint_time = (time.time() - endpoint_start) * 1000
-        try:
-            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "cleanup.py:47", "message": "before commit (commit happens in get_db)", "data": {"commit_time_ms": commit_time, "endpoint_time_ms": endpoint_time}, "timestamp": int(time.time() * 1000)}) + "\n")
-        except Exception: pass
-        # #endregion
         return CleanupResult(
             uuid=result["uuid"],
             success=result["success"],

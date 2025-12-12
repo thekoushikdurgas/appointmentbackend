@@ -1,6 +1,8 @@
 """LinkedIn URL-based CRUD API endpoints."""
 
+import json
 from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +26,62 @@ from app.models.exports import ExportStatus, ExportType
 from app.services.export_service import ExportService
 from app.services.linkedin_service import LinkedInService
 from app.tasks.export_tasks import process_linkedin_export
+
+
+def detect_linkedin_url_column(raw_headers: list[str]) -> Optional[str]:
+    """
+    Auto-detect LinkedIn URL column from CSV headers.
+    
+    Searches for columns containing "linkedin" or "url" (case-insensitive).
+    Priority: exact "linkedin_url" > "linkedin" > "url"
+    
+    Args:
+        raw_headers: List of CSV header names
+        
+    Returns:
+        Column name if detected, None if not found or ambiguous
+        
+    Raises:
+        ValueError: If multiple potential LinkedIn URL columns found (ambiguous)
+    """
+    if not raw_headers:
+        return None
+    
+    # Normalize headers for comparison (case-insensitive)
+    normalized_headers = {h.lower(): h for h in raw_headers}
+    
+    # Priority 1: Exact match "linkedin_url"
+    if "linkedin_url" in normalized_headers:
+        return normalized_headers["linkedin_url"]
+    
+    # Priority 2: Contains "linkedin"
+    linkedin_matches = [
+        h for h in raw_headers
+        if "linkedin" in h.lower() and "url" in h.lower()
+    ]
+    if len(linkedin_matches) == 1:
+        return linkedin_matches[0]
+    elif len(linkedin_matches) > 1:
+        raise ValueError(
+            f"Multiple LinkedIn URL columns found: {linkedin_matches}. "
+            "Please specify linkedin_url_column explicitly."
+        )
+    
+    # Priority 3: Contains "url" (but not "linkedin" already checked)
+    url_matches = [
+        h for h in raw_headers
+        if "url" in h.lower() and "linkedin" not in h.lower()
+    ]
+    if len(url_matches) == 1:
+        return url_matches[0]
+    elif len(url_matches) > 1:
+        raise ValueError(
+            f"Multiple URL columns found: {url_matches}. "
+            "Please specify linkedin_url_column explicitly."
+        )
+    
+    return None
+
 
 router = APIRouter(prefix="/linkedin", tags=["LinkedIn"])
 service = LinkedInService()
@@ -61,50 +119,13 @@ async def search_by_linkedin_url(
             detail="LinkedIn URL cannot be empty",
         )
     
-    #region agent log
-    import json
-    import time
-    log_path = "d:\\code\\ayan\\contact360\\.cursor\\debug.log"
     try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_endpoint_entry", "timestamp": int(time.time() * 1000), "location": "linkedin.py:64", "message": "endpoint_entry", "data": {"url": request.url.strip(), "user_id": current_user.uuid}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1,H2,H3,H4,H5,H6"}) + "\n")
-    except: pass
-    #endregion agent log
-    try:
-        #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_service_call", "timestamp": int(time.time() * 1000), "location": "linkedin.py:65", "message": "before_service_call", "data": {}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1,H2"}) + "\n")
-        except: pass
-        #endregion agent log
         result = await service.search_by_url(
             linkedin_url=request.url.strip(),
             user_id=current_user.uuid,
         )
-        #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_service_success", "timestamp": int(time.time() * 1000), "location": "linkedin.py:69", "message": "service_success", "data": {"total_contacts": result.total_contacts, "total_companies": result.total_companies, "contacts_len": len(result.contacts), "companies_len": len(result.companies)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
-        except Exception as log_exc:
-            try:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_log_error", "timestamp": int(time.time() * 1000), "location": "linkedin.py:69", "message": "log_error", "data": {"error": str(log_exc)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
-            except: pass
-        #endregion agent log
-        #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_before_return", "timestamp": int(time.time() * 1000), "location": "linkedin.py:77", "message": "before_return", "data": {"result_type": type(result).__name__}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1"}) + "\n")
-        except: pass
-        #endregion agent log
         return result
     except Exception as exc:
-        #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"id": f"log_{int(time.time() * 1000)}_exception_caught", "timestamp": int(time.time() * 1000), "location": "linkedin.py:70", "message": "exception_caught", "data": {"exception_type": type(exc).__name__, "exception_msg": str(exc)[:500], "exception_repr": repr(exc)[:500]}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1,H2,H3,H4,H5,H6"}) + "\n")
-        except: pass
-        #endregion agent log
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to search by LinkedIn URL",
@@ -174,6 +195,9 @@ async def create_linkedin_export(
     marked as "not_found". Returns a signed temporary download URL that expires
     after 24 hours.
     
+    Supports CSV context preservation: if raw_headers and rows are provided,
+    the export will preserve original CSV columns while enriching with LinkedIn data.
+    
     The export is processed asynchronously via a background job. The response
     includes an export_id and job_id for tracking progress.
     """
@@ -192,6 +216,69 @@ async def create_linkedin_export(
         )
     
     try:
+        # Handle CSV context: extract URLs from CSV rows if provided
+        linkedin_urls_data = []
+        linkedin_url_column = request.linkedin_url_column
+        
+        # If CSV context is provided, extract URLs from rows
+        if request.rows is not None and request.raw_headers is not None:
+            # Auto-detect LinkedIn URL column if not explicitly provided
+            if not linkedin_url_column:
+                try:
+                    linkedin_url_column = detect_linkedin_url_column(request.raw_headers)
+                except ValueError as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(e),
+                    ) from e
+            
+            if not linkedin_url_column:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Could not detect LinkedIn URL column. Please provide linkedin_url_column.",
+                )
+            
+            # Extract URLs from CSV rows
+            extracted_urls = []
+            for idx, row in enumerate(request.rows):
+                url_value = row.get(linkedin_url_column)
+                if url_value and isinstance(url_value, str) and url_value.strip():
+                    extracted_url = url_value.strip()
+                    extracted_urls.append(extracted_url)
+                    
+                    # Create URL data with CSV context
+                    url_payload: dict[str, Any] = {
+                        "linkedin_url": extracted_url,
+                        "raw_row": row,
+                    }
+                    linkedin_urls_data.append(url_payload)
+                elif idx < len(valid_urls):
+                    # Fallback to request.urls if row doesn't have URL
+                    url_payload: dict[str, Any] = {
+                        "linkedin_url": valid_urls[idx],
+                        "raw_row": row,
+                    }
+                    linkedin_urls_data.append(url_payload)
+            
+            # Use extracted URLs if found, otherwise use request.urls
+            if extracted_urls:
+                valid_urls = extracted_urls
+            else:
+                # If no URLs extracted from rows, use request.urls and match with rows
+                for idx, url in enumerate(valid_urls):
+                    url_payload: dict[str, Any] = {
+                        "linkedin_url": url,
+                    }
+                    if idx < len(request.rows):
+                        url_payload["raw_row"] = request.rows[idx]
+                    linkedin_urls_data.append(url_payload)
+        else:
+            # No CSV context: create simple URL data
+            for url in valid_urls:
+                linkedin_urls_data.append({
+                    "linkedin_url": url,
+                })
+        
         # Create export record with status "pending"
         # Use ExportType.contacts since it's a combined export but we'll track both counts
         export = await export_service.create_export(
@@ -202,6 +289,21 @@ async def create_linkedin_export(
             company_uuids=[],  # Will be populated by background task
             linkedin_urls=valid_urls,  # Store original LinkedIn URLs for reference
         )
+        
+        # Store LinkedIn URLs JSON data with CSV context if available
+        if request.rows is not None or request.raw_headers is not None:
+            linkedin_urls_json = json.dumps(
+                {
+                    "urls": linkedin_urls_data,
+                    "mapping": request.mapping,
+                    "raw_headers": request.raw_headers,
+                    "rows": request.rows,
+                    "linkedin_url_column": linkedin_url_column,
+                    "contact_field_mappings": request.contact_field_mappings,
+                    "company_field_mappings": request.company_field_mappings,
+                }
+            )
+            export.linkedin_urls_json = linkedin_urls_json
         
         # Set total_records for progress tracking (will be updated by task)
         export.total_records = len(valid_urls)

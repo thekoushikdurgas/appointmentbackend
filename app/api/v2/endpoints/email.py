@@ -382,6 +382,8 @@ async def start_email_verification(
         all_valid_emails = []
         total_batches_processed = 0
         verification_error_occurred = False
+        first_email = None
+        first_email_status = None
         
         # Process all unique patterns in batches
         for batch_number in range(1, total_batches + 1):
@@ -409,6 +411,23 @@ async def start_email_verification(
                         batch_size=20,  # Process 20 emails concurrently per batch
                     )
                 
+                # Track first email found with valid, catchall, or risky status
+                # Process emails in order to find the first one
+                for email in batch_emails:
+                    email_key = email.lower().strip()
+                    status = email_status_map.get(email_key, EmailVerificationStatus.UNKNOWN)
+                    
+                    # If this is the first email with a meaningful status (valid, catchall)
+                    # Note: "risky" from Truelist is already mapped to CATCHALL by TruelistService
+                    if first_email is None and status in (
+                        EmailVerificationStatus.VALID,
+                        EmailVerificationStatus.CATCHALL,
+                    ):
+                        first_email = email  # Use original case from batch_emails
+                        first_email_status = status
+                        # Don't break here - continue to collect all valid emails
+                        # But we'll stop processing more batches after this one
+                
                 # Extract valid emails from status map
                 valid_emails = [
                     email for email, status in email_status_map.items()
@@ -434,16 +453,17 @@ async def start_email_verification(
             
             if valid_emails:
                 all_valid_emails.extend(valid_emails)
-                
-                # If we found valid emails, we can stop (or continue for more)
-                # For now, we'll stop after finding at least one valid email
-                if len(all_valid_emails) > 0:
-                    break
+            
+            # If we found first email (valid or catchall), we can stop
+            if first_email is not None:
+                break
         
         # Prepare response
         response = EmailVerifierResponse(
             valid_emails=all_valid_emails,
             total_valid=len(all_valid_emails),
+            first_email=first_email,
+            first_email_status=first_email_status,
             generated_emails=all_unique_emails,
             total_generated=total_unique_patterns,
             total_batches_processed=total_batches_processed,
@@ -532,18 +552,19 @@ async def start_single_email_verification(
     current_user: User = Depends(get_current_user),
 ) -> SingleEmailVerifierFindResponse:
     """
-    Verify emails sequentially and return immediately when first VALID email is found.
+    Verify emails sequentially and return immediately when first VALID or CATCHALL email is found.
     
     Generates random email combinations based on first name, last name, and domain,
-    then verifies them sequentially one at a time through BulkMailVerifier direct email 
-    verification API. Stops immediately when the first VALID email is found and returns it.
+    then verifies them sequentially one at a time through email verification API. 
+    Stops immediately when the first VALID or CATCHALL (risky) email is found and returns it.
     
     Args:
         request: EmailVerifierRequest with first_name, last_name, and domain/website
         current_user: Current authenticated user
         
     Returns:
-        SingleEmailVerifierFindResponse with the first valid email found, or None if none found
+        SingleEmailVerifierFindResponse with the first email found (valid or catchall) and its status, 
+        or None if none found
     """
     try:
         # Extract domain from website or domain parameter
@@ -634,7 +655,7 @@ async def start_single_email_verification(
         total_unique_patterns = len(all_unique_emails)
         
         if total_unique_patterns == 0:
-            return SingleEmailVerifierFindResponse(valid_email=None)
+            return SingleEmailVerifierFindResponse(valid_email=None, status=None)
         
         # Calculate number of batches needed
         total_batches = (total_unique_patterns + email_count - 1) // email_count
@@ -657,9 +678,9 @@ async def start_single_email_verification(
             if not batch_emails_to_check:
                 continue
             
-            # Verify emails sequentially until first valid is found
+            # Verify emails sequentially until first valid or catchall is found
             try:
-                valid_email, emails_checked = await _verify_emails_sequential_until_valid(
+                found_email, email_status, emails_checked = await _verify_emails_sequential_until_valid(
                     emails=batch_emails_to_check,
                     service=service,
                     verified_emails_set=verified_emails_set,
@@ -669,8 +690,8 @@ async def start_single_email_verification(
                 verified_emails_set.update(batch_emails_to_check[:emails_checked])
                 total_emails_checked += emails_checked
                 
-                if valid_email:
-                    return SingleEmailVerifierFindResponse(valid_email=valid_email)
+                if found_email:
+                    return SingleEmailVerifierFindResponse(valid_email=found_email, status=email_status)
                     
             except HTTPException as http_exc:
                 # Handle HTTPException from verification (e.g., credentials not configured)
@@ -683,8 +704,8 @@ async def start_single_email_verification(
                 # Log error but continue with next batch
                 pass
         
-        # No valid email found after all patterns checked
-        return SingleEmailVerifierFindResponse(valid_email=None)
+        # No valid or catchall email found after all patterns checked
+        return SingleEmailVerifierFindResponse(valid_email=None, status=None)
         
     except HTTPException:
         raise
@@ -790,11 +811,53 @@ def _store_in_cache(cache_key: str, email: str) -> None:
     _email_lookup_cache[cache_key] = (email, time.time())
 
 
+def detect_email_column(raw_headers: list[str]) -> Optional[str]:
+    """
+    Auto-detect email column from CSV headers.
+    
+    Searches for columns containing "email" (case-insensitive).
+    Priority: exact "email" > columns containing "email"
+    
+    Args:
+        raw_headers: List of CSV header names
+        
+    Returns:
+        Column name if detected, None if not found or ambiguous
+        
+    Raises:
+        ValueError: If multiple potential email columns found (ambiguous)
+    """
+    if not raw_headers:
+        return None
+    
+    # Normalize headers for comparison (case-insensitive)
+    normalized_headers = {h.lower(): h for h in raw_headers}
+    
+    # Priority 1: Exact match "email"
+    if "email" in normalized_headers:
+        return normalized_headers["email"]
+    
+    # Priority 2: Contains "email"
+    email_matches = [
+        h for h in raw_headers
+        if "email" in h.lower()
+    ]
+    if len(email_matches) == 1:
+        return email_matches[0]
+    elif len(email_matches) > 1:
+        raise ValueError(
+            f"Multiple email columns found: {email_matches}. "
+            "Please specify email_column explicitly."
+        )
+    
+    return None
+
+
 async def _verify_emails_batch_truelist(
     emails: list[str],
     service: TruelistService,
     timeout: float = 2.0,
-) -> tuple[Optional[str], int]:
+) -> tuple[Optional[str], Optional[EmailVerificationStatus], int]:
     """
     Optimized batch verification for Truelist - verifies all emails in a single API call.
     
@@ -807,10 +870,13 @@ async def _verify_emails_batch_truelist(
         timeout: Maximum time to wait for verification (default: 2.0 seconds)
         
     Returns:
-        Tuple of (valid_email: str | None, emails_checked: int)
+        Tuple of (email: str | None, status: EmailVerificationStatus | None, emails_checked: int)
+        - email: The first email found with valid or catchall status, or None
+        - status: The verification status (VALID or CATCHALL), or None
+        - emails_checked: Number of emails checked
     """
     if not emails:
-        return None, 0
+        return None, None, 0
     
     try:
         # Use asyncio.wait_for to enforce timeout
@@ -819,7 +885,7 @@ async def _verify_emails_batch_truelist(
             timeout=timeout
         )
         
-        # Check results for first valid email
+        # Check results for first email with VALID or CATCHALL status
         for email in emails:
             email_key = email.lower().strip()
             if email_key in results:
@@ -827,18 +893,17 @@ async def _verify_emails_batch_truelist(
                 mapped_status = result.get("mapped_status", "unknown")
                 try:
                     status = EmailVerificationStatus(mapped_status)
-                    if status == EmailVerificationStatus.VALID:
-                        return email_key, len(emails)
+                    # Return first email with VALID or CATCHALL status
+                    if status in (EmailVerificationStatus.VALID, EmailVerificationStatus.CATCHALL):
+                        return email_key, status, len(emails)
                 except ValueError:
                     pass
         
-        return None, len(emails)
+        return None, None, len(emails)
     except asyncio.TimeoutError:
-        print(f"[BATCH_VERIFY] Timeout after {timeout}s for {len(emails)} emails")
-        return None, 0
+        return None, None, 0
     except Exception as e:
-        print(f"[BATCH_VERIFY] Error in batch verification: {type(e).__name__}: {str(e)}")
-        return None, 0
+        return None, None, 0
 
 
 async def _verify_emails_concurrent_until_valid(
@@ -846,9 +911,9 @@ async def _verify_emails_concurrent_until_valid(
     service: BulkMailVerifierService,
     verified_emails_set: Optional[set[str]] = None,
     max_concurrent: int = 5,
-) -> tuple[Optional[str], int]:
+) -> tuple[Optional[str], Optional[EmailVerificationStatus], int]:
     """
-    Verify emails concurrently until the first VALID email is found.
+    Verify emails concurrently until the first VALID or CATCHALL email is found.
     
     Args:
         emails: List of email addresses to verify
@@ -857,134 +922,85 @@ async def _verify_emails_concurrent_until_valid(
         max_concurrent: Maximum number of concurrent verifications (default: 5)
         
     Returns:
-        Tuple of (valid_email: str | None, emails_checked: int)
-        - valid_email: The first valid email found, or None if none found
+        Tuple of (email: str | None, status: EmailVerificationStatus | None, emails_checked: int)
+        - email: The first email found with valid or catchall status, or None if none found
+        - status: The verification status (VALID or CATCHALL), or None
         - emails_checked: Number of emails verified before stopping
     """
-    print(f"[CONCURRENT_VERIFY] Starting concurrent verification: {len(emails)} emails, max_concurrent={max_concurrent}")
-    # #region agent log
-    import json as json_lib
-    import time
-    log_path = r"d:\code\ayan\contact360\.cursor\debug.log"
-    verify_func_start = time.time()
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json_lib.dumps({"id": f"log_{int(verify_func_start * 1000)}_verify_concurrent_start", "timestamp": int(verify_func_start * 1000), "location": "email.py:717", "message": "_verify_emails_concurrent_until_valid start", "data": {"total_emails": len(emails), "max_concurrent": max_concurrent}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-    except: pass
-    # #endregion agent log
     if not emails:
-        print(f"[CONCURRENT_VERIFY] No emails to verify, returning None")
-        return None, 0
+        return None, None, 0
     
     if verified_emails_set is None:
         verified_emails_set = set()
     
     emails_checked = 0
-    valid_email_found = None
+    first_email_found = None
+    first_email_status = None
     semaphore = asyncio.Semaphore(max_concurrent)
-    print(f"[CONCURRENT_VERIFY] Semaphore created with max_concurrent={max_concurrent}")
     
-    async def verify_single(email: str) -> tuple[str, Optional[str]]:
+    async def verify_single(email: str) -> tuple[str, Optional[EmailVerificationStatus]]:
         """Verify a single email and return (email, status)."""
-        nonlocal emails_checked, valid_email_found
-        if email in verified_emails_set or valid_email_found:
-            print(f"[VERIFY_SINGLE] Skipping {email} - already verified or valid email found")
+        nonlocal emails_checked, first_email_found, first_email_status
+        if email in verified_emails_set or first_email_found:
             return email, None
         
         async with semaphore:
-            if valid_email_found:  # Check again after acquiring semaphore
-                print(f"[VERIFY_SINGLE] Skipping {email} - valid email already found: {valid_email_found}")
+            if first_email_found:  # Check again after acquiring semaphore
                 return email, None
             
             emails_checked += 1
-            print(f"[VERIFY_SINGLE] [{emails_checked}/{len(emails)}] Verifying email: {email}")
-            # #region agent log
-            single_email_start = time.time()
-            try:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json_lib.dumps({"id": f"log_{int(single_email_start * 1000)}_single_email_start", "timestamp": int(single_email_start * 1000), "location": "email.py:752", "message": "Single email verification start (concurrent)", "data": {"email_index": emails_checked, "email": email[:20] + "..." if len(email) > 20 else email}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-            except: pass
-            # #endregion agent log
             try:
                 result = await service.verify_single_email(email)
-                # #region agent log
-                single_email_end = time.time()
-                try:
-                    with open(log_path, "a", encoding="utf-8") as f:
-                        f.write(json_lib.dumps({"id": f"log_{int(single_email_end * 1000)}_single_email_end", "timestamp": int(single_email_end * 1000), "location": "email.py:753", "message": "Single email verification end (concurrent)", "data": {"elapsed_ms": (single_email_end - single_email_start) * 1000, "status": result.get("mapped_status", "unknown")}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                except: pass
-                # #endregion agent log
                 mapped_status = result.get("mapped_status", "unknown")
                 verified_emails_set.add(email)
-                print(f"[VERIFY_SINGLE] Result for {email}: status={mapped_status}, result_keys={list(result.keys())}")
                 
                 try:
                     status = EmailVerificationStatus(mapped_status)
                 except ValueError:
                     status = EmailVerificationStatus.UNKNOWN
                 
-                if status == EmailVerificationStatus.VALID:
-                    if not valid_email_found:  # First valid email found
-                        valid_email_found = email.lower().strip()
-                        print(f"[VERIFY_SINGLE] ✓ VALID EMAIL FOUND: {valid_email_found}")
-                    return email, "valid"
+                # Track first email with VALID or CATCHALL status
+                if status in (EmailVerificationStatus.VALID, EmailVerificationStatus.CATCHALL):
+                    if not first_email_found:  # First email with meaningful status found
+                        first_email_found = email.lower().strip()
+                        first_email_status = status
+                    return email, status
                 
-                print(f"[VERIFY_SINGLE] Email {email} status: {mapped_status} (not valid)")
-                return email, mapped_status
+                return email, None
             except Exception as e:
-                print(f"[VERIFY_SINGLE] ✗ Error verifying {email}: {type(e).__name__}: {str(e)}")
-                # #region agent log
-                single_email_error = time.time()
-                try:
-                    with open(log_path, "a", encoding="utf-8") as f:
-                        f.write(json_lib.dumps({"id": f"log_{int(single_email_error * 1000)}_single_email_error", "timestamp": int(single_email_error * 1000), "location": "email.py:766", "message": "Single email verification error (concurrent)", "data": {"elapsed_ms": (single_email_error - single_email_start) * 1000, "error": str(e)[:100]}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                except: pass
-                # #endregion agent log
                 verified_emails_set.add(email)
                 return email, None
     
     try:
         # Create tasks for all emails
         filtered_emails = [email for email in emails if email not in verified_emails_set]
-        print(f"[CONCURRENT_VERIFY] Creating {len(filtered_emails)} verification tasks (filtered from {len(emails)} total)")
         tasks = [asyncio.create_task(verify_single(email)) for email in filtered_emails]
         
-        # Wait for first valid email or all tasks complete
+        # Wait for first email with VALID or CATCHALL status or all tasks complete
         for task in asyncio.as_completed(tasks):
             email, status = await task
-            print(f"[CONCURRENT_VERIFY] Task completed for {email}: status={status}, valid_email_found={valid_email_found}")
-            if status == "valid" and valid_email_found:
+            if status in (EmailVerificationStatus.VALID, EmailVerificationStatus.CATCHALL) and first_email_found:
                 # Cancel remaining tasks
                 remaining = [t for t in tasks if not t.done()]
-                print(f"[CONCURRENT_VERIFY] Valid email found! Cancelling {len(remaining)} remaining tasks")
                 for t in remaining:
                     t.cancel()
                 # Wait a bit for cancellations
                 await asyncio.sleep(0.1)
                 break
         
-        # #region agent log
-        verify_func_end = time.time()
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json_lib.dumps({"id": f"log_{int(verify_func_end * 1000)}_verify_concurrent_end", "timestamp": int(verify_func_end * 1000), "location": "email.py:772", "message": "_verify_emails_concurrent_until_valid end", "data": {"total_elapsed_ms": (verify_func_end - verify_func_start) * 1000, "emails_checked": emails_checked, "found": valid_email_found is not None}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-        except: pass
-        # #endregion agent log
-        print(f"[CONCURRENT_VERIFY] Final result: valid_email={valid_email_found}, emails_checked={emails_checked}")
-        return valid_email_found, emails_checked
+        return first_email_found, first_email_status, emails_checked
         
     except Exception as e:
-        print(f"[CONCURRENT_VERIFY] ✗ Exception in concurrent verification: {type(e).__name__}: {str(e)}")
-        return valid_email_found, emails_checked
+        return first_email_found, first_email_status, emails_checked
 
 
 async def _verify_emails_sequential_until_valid(
     emails: list[str],
     service: BulkMailVerifierService,
     verified_emails_set: Optional[set[str]] = None,
-) -> tuple[Optional[str], int]:
+) -> tuple[Optional[str], Optional[EmailVerificationStatus], int]:
     """
-    Verify emails sequentially until the first VALID email is found.
+    Verify emails sequentially until the first VALID or CATCHALL email is found.
     
     Args:
         emails: List of email addresses to verify
@@ -992,22 +1008,13 @@ async def _verify_emails_sequential_until_valid(
         verified_emails_set: Optional set to track verified emails (will be updated in-place)
         
     Returns:
-        Tuple of (valid_email: str | None, emails_checked: int)
-        - valid_email: The first valid email found, or None if none found
+        Tuple of (email: str | None, status: EmailVerificationStatus | None, emails_checked: int)
+        - email: The first email found with valid or catchall status, or None if none found
+        - status: The verification status of the email (VALID or CATCHALL), or None
         - emails_checked: Number of emails verified before stopping
     """
-    # #region agent log
-    import json as json_lib
-    import time
-    log_path = r"d:\code\ayan\contact360\.cursor\debug.log"
-    verify_func_start = time.time()
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json_lib.dumps({"id": f"log_{int(verify_func_start * 1000)}_verify_func_start", "timestamp": int(verify_func_start * 1000), "location": "email.py:717", "message": "_verify_emails_sequential_until_valid start", "data": {"total_emails": len(emails)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-    except: pass
-    # #endregion agent log
     if not emails:
-        return None, 0
+        return None, None, 0
     
     if verified_emails_set is None:
         verified_emails_set = set()
@@ -1022,22 +1029,8 @@ async def _verify_emails_sequential_until_valid(
             
             emails_checked += 1
             
-            # #region agent log
-            single_email_start = time.time()
-            try:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json_lib.dumps({"id": f"log_{int(single_email_start * 1000)}_single_email_start", "timestamp": int(single_email_start * 1000), "location": "email.py:752", "message": "Single email verification start", "data": {"email_index": emails_checked, "email": email[:20] + "..." if len(email) > 20 else email}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-            except: pass
-            # #endregion agent log
             try:
                 result = await service.verify_single_email(email)
-                # #region agent log
-                single_email_end = time.time()
-                try:
-                    with open(log_path, "a", encoding="utf-8") as f:
-                        f.write(json_lib.dumps({"id": f"log_{int(single_email_end * 1000)}_single_email_end", "timestamp": int(single_email_end * 1000), "location": "email.py:753", "message": "Single email verification end", "data": {"elapsed_ms": (single_email_end - single_email_start) * 1000, "status": result.get("mapped_status", "unknown")}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                except: pass
-                # #endregion agent log
                 mapped_status = result.get("mapped_status", "unknown")
                 
                 # Add to verified set
@@ -1048,41 +1041,21 @@ async def _verify_emails_sequential_until_valid(
                 except ValueError:
                     status = EmailVerificationStatus.UNKNOWN
                 
-                if status == EmailVerificationStatus.VALID:
-                    # #region agent log
-                    verify_func_end = time.time()
-                    try:
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(json_lib.dumps({"id": f"log_{int(verify_func_end * 1000)}_verify_func_end", "timestamp": int(verify_func_end * 1000), "location": "email.py:764", "message": "_verify_emails_sequential_until_valid end (found)", "data": {"total_elapsed_ms": (verify_func_end - verify_func_start) * 1000, "emails_checked": emails_checked}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                    except: pass
-                    # #endregion agent log
-                    return email.lower().strip(), emails_checked
+                # Return first email with VALID or CATCHALL status
+                if status in (EmailVerificationStatus.VALID, EmailVerificationStatus.CATCHALL):
+                    return email.lower().strip(), status, emails_checked
                 
             except Exception as e:
-                # #region agent log
-                single_email_error = time.time()
-                try:
-                    with open(log_path, "a", encoding="utf-8") as f:
-                        f.write(json_lib.dumps({"id": f"log_{int(single_email_error * 1000)}_single_email_error", "timestamp": int(single_email_error * 1000), "location": "email.py:766", "message": "Single email verification error", "data": {"elapsed_ms": (single_email_error - single_email_start) * 1000, "error": str(e)[:100]}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                except: pass
-                # #endregion agent log
                 # Still add to verified set to avoid retrying failed emails
                 verified_emails_set.add(email)
                 # Continue to next email on error
                 continue
         
-        # #region agent log
-        verify_func_end = time.time()
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json_lib.dumps({"id": f"log_{int(verify_func_end * 1000)}_verify_func_end", "timestamp": int(verify_func_end * 1000), "location": "email.py:772", "message": "_verify_emails_sequential_until_valid end (not found)", "data": {"total_elapsed_ms": (verify_func_end - verify_func_start) * 1000, "emails_checked": emails_checked}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-        except: pass
-        # #endregion agent log
-        return None, emails_checked
+        return None, None, emails_checked
         
     except Exception as e:
         # Return partial results
-        return None, emails_checked
+        return None, None, emails_checked
 
 
 async def _verify_emails_with_status(
@@ -1209,14 +1182,83 @@ async def bulk_email_verifier(
     Accepts a list of email addresses and returns verification status for each email
     (valid, invalid, catchall, unknown).
     
+    Supports CSV context preservation: if raw_headers and rows are provided,
+    the endpoint will preserve original CSV columns while adding verification status
+    and generate a downloadable CSV file.
+    
     Args:
-        request: BulkEmailVerifierRequest with list of emails
+        request: BulkEmailVerifierRequest with list of emails and optional CSV context
         current_user: Current authenticated user
         
     Returns:
-        BulkEmailVerifierResponse with verification results for each email
+        BulkEmailVerifierResponse with verification results for each email.
+        If CSV context provided, also includes download_url, export_id, and expires_at.
     """
     try:
+        # Handle CSV context: extract emails from CSV rows if provided
+        emails_to_verify = request.emails
+        email_column = request.email_column
+        emails_data = []  # Store email with CSV row mapping
+        
+        # If CSV context is provided, extract emails from rows
+        if request.rows is not None and request.raw_headers is not None:
+            # Auto-detect email column if not explicitly provided
+            if not email_column:
+                try:
+                    email_column = detect_email_column(request.raw_headers)
+                except ValueError as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(e),
+                    ) from e
+            
+            if not email_column:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Could not detect email column. Please provide email_column.",
+                )
+            
+            # Extract emails from CSV rows
+            extracted_emails = []
+            for idx, row in enumerate(request.rows):
+                email_value = row.get(email_column)
+                if email_value and isinstance(email_value, str) and email_value.strip():
+                    extracted_email = email_value.strip().lower()
+                    extracted_emails.append(extracted_email)
+                    emails_data.append({
+                        "email": extracted_email,
+                        "raw_row": row,
+                        "original_email": email_value.strip(),  # Preserve original case
+                    })
+                elif idx < len(request.emails):
+                    # Fallback to request.emails if row doesn't have email
+                    emails_data.append({
+                        "email": request.emails[idx].lower().strip(),
+                        "raw_row": row,
+                        "original_email": request.emails[idx],
+                    })
+            
+            # Use extracted emails if found, otherwise use request.emails and match with rows
+            if extracted_emails:
+                emails_to_verify = extracted_emails
+            else:
+                # If no emails extracted from rows, use request.emails and match with rows
+                for idx, email in enumerate(request.emails):
+                    email_data = {
+                        "email": email.lower().strip(),
+                        "original_email": email,
+                    }
+                    if idx < len(request.rows):
+                        email_data["raw_row"] = request.rows[idx]
+                    emails_data.append(email_data)
+        else:
+            # No CSV context: create simple email data
+            for email in request.emails:
+                emails_data.append({
+                    "email": email.lower().strip(),
+                    "original_email": email,
+                })
+        
         provider = request.provider
         use_bmv = provider == EmailProvider.BULKMAILVERIFIER
         use_truelist = provider == EmailProvider.TRUELIST
@@ -1238,20 +1280,20 @@ async def bulk_email_verifier(
         if use_bmv:
             service = BulkMailVerifierService()
             email_status_map = await _verify_emails_batch_direct(
-                emails=request.emails,
+                emails=emails_to_verify,
                 service=service,
                 batch_size=20,  # Process 20 emails concurrently per batch
             )
         elif use_truelist:
             service = TruelistService()
-            truelist_results = await service.verify_emails(request.emails)
+            truelist_results = await service.verify_emails(emails_to_verify)
             email_status_map = {
                 email.lower().strip(): EmailVerificationStatus(
                     truelist_results.get(email.lower().strip(), {}).get(
                         "mapped_status", EmailVerificationStatus.UNKNOWN
                     )
                 )
-                for email in request.emails
+                for email in emails_to_verify
             }
         else:
             raise HTTPException(
@@ -1266,11 +1308,12 @@ async def bulk_email_verifier(
         catchall_count = 0
         unknown_count = 0
         
-        for email in request.emails:
-            normalized_email = email.lower().strip()
-            verification_status = email_status_map.get(normalized_email, EmailVerificationStatus.UNKNOWN)
+        for email_data in emails_data:
+            email = email_data["email"]
+            original_email = email_data.get("original_email", email)
+            verification_status = email_status_map.get(email, EmailVerificationStatus.UNKNOWN)
             
-            results.append(VerifiedEmailResult(email=email, status=verification_status))
+            results.append(VerifiedEmailResult(email=original_email, status=verification_status))
             
             if verification_status == EmailVerificationStatus.VALID:
                 valid_count += 1
@@ -1281,6 +1324,78 @@ async def bulk_email_verifier(
             else:
                 unknown_count += 1
         
+        # Handle CSV generation if CSV context provided
+        download_url = None
+        export_id = None
+        expires_at = None
+        
+        if request.rows is not None and request.raw_headers is not None:
+            # Merge verification results with CSV rows
+            csv_rows = []
+            for email_data in emails_data:
+                email = email_data["email"]
+                original_email = email_data.get("original_email", email)
+                raw_row = email_data.get("raw_row", {})
+                verification_status = email_status_map.get(email, EmailVerificationStatus.UNKNOWN)
+                
+                # Start with original CSV row
+                row_for_csv: dict[str, Any] = {}
+                if raw_row:
+                    row_for_csv.update(raw_row)
+                
+                # Add/override verification_status column
+                row_for_csv["verification_status"] = verification_status.value
+                
+                csv_rows.append(row_for_csv)
+            
+            # Create export record
+            export = await export_service.create_export(
+                session,
+                current_user.uuid,
+                ExportType.emails,  # Using emails type for bulk verifier exports
+                contact_uuids=[],
+                company_uuids=[],
+            )
+            
+            # Store CSV context in export record
+            verifier_data_json = json.dumps(
+                {
+                    "emails_data": emails_data,
+                    "mapping": request.mapping,
+                    "raw_headers": request.raw_headers,
+                    "rows": request.rows,
+                    "email_column": email_column,
+                }
+            )
+            export.email_contacts_json = verifier_data_json
+            export.contact_count = len(emails_data)
+            export.total_records = len(emails_data)
+            await session.flush()
+            
+            # Generate CSV file
+            csv_headers = list(request.raw_headers)
+            if "verification_status" not in csv_headers:
+                csv_headers.append("verification_status")
+            
+            file_path = await export_service.generate_bulk_verifier_csv(
+                session,
+                export.export_id,
+                csv_rows,
+                csv_headers,
+            )
+            
+            # Update export with file path
+            export.file_path = file_path
+            export.status = ExportStatus.completed
+            await session.flush()
+            
+            # Generate signed download URL
+            expires_at = export.created_at + timedelta(hours=24)
+            download_token = generate_signed_url(export.export_id, current_user.uuid, expires_at)
+            base_url = settings.BASE_URL.rstrip("/")
+            download_url = f"{base_url}/api/v2/exports/{export.export_id}/download?token={download_token}"
+            export_id = export.export_id
+        
         response = BulkEmailVerifierResponse(
             results=results,
             total=len(results),
@@ -1288,6 +1403,9 @@ async def bulk_email_verifier(
             invalid_count=invalid_count,
             catchall_count=catchall_count,
             unknown_count=unknown_count,
+            download_url=download_url,
+            export_id=export_id,
+            expires_at=expires_at,
         )
         
         # Log activity (don't fail verification if activity logging fails)
@@ -1345,17 +1463,27 @@ async def single_email_verifier(
     session: AsyncSession = Depends(get_db),
 ) -> SingleEmailVerifierResponse:
     """
-    Verify a single email address through BulkMailVerifier service.
+    Verify a single email address through email verification service.
     
     Accepts a single email address and returns its verification status
     (valid, invalid, catchall, unknown).
     
+    When using Truelist provider, the response includes additional fields:
+    - email_state: The email state from Truelist (e.g., 'ok', 'risky', 'invalid')
+    - email_sub_state: The email sub-state (e.g., 'accept_all', 'disposable', 'role')
+    - domain: Domain extracted from email
+    - canonical: Canonical email format
+    - mx_record: MX record information
+    - verified_at: Timestamp when email was verified
+    - did_you_mean: Suggested email correction
+    
     Args:
-        request: SingleEmailVerifierRequest with single email
+        request: SingleEmailVerifierRequest with single email and provider
         current_user: Current authenticated user
         
     Returns:
-        SingleEmailVerifierResponse with verification result for the email
+        SingleEmailVerifierResponse with verification result for the email.
+        Includes Truelist-specific fields when using Truelist provider.
     """
     try:
         provider = request.provider
@@ -1379,24 +1507,44 @@ async def single_email_verifier(
         if use_bmv:
             service = BulkMailVerifierService()
             result = await service.verify_single_email(request.email)
+            # Map the result status to EmailVerificationStatus enum
+            mapped_status = result.get("mapped_status", "unknown")
+            try:
+                verification_status = EmailVerificationStatus(mapped_status)
+            except ValueError:
+                verification_status = EmailVerificationStatus.UNKNOWN
+            
+            response = SingleEmailVerifierResponse(
+                result=VerifiedEmailResult(email=request.email, status=verification_status),
+            )
         elif use_truelist:
             service = TruelistService()
             result = await service.verify_single_email(request.email)
+            # Map the result status to EmailVerificationStatus enum
+            mapped_status = result.get("mapped_status", "unknown")
+            try:
+                verification_status = EmailVerificationStatus(mapped_status)
+            except ValueError:
+                verification_status = EmailVerificationStatus.UNKNOWN
+            
+                # Extract Truelist-specific fields from the result
+            response = SingleEmailVerifierResponse(
+                    result=VerifiedEmailResult(
+                        email=request.email,
+                        status=verification_status,
+                        email_state=result.get("email_state"),
+                        email_sub_state=result.get("email_sub_state"),
+                        domain=result.get("domain"),
+                        canonical=result.get("canonical"),
+                        mx_record=result.get("mx_record"),
+                        verified_at=result.get("verified_at"),
+                        did_you_mean=result.get("did_you_mean"),
+                    ),
+                )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unsupported provider: {provider}",
-            )
-        
-        # Map the result status to EmailVerificationStatus enum
-        mapped_status = result.get("mapped_status", "unknown")
-        try:
-            verification_status = EmailVerificationStatus(mapped_status)
-        except ValueError:
-            verification_status = EmailVerificationStatus.UNKNOWN
-        
-        response = SingleEmailVerifierResponse(
-            result=VerifiedEmailResult(email=request.email, status=verification_status),
         )
         
         # Log activity (don't fail verification if activity logging fails)
@@ -1852,23 +2000,18 @@ async def get_single_email(
     2. If not found, trying email verification using the single email verifier
     3. If still not found, returns None
     
+    When email is found via verifier, the response includes the verification status.
+    If the email has status "catchall" (risky from Truelist), it is still returned.
+    
     Args:
         request: SingleEmailRequest with first_name, last_name, and domain/website
         current_user: Current authenticated user
         session: Database session
         
     Returns:
-        SingleEmailResponse with email address and source, or None if not found
+        SingleEmailResponse with email address, source, and status (when found via verifier).
+        Status is only present when source is "verifier" and indicates if email is valid or catchall.
     """
-    # #region agent log
-    import json as json_lib
-    start_time = time.time()
-    log_path = r"d:\code\ayan\contact360\.cursor\debug.log"
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json_lib.dumps({"id": f"log_{int(start_time * 1000)}_entry", "timestamp": int(start_time * 1000), "location": "email.py:1479", "message": "get_single_email entry", "data": {"first_name": request.first_name, "last_name": request.last_name, "domain": request.domain or request.website}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
-    except: pass
-    # #endregion agent log
     try:
         # Normalize inputs
         first_name = request.first_name.strip()
@@ -1900,15 +2043,7 @@ async def get_single_email(
         cache_key = _get_cache_key(first_name, last_name, extracted_domain)
         cached_email = _get_from_cache(cache_key)
         if cached_email:
-            print(f"[EMAIL_SINGLE] Cache hit for {cache_key}: {cached_email}")
-            # #region agent log
-            cache_hit_time = time.time()
-            try:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json_lib.dumps({"id": f"log_{int(cache_hit_time * 1000)}_cache_hit", "timestamp": int(cache_hit_time * 1000), "location": "email.py:cache", "message": "Cache hit", "data": {"elapsed_ms": (cache_hit_time - start_time) * 1000, "email": cached_email}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "CACHE"}) + "\n")
-            except: pass
-            # #endregion agent log
-            return SingleEmailResponse(email=cached_email, source="cache")
+            return SingleEmailResponse(email=cached_email, source="cache", status=None)
         
         # Initialize services
         email_finder_service = EmailFinderService()
@@ -1931,13 +2066,6 @@ async def get_single_email(
         source = None
         
         # Step 1: Try email finder (database search) with timeout
-        # #region agent log
-        step1_start = time.time()
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json_lib.dumps({"id": f"log_{int(step1_start * 1000)}_step1_start", "timestamp": int(step1_start * 1000), "location": "email.py:1516", "message": "Step 1: Database search start", "data": {"elapsed_ms": (step1_start - start_time) * 1000}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + "\n")
-        except: pass
-        # #endregion agent log
         try:
             # Add timeout to database query (tight 0.75s to avoid long waits)
             finder_result = await asyncio.wait_for(
@@ -1949,13 +2077,6 @@ async def get_single_email(
                 ),
                 timeout=0.75
             )
-            # #region agent log
-            step1_end = time.time()
-            try:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json_lib.dumps({"id": f"log_{int(step1_end * 1000)}_step1_end", "timestamp": int(step1_end * 1000), "location": "email.py:1523", "message": "Step 1: Database search end", "data": {"elapsed_ms": (step1_end - step1_start) * 1000, "found": len(finder_result.emails) if finder_result.emails else 0}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + "\n")
-            except: pass
-            # #endregion agent log
             
             if finder_result.emails and len(finder_result.emails) > 0:
                 email_found = finder_result.emails[0].email
@@ -1965,13 +2086,6 @@ async def get_single_email(
                 _store_in_cache(cache_key, email_found)
                 
                 # Log activity for successful search
-                # #region agent log
-                activity_log_start = time.time()
-                try:
-                    with open(log_path, "a", encoding="utf-8") as f:
-                        f.write(json_lib.dumps({"id": f"log_{int(activity_log_start * 1000)}_activity_start", "timestamp": int(activity_log_start * 1000), "location": "email.py:1529", "message": "Activity logging start", "data": {"elapsed_ms": (activity_log_start - start_time) * 1000}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "D"}) + "\n")
-                except: pass
-                # #endregion agent log
                 try:
                     await activity_service.log_search_activity(
                         session=session,
@@ -1991,38 +2105,15 @@ async def get_single_email(
                         status=ActivityStatus.SUCCESS,
                         request=http_request,
                     )
-                    # #region agent log
-                    activity_log_end = time.time()
-                    try:
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(json_lib.dumps({"id": f"log_{int(activity_log_end * 1000)}_activity_end", "timestamp": int(activity_log_end * 1000), "location": "email.py:1548", "message": "Activity logging end", "data": {"elapsed_ms": (activity_log_end - activity_log_start) * 1000}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "D"}) + "\n")
-                    except: pass
-                    # #endregion agent log
                 except Exception as log_exc:
-                    print(f"[EMAIL_VERIFIER][ACTIVITY] ✗ Failed to log activity (finder): {type(log_exc).__name__}: {str(log_exc)}")
                     try:
                         await session.rollback()
-                        print("[EMAIL_VERIFIER][ACTIVITY] Rolled back session after logging failure (finder)")
-                    except Exception as rb_exc:
-                        print(f"[EMAIL_VERIFIER][ACTIVITY] ✗ Rollback failed after logging failure (finder): {type(rb_exc).__name__}: {str(rb_exc)}")
+                    except Exception:
+                        pass
                 
-                # #region agent log
-                total_time = time.time()
-                try:
-                    with open(log_path, "a", encoding="utf-8") as f:
-                        f.write(json_lib.dumps({"id": f"log_{int(total_time * 1000)}_exit", "timestamp": int(total_time * 1000), "location": "email.py:1551", "message": "get_single_email exit (finder)", "data": {"total_elapsed_ms": (total_time - start_time) * 1000, "source": "finder"}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
-                except: pass
-                # #endregion agent log
-                return SingleEmailResponse(email=email_found, source=source)
+                return SingleEmailResponse(email=email_found, source=source, status=None)
         except asyncio.TimeoutError:
             # Database query timed out (>5s), skip to verifier
-            # #region agent log
-            step1_timeout = time.time()
-            try:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json_lib.dumps({"id": f"log_{int(step1_timeout * 1000)}_step1_timeout", "timestamp": int(step1_timeout * 1000), "location": "email.py:1552", "message": "Step 1: Database search timeout", "data": {"elapsed_ms": (step1_timeout - step1_start) * 1000}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + "\n")
-            except: pass
-            # #endregion agent log
             pass
         except HTTPException as http_exc:
             if http_exc.status_code == status.HTTP_404_NOT_FOUND:
@@ -2036,125 +2127,59 @@ async def get_single_email(
             pass
         
         # Step 2: If not found, try email verifier with overall timeout
-        if not email_found:
-            if not bulk_verifier_service:
-                print(f"[EMAIL_VERIFIER] BulkMailVerifier service not available (credentials not configured)")
-            else:
-                print(f"[EMAIL_VERIFIER] Email not found in database, proceeding to verification step")
         if not email_found and bulk_verifier_service:
-            print(f"[EMAIL_VERIFIER] Step 2: Starting email verification for {first_name} {last_name} @ {extracted_domain}")
-            # #region agent log
-            step2_start = time.time()
-            try:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json_lib.dumps({"id": f"log_{int(step2_start * 1000)}_step2_start", "timestamp": int(step2_start * 1000), "location": "email.py:1564", "message": "Step 2: Email verifier start", "data": {"elapsed_ms": (step2_start - start_time) * 1000}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-            except: pass
-            # #endregion agent log
             tier1_emails = []  # Initialize for exception handler
             try:
                 # Wrap entire verification step in timeout (3 seconds max)
                 async def _verification_work():
                     nonlocal tier1_emails
                     # OPTIMIZATION: Generate only Tier 1 patterns first (most common, 60-70% coverage)
-                    print(f"[EMAIL_VERIFIER] Generating Tier 1 email patterns...")
-                    # #region agent log
-                    pattern_gen_start = time.time()
-                    try:
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(json_lib.dumps({"id": f"log_{int(pattern_gen_start * 1000)}_pattern_start", "timestamp": int(pattern_gen_start * 1000), "location": "email.py:1570", "message": "Email pattern generation start (Tier 1 only)", "data": {"elapsed_ms": (pattern_gen_start - start_time) * 1000}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + "\n")
-                    except: pass
-                    # #endregion agent log
-                    
                     # Generate Tier 1 patterns first (most common patterns)
                     vars = _get_name_variations(first_name, last_name)
-                    print(f"[EMAIL_VERIFIER] Name variations: fn={vars.get('fn')}, ln={vars.get('ln')}, f_initial={vars.get('f_initial')}, l_initial={vars.get('l_initial')}")
                     tier1_patterns = _generate_tier1_patterns(vars)
-                    print(f"[EMAIL_VERIFIER] Generated {len(tier1_patterns)} Tier 1 patterns: {tier1_patterns}")
                     tier1_emails = [f"{pattern}@{extracted_domain}" for pattern in tier1_patterns if pattern and len(pattern) <= 64]
                     # Limit to top 3 patterns for fast verification (Truelist rate limit friendly)
                     tier1_emails = tier1_emails[:3]
-                    print(f"[EMAIL_VERIFIER] Created {len(tier1_emails)} email addresses to verify (trimmed): {tier1_emails}")
-                    # #region agent log
-                    tier1_log_ts = time.time()
-                    try:
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(json_lib.dumps({"id": f"log_{int(tier1_log_ts * 1000)}_tier1_count", "timestamp": int(tier1_log_ts * 1000), "location": "email.py:1573", "message": "Tier1 patterns ready", "data": {"tier1_count": len(tier1_emails)}, "sessionId": "debug-session", "runId": "run-debug1", "hypothesisId": "H2"}) + "\n")
-                    except:
-                        pass
-                    # #endregion agent log
-                    
-                    # #region agent log
-                    pattern_gen_end = time.time()
-                    try:
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(json_lib.dumps({"id": f"log_{int(pattern_gen_end * 1000)}_pattern_end", "timestamp": int(pattern_gen_end * 1000), "location": "email.py:1576", "message": "Email pattern generation end (Tier 1 only)", "data": {"elapsed_ms": (pattern_gen_end - pattern_gen_start) * 1000, "total_patterns": len(tier1_emails)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + "\n")
-                    except: pass
-                    # #endregion agent log
                     
                     if not tier1_emails:
-                        print(f"[EMAIL_VERIFIER] No Tier 1 email patterns generated, skipping verification")
                         return None, 0
                     
                     # Track verified emails to prevent duplicates
                     verified_emails_set = set()
                     
                     # OPTIMIZATION: Use batch verification for Truelist (single API call for all 3 emails)
-                    # #region agent log
-                    verify_start = time.time()
-                    try:
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(json_lib.dumps({"id": f"log_{int(verify_start * 1000)}_verify_start", "timestamp": int(verify_start * 1000), "location": "email.py:1599", "message": "Email verification start", "data": {"elapsed_ms": (verify_start - start_time) * 1000, "emails_to_check": len(tier1_emails), "use_batch": use_truelist}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                    except: pass
-                    # #endregion agent log
-                    
                     # Use optimized batch verification for Truelist (single API call)
                     if use_truelist and isinstance(bulk_verifier_service, TruelistService):
-                        print(f"[EMAIL_VERIFIER] Using batch verification for Truelist ({len(tier1_emails)} emails in one call)")
-                        valid_email, emails_checked = await _verify_emails_batch_truelist(
+                        found_email, email_status, emails_checked = await _verify_emails_batch_truelist(
                             emails=tier1_emails,
                             service=bulk_verifier_service,
                             timeout=2.0,  # 2 second timeout for batch call
                         )
                     else:
                         # Use concurrent verification for other providers
-                        print(f"[EMAIL_VERIFIER] Starting concurrent verification of {len(tier1_emails)} emails (max 5 concurrent)")
                         max_concurrent = 5
-                        valid_email, emails_checked = await _verify_emails_concurrent_until_valid(
+                        found_email, email_status, emails_checked = await _verify_emails_concurrent_until_valid(
                             emails=tier1_emails,
                             service=bulk_verifier_service,
                             verified_emails_set=verified_emails_set,
                             max_concurrent=max_concurrent,
                         )
-                    print(f"[EMAIL_VERIFIER] Verification completed: checked {emails_checked} emails, valid_email={valid_email}")
-                    # #region agent log
-                    post_verify_ts = time.time()
-                    try:
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(json_lib.dumps({"id": f"log_{int(post_verify_ts * 1000)}_verify_summary", "timestamp": int(post_verify_ts * 1000), "location": "email.py:1602", "message": "Verification summary", "data": {"emails_checked": emails_checked, "valid_email": bool(valid_email), "max_concurrent": max_concurrent if not use_truelist else "batch"}, "sessionId": "debug-session", "runId": "run-debug1", "hypothesisId": "H3"}) + "\n")
-                    except:
-                        pass
-                    # #endregion agent log
-                    verify_end = time.time()
-                    try:
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(json_lib.dumps({"id": f"log_{int(verify_end * 1000)}_verify_end", "timestamp": int(verify_end * 1000), "location": "email.py:1604", "message": "Email verification end", "data": {"elapsed_ms": (verify_end - verify_start) * 1000, "found": valid_email is not None}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                    except: pass
-                    # #endregion agent log
                     
-                    if valid_email:
-                        return valid_email, emails_checked
-                    return None, emails_checked
+                    if found_email:
+                        return found_email, email_status, emails_checked
+                    return None, None, emails_checked
                 
                 # Execute verification with overall timeout (3 seconds)
+                email_status = None
                 try:
-                    valid_email, emails_checked = await asyncio.wait_for(
+                    found_email, found_status, emails_checked = await asyncio.wait_for(
                         _verification_work(),
                         timeout=3.0
                     )
-                    if valid_email:
-                        email_found = valid_email
+                    if found_email:
+                        email_found = found_email
+                        email_status = found_status
                         source = "verifier"
-                        print(f"[EMAIL_VERIFIER] ✓ Valid email found: {valid_email} (source: {source})")
                         
                         # Store in cache for future requests
                         _store_in_cache(cache_key, email_found)
@@ -2174,44 +2199,33 @@ async def get_single_email(
                                 result_summary={
                                     "email": email_found,
                                     "source": source,
+                                    "status": found_status.value if found_status else None,
                                     "emails_found": 1,
                                 },
                                 status=ActivityStatus.SUCCESS,
                                 request=http_request,
                             )
                         except Exception as log_exc:
-                            print(f"[EMAIL_VERIFIER][ACTIVITY] ✗ Failed to log activity (verifier): {type(log_exc).__name__}: {str(log_exc)}")
                             try:
                                 await session.rollback()
-                                print("[EMAIL_VERIFIER][ACTIVITY] Rolled back session after logging failure (verifier)")
-                            except Exception as rb_exc:
-                                print(f"[EMAIL_VERIFIER][ACTIVITY] ✗ Rollback failed after logging failure (verifier): {type(rb_exc).__name__}: {str(rb_exc)}")
+                            except Exception:
+                                pass
                 except asyncio.TimeoutError:
-                    print(f"[EMAIL_VERIFIER] Verification step timed out after 3 seconds")
-                    # #region agent log
-                    timeout_ts = time.time()
-                    try:
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(json_lib.dumps({"id": f"log_{int(timeout_ts * 1000)}_verify_timeout", "timestamp": int(timeout_ts * 1000), "location": "email.py:verify_timeout", "message": "Verification timeout", "data": {"elapsed_ms": (timeout_ts - step2_start) * 1000}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "TIMEOUT"}) + "\n")
-                    except: pass
-                    # #endregion agent log
+                    pass
                 
             except HTTPException as verifier_exc:
-                print(f"[EMAIL_VERIFIER] ✗ Verification failed with HTTP exception: {type(verifier_exc).__name__}: {str(verifier_exc.detail) if hasattr(verifier_exc, 'detail') else str(verifier_exc)}")
                 # If rate limited, return fast with best-guess pattern
                 if getattr(verifier_exc, "status_code", None) == status.HTTP_429_TOO_MANY_REQUESTS and tier1_emails and len(tier1_emails) > 0:
                     fallback_email = tier1_emails[0]
                     source = "pattern_fallback"
-                    return SingleEmailResponse(email=fallback_email, source=source)
+                    return SingleEmailResponse(email=fallback_email, source=source, status=None)
                 # Otherwise continue
                 pass  # Continue if verifier fails
             except Exception as verifier_exc:
-                print(f"[EMAIL_VERIFIER] ✗ Verification failed with exception: {type(verifier_exc).__name__}: {str(verifier_exc)}")
                 pass  # Continue if verifier fails
         
         # Log activity for no email found (successful search but no results)
         if not email_found:
-            print(f"[EMAIL_VERIFIER] No email found after verification step")
             try:
                 await activity_service.log_search_activity(
                     session=session,
@@ -2231,22 +2245,13 @@ async def get_single_email(
                     request=http_request,
                 )
             except Exception as log_exc:
-                print(f"[EMAIL_VERIFIER][ACTIVITY] ✗ Failed to log activity (no results): {type(log_exc).__name__}: {str(log_exc)}")
                 try:
                     await session.rollback()
-                    print("[EMAIL_VERIFIER][ACTIVITY] Rolled back session after logging failure (no results)")
-                except Exception as rb_exc:
-                    print(f"[EMAIL_VERIFIER][ACTIVITY] ✗ Rollback failed after logging failure (no results): {type(rb_exc).__name__}: {str(rb_exc)}")
+                except Exception:
+                    pass
         
         # Return result
-        # #region agent log
-        total_time = time.time()
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json_lib.dumps({"id": f"log_{int(total_time * 1000)}_exit", "timestamp": int(total_time * 1000), "location": "email.py:1664", "message": "get_single_email exit", "data": {"total_elapsed_ms": (total_time - start_time) * 1000, "source": source, "email_found": email_found is not None}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
-        except: pass
-        # #endregion agent log
-        return SingleEmailResponse(email=email_found, source=source)
+        return SingleEmailResponse(email=email_found, source=source, status=email_status)
         
     except HTTPException as http_exc:
         # Log failed activity for HTTP exceptions

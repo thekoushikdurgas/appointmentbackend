@@ -26,10 +26,7 @@ class BulkMailVerifierService:
     async def _ensure_authenticated(self) -> None:
         """Ensure we have a valid access token, login if needed."""
         if not self._access_token:
-            print(f"[BULKMAILVERIFIER] No access token found, logging in...")
             await self.login()
-        else:
-            print(f"[BULKMAILVERIFIER] Using existing access token")
 
     def _map_verification_status(self, data: Dict) -> str:
         """
@@ -50,19 +47,13 @@ class BulkMailVerifierService:
         catch_all = data.get("catch_all") or data.get("catchAll") or data.get("CatchAll") or "False"
         catch_all_str = str(catch_all).lower()
         
-        print(f"[MAP_STATUS] Mapping status: result={api_result}, status={api_status}, error={error}, catch_all={catch_all_str}")
-        
         if catch_all_str in ("true", "1", "yes"):
-            print(f"[MAP_STATUS] Mapped to: catchall")
             return "catchall"
         elif error or api_status_value == "invalid":
-            print(f"[MAP_STATUS] Mapped to: invalid")
             return "invalid"
         elif api_status_value == "valid":
-            print(f"[MAP_STATUS] Mapped to: valid")
             return "valid"
         else:
-            print(f"[MAP_STATUS] Mapped to: unknown")
             return "unknown"
 
     async def login(self) -> Dict[str, str]:
@@ -75,13 +66,11 @@ class BulkMailVerifierService:
         Raises:
             HTTPException: If authentication fails
         """
-        print(f"[BULKMAILVERIFIER] Attempting login to {self.base_url}/api/token/")
         if not self.email or not self.password:
             error_msg = (
                 "BulkMailVerifier credentials not configured. "
                 "Please set BULKMAILVERIFIER_EMAIL and BULKMAILVERIFIER_PASSWORD environment variables."
             )
-            print(f"[BULKMAILVERIFIER] ✗ Login failed: credentials not configured")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=error_msg,
@@ -95,7 +84,6 @@ class BulkMailVerifierService:
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                print(f"[BULKMAILVERIFIER] Sending login request to {url}")
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
                 data = response.json()
@@ -104,13 +92,11 @@ class BulkMailVerifierService:
                 self._refresh_token = data.get("refresh")
                 
                 if not self._access_token:
-                    print(f"[BULKMAILVERIFIER] ✗ Login failed: No access token in response")
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail="Failed to get access token from BulkMailVerifier",
                     )
                 
-                print(f"[BULKMAILVERIFIER] ✓ Login successful, access token obtained (length: {len(self._access_token) if self._access_token else 0})")
                 return {"access": self._access_token, "refresh": self._refresh_token}
                 
         except httpx.HTTPStatusError as e:
@@ -141,7 +127,6 @@ class BulkMailVerifierService:
         Raises:
             HTTPException: If verification fails
         """
-        print(f"[BULKMAILVERIFIER] Verifying single email: {email}")
         await self._ensure_authenticated()
         
         url = f"{self.base_url}/api/email/verify/"
@@ -155,26 +140,21 @@ class BulkMailVerifierService:
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                print(f"[BULKMAILVERIFIER] Sending verification request to {url} for {email}")
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 data = response.json()
-                print(f"[BULKMAILVERIFIER] Received response for {email}: {data}")
                 
                 mapped_status = self._map_verification_status(data)
                 result = data.copy()
                 result["mapped_status"] = mapped_status
-                print(f"[BULKMAILVERIFIER] Final result for {email}: mapped_status={mapped_status}")
                 return result
                 
         except httpx.HTTPStatusError as e:
-            print(f"[BULKMAILVERIFIER] ✗ HTTP error verifying {email}: {e.response.status_code} - {e.response.text}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"BulkMailVerifier verification failed: {e.response.text}",
             ) from e
         except Exception as e:
-            print(f"[BULKMAILVERIFIER] ✗ Exception verifying {email}: {type(e).__name__}: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to verify email: {str(e)}",

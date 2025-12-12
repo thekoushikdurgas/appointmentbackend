@@ -44,6 +44,14 @@ class TruelistService:
     def _map_status(email_state: str | None, email_sub_state: str | None) -> str:
         """
         Map Truelist email_state/email_sub_state to normalized status.
+        
+        Truelist states:
+        - "ok" -> VALID
+        - "invalid" -> INVALID
+        - "risky" with "accept_all" -> CATCHALL (catchall domain)
+        - "risky" with other sub_states -> UNKNOWN (needs review)
+        - "unknown" or "pending" -> UNKNOWN
+        - "disposable" or "role" in sub_state -> INVALID
         """
         state = (email_state or "").lower()
         sub_state = (email_sub_state or "").lower()
@@ -52,10 +60,14 @@ class TruelistService:
             return EmailVerificationStatus.VALID.value
         if "invalid" in state:
             return EmailVerificationStatus.INVALID.value
-        if "unknown" in state or "pending" in state:
-            return EmailVerificationStatus.UNKNOWN.value
+        # Handle catchall: risky state with accept_all sub_state
+        if state == "risky" and "accept_all" in sub_state:
+            return EmailVerificationStatus.CATCHALL.value
         if "disposable" in sub_state or "role" in sub_state:
             return EmailVerificationStatus.INVALID.value
+        if "unknown" in state or "pending" in state:
+            return EmailVerificationStatus.UNKNOWN.value
+        # Default risky or other states to UNKNOWN
         return EmailVerificationStatus.UNKNOWN.value
 
     async def verify_single_email(self, email: str) -> Dict[str, Any]:

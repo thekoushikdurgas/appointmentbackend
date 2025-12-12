@@ -853,6 +853,79 @@ class ExportService:
             temp_file_path.rename(file_path)
             return str(file_path)
 
+    async def generate_bulk_verifier_csv(
+        self,
+        session: AsyncSession,
+        export_id: str,
+        csv_rows: list[dict],
+        csv_headers: list[str],
+    ) -> str:
+        """
+        Generate CSV file for bulk email verifier with original columns + verification status.
+        
+        Args:
+            session: Database session
+            export_id: Export ID
+            csv_rows: List of dictionaries with CSV row data including verification_status
+            csv_headers: Original CSV headers with verification_status added
+            
+        Returns:
+            S3 key or local file path to the generated CSV file
+        """
+        # Generate CSV in memory
+        csv_buffer = io.StringIO()
+        
+        # Use provided CSV headers as fieldnames
+        fieldnames = csv_headers
+        
+        # Write CSV
+        writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        rows_written = 0
+        rows_failed = 0
+        for row in csv_rows:
+            try:
+                # Ensure all fieldnames are present in row
+                row_data = {name: row.get(name, "") for name in fieldnames}
+                writer.writerow(row_data)
+                rows_written += 1
+            except Exception:
+                rows_failed += 1
+                # Continue with next row even if one fails
+                continue
+        
+        # Get CSV content as bytes
+        csv_content = csv_buffer.getvalue().encode("utf-8")
+        csv_buffer.close()
+        
+        # Upload to S3 if configured, otherwise save locally
+        if settings.S3_BUCKET_NAME:
+            try:
+                s3_key = f"{self.s3_service.exports_prefix}{export_id}.csv"
+                await self.s3_service.upload_file(
+                    file_content=csv_content,
+                    s3_key=s3_key,
+                    content_type="text/csv",
+                )
+                return s3_key
+            except Exception:
+                # Fallback to local storage
+                exports_dir = Path(settings.UPLOAD_DIR) / "exports"
+                exports_dir.mkdir(parents=True, exist_ok=True)
+                file_path = exports_dir / f"{export_id}.csv"
+                with file_path.open("wb") as f:
+                    f.write(csv_content)
+                return str(file_path)
+        else:
+            # Save locally
+            exports_dir = Path(settings.UPLOAD_DIR) / "exports"
+            exports_dir.mkdir(parents=True, exist_ok=True)
+            file_path = exports_dir / f"{export_id}.csv"
+            with file_path.open("wb") as f:
+                f.write(csv_content)
+            return str(file_path)
+
     async def generate_linkedin_export_csv(
         self,
         session: AsyncSession,
@@ -860,6 +933,8 @@ class ExportService:
         contact_uuids: list[str],
         company_uuids: list[str],
         unmatched_urls: list[str],
+        csv_rows: Optional[list[dict]] = None,
+        csv_headers: Optional[list[str]] = None,
     ) -> str:
         """
         Generate combined CSV with contacts, companies, and unmatched URLs.
@@ -868,12 +943,17 @@ class ExportService:
         contacts, companies, and not_found entries. Includes all contact and
         company fields, with empty values for fields that don't apply.
         
+        If csv_rows and csv_headers are provided, preserves original CSV structure
+        while enriching with LinkedIn data.
+        
         Args:
             session: Database session
             export_id: Export record ID
             contact_uuids: List of contact UUIDs to export
             company_uuids: List of company UUIDs to export
             unmatched_urls: List of LinkedIn URLs that didn't match anything
+            csv_rows: Optional pre-processed CSV rows with LinkedIn data (preserves original columns)
+            csv_headers: Optional original CSV headers (preserves column order)
             
         Returns:
             S3 key or local file path to the generated CSV file
@@ -881,8 +961,23 @@ class ExportService:
         # Generate CSV in memory
         csv_buffer = io.StringIO()
         
-        # Define CSV fieldnames - combined structure with record_type and linkedin_url
-        fieldnames = [
+        # If CSV context is provided, use it; otherwise use standard fieldnames
+        if csv_rows is not None and csv_headers is not None:
+            # Use original CSV headers as primary fieldnames
+            fieldnames = list(csv_headers)
+            # Ensure required fields are present
+            if "record_type" not in fieldnames:
+                fieldnames.insert(0, "record_type")
+            if "linkedin_url" not in fieldnames:
+                # Insert linkedin_url after record_type or at the beginning
+                if "record_type" in fieldnames:
+                    idx = fieldnames.index("record_type") + 1
+                    fieldnames.insert(idx, "linkedin_url")
+                else:
+                    fieldnames.insert(0, "linkedin_url")
+        else:
+            # Define CSV fieldnames - combined structure with record_type and linkedin_url
+            fieldnames = [
             "record_type",  # "contact", "company", or "not_found"
             "linkedin_url",  # LinkedIn URL (for not_found rows and reference)
             # Contact fields
@@ -965,82 +1060,92 @@ class ExportService:
         writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
         writer.writeheader()
         
-        # Write contact rows
-        for contact_uuid in contact_uuids:
-            try:
-                result = await self.contact_repo.get_contact_with_relations(
-                    session, contact_uuid
-                )
-                
-                if not result:
+        # If CSV context is provided, write pre-processed rows
+        if csv_rows is not None:
+            for row in csv_rows:
+                try:
+                    # Ensure all fieldnames are present in row
+                    row_data = {name: row.get(name, "") for name in fieldnames}
+                    writer.writerow(row_data)
+                except Exception:
                     continue
-                
-                contact, company, contact_meta, company_meta = result
-                
-                # Get LinkedIn URL from metadata
-                linkedin_url = get_value(contact_meta.linkedin_url if contact_meta else None)
-                
-                row = {
-                    "record_type": "contact",
-                    "linkedin_url": linkedin_url,
-                    # Contact fields
-                    "contact_uuid": contact.uuid or "",
-                    "contact_first_name": contact.first_name or "",
-                    "contact_last_name": contact.last_name or "",
-                    "contact_company_id": contact.company_id or "",
-                    "contact_email": contact.email or "",
-                    "contact_title": contact.title or "",
-                    "contact_departments": format_array(contact.departments),
-                    "contact_mobile_phone": contact.mobile_phone or "",
-                    "contact_email_status": contact.email_status or "",
-                    "contact_text_search": contact.text_search or "",
-                    "contact_seniority": contact.seniority or "",
-                    "contact_created_at": format_datetime(contact.created_at),
-                    "contact_updated_at": format_datetime(contact.updated_at),
-                    # Contact Metadata fields
-                    "contact_metadata_linkedin_url": linkedin_url,
-                    "contact_metadata_facebook_url": get_value(contact_meta.facebook_url if contact_meta else None),
-                    "contact_metadata_twitter_url": get_value(contact_meta.twitter_url if contact_meta else None),
-                    "contact_metadata_website": get_value(contact_meta.website if contact_meta else None),
-                    "contact_metadata_work_direct_phone": get_value(contact_meta.work_direct_phone if contact_meta else None),
-                    "contact_metadata_home_phone": get_value(contact_meta.home_phone if contact_meta else None),
-                    "contact_metadata_city": get_value(contact_meta.city if contact_meta else None),
-                    "contact_metadata_state": get_value(contact_meta.state if contact_meta else None),
-                    "contact_metadata_country": get_value(contact_meta.country if contact_meta else None),
-                    "contact_metadata_other_phone": get_value(contact_meta.other_phone if contact_meta else None),
-                    "contact_metadata_stage": get_value(contact_meta.stage if contact_meta else None),
-                    # Company fields (from related company)
-                    "company_uuid": company.uuid if company else "",
-                    "company_name": company.name if company else "",
-                    "company_employees_count": str(company.employees_count) if company and company.employees_count else "",
-                    "company_industries": format_array(company.industries if company else None),
-                    "company_keywords": format_array(company.keywords if company else None),
-                    "company_address": company.address if company else "",
-                    "company_annual_revenue": str(company.annual_revenue) if company and company.annual_revenue else "",
-                    "company_total_funding": str(company.total_funding) if company and company.total_funding else "",
-                    "company_technologies": format_array(company.technologies if company else None),
-                    "company_text_search": company.text_search if company else "",
-                    "company_created_at": format_datetime(company.created_at if company else None),
-                    "company_updated_at": format_datetime(company.updated_at if company else None),
-                    # Company Metadata fields
-                    "company_metadata_linkedin_url": get_value(company_meta.linkedin_url if company_meta else None),
-                    "company_metadata_facebook_url": get_value(company_meta.facebook_url if company_meta else None),
-                    "company_metadata_twitter_url": get_value(company_meta.twitter_url if company_meta else None),
-                    "company_metadata_website": get_value(company_meta.website if company_meta else None),
-                    "company_metadata_company_name_for_emails": get_value(company_meta.company_name_for_emails if company_meta else None),
-                    "company_metadata_phone_number": get_value(company_meta.phone_number if company_meta else None),
-                    "company_metadata_latest_funding": get_value(company_meta.latest_funding if company_meta else None),
-                    "company_metadata_latest_funding_amount": str(company_meta.latest_funding_amount) if company_meta and company_meta.latest_funding_amount else "",
-                    "company_metadata_last_raised_at": get_value(company_meta.last_raised_at if company_meta else None),
-                    "company_metadata_city": get_value(company_meta.city if company_meta else None),
-                    "company_metadata_state": get_value(company_meta.state if company_meta else None),
-                    "company_metadata_country": get_value(company_meta.country if company_meta else None),
-                }
-                
-                writer.writerow(row)
-                
-            except Exception:
-                continue
+        else:
+            # Standard processing: Write contact rows
+            for contact_uuid in contact_uuids:
+                try:
+                    result = await self.contact_repo.get_contact_with_relations(
+                        session, contact_uuid
+                    )
+                    
+                    if not result:
+                        continue
+                    
+                    contact, company, contact_meta, company_meta = result
+                    
+                    # Get LinkedIn URL from metadata
+                    linkedin_url = get_value(contact_meta.linkedin_url if contact_meta else None)
+                    
+                    row = {
+                        "record_type": "contact",
+                        "linkedin_url": linkedin_url,
+                        # Contact fields
+                        "contact_uuid": contact.uuid or "",
+                        "contact_first_name": contact.first_name or "",
+                        "contact_last_name": contact.last_name or "",
+                        "contact_company_id": contact.company_id or "",
+                        "contact_email": contact.email or "",
+                        "contact_title": contact.title or "",
+                        "contact_departments": format_array(contact.departments),
+                        "contact_mobile_phone": contact.mobile_phone or "",
+                        "contact_email_status": contact.email_status or "",
+                        "contact_text_search": contact.text_search or "",
+                        "contact_seniority": contact.seniority or "",
+                        "contact_created_at": format_datetime(contact.created_at),
+                        "contact_updated_at": format_datetime(contact.updated_at),
+                        # Contact Metadata fields
+                        "contact_metadata_linkedin_url": linkedin_url,
+                        "contact_metadata_facebook_url": get_value(contact_meta.facebook_url if contact_meta else None),
+                        "contact_metadata_twitter_url": get_value(contact_meta.twitter_url if contact_meta else None),
+                        "contact_metadata_website": get_value(contact_meta.website if contact_meta else None),
+                        "contact_metadata_work_direct_phone": get_value(contact_meta.work_direct_phone if contact_meta else None),
+                        "contact_metadata_home_phone": get_value(contact_meta.home_phone if contact_meta else None),
+                        "contact_metadata_city": get_value(contact_meta.city if contact_meta else None),
+                        "contact_metadata_state": get_value(contact_meta.state if contact_meta else None),
+                        "contact_metadata_country": get_value(contact_meta.country if contact_meta else None),
+                        "contact_metadata_other_phone": get_value(contact_meta.other_phone if contact_meta else None),
+                        "contact_metadata_stage": get_value(contact_meta.stage if contact_meta else None),
+                        # Company fields (from related company)
+                        "company_uuid": company.uuid if company else "",
+                        "company_name": company.name if company else "",
+                        "company_employees_count": str(company.employees_count) if company and company.employees_count else "",
+                        "company_industries": format_array(company.industries if company else None),
+                        "company_keywords": format_array(company.keywords if company else None),
+                        "company_address": company.address if company else "",
+                        "company_annual_revenue": str(company.annual_revenue) if company and company.annual_revenue else "",
+                        "company_total_funding": str(company.total_funding) if company and company.total_funding else "",
+                        "company_technologies": format_array(company.technologies if company else None),
+                        "company_text_search": company.text_search if company else "",
+                        "company_created_at": format_datetime(company.created_at if company else None),
+                        "company_updated_at": format_datetime(company.updated_at if company else None),
+                        # Company Metadata fields
+                        "company_metadata_linkedin_url": get_value(company_meta.linkedin_url if company_meta else None),
+                        "company_metadata_facebook_url": get_value(company_meta.facebook_url if company_meta else None),
+                        "company_metadata_twitter_url": get_value(company_meta.twitter_url if company_meta else None),
+                        "company_metadata_website": get_value(company_meta.website if company_meta else None),
+                        "company_metadata_company_name_for_emails": get_value(company_meta.company_name_for_emails if company_meta else None),
+                        "company_metadata_phone_number": get_value(company_meta.phone_number if company_meta else None),
+                        "company_metadata_latest_funding": get_value(company_meta.latest_funding if company_meta else None),
+                        "company_metadata_latest_funding_amount": str(company_meta.latest_funding_amount) if company_meta and company_meta.latest_funding_amount else "",
+                        "company_metadata_last_raised_at": get_value(company_meta.last_raised_at if company_meta else None),
+                        "company_metadata_city": get_value(company_meta.city if company_meta else None),
+                        "company_metadata_state": get_value(company_meta.state if company_meta else None),
+                        "company_metadata_country": get_value(company_meta.country if company_meta else None),
+                    }
+                    
+                    writer.writerow(row)
+                    
+                except Exception:
+                    continue
         
         # Batch fetch all companies and their metadata for company rows
         company_uuids_set = set(company_uuids)
@@ -1128,19 +1233,19 @@ class ExportService:
             except Exception:
                 continue
         
-        # Write not_found rows
-        for url in unmatched_urls:
-            row_data = {
-                "record_type": "not_found",
-                "linkedin_url": url,
-                # All other fields empty
-            }
-            # Fill all other fields with empty strings
-            for field in fieldnames:
-                if field not in row_data:
-                    row_data[field] = ""
-            
-            writer.writerow(row_data)
+            # Write not_found rows (only if not using CSV context)
+            for url in unmatched_urls:
+                row_data = {
+                    "record_type": "not_found",
+                    "linkedin_url": url,
+                    # All other fields empty
+                }
+                # Fill all other fields with empty strings
+                for field in fieldnames:
+                    if field not in row_data:
+                        row_data[field] = ""
+                
+                writer.writerow(row_data)
         
         # Get CSV content as bytes
         csv_content = csv_buffer.getvalue().encode("utf-8")

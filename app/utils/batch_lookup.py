@@ -6,7 +6,7 @@ by fetching related entities in separate queries using foreign key lookups.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,6 +48,39 @@ async def batch_fetch_companies_by_uuids(
         
         for company in companies:
             result_dict[company.uuid] = company
+    
+    return result_dict
+
+
+async def batch_fetch_contacts_by_uuids(
+    session: AsyncSession,
+    contact_uuids: set[str],
+) -> dict[str, Contact]:
+    """
+    Batch fetch contacts by their UUIDs.
+    
+    Args:
+        session: Database session
+        contact_uuids: Set of contact UUIDs to fetch
+        
+    Returns:
+        Dictionary mapping contact UUID to Contact object
+    """
+    if not contact_uuids:
+        return {}
+    
+    # Split into batches to avoid query size limits
+    uuid_list = list(contact_uuids)
+    result_dict: dict[str, Contact] = {}
+    
+    for i in range(0, len(uuid_list), BATCH_SIZE):
+        batch = uuid_list[i:i + BATCH_SIZE]
+        stmt = select(Contact).where(Contact.uuid.in_(batch))
+        result = await session.execute(stmt)
+        contacts = result.scalars().all()
+        
+        for contact in contacts:
+            result_dict[contact.uuid] = contact
     
     return result_dict
 
@@ -179,4 +212,74 @@ async def fetch_company_metadata_by_uuid(
     result = await session.execute(stmt)
     metadata = result.scalar_one_or_none()
     return metadata
+
+
+async def fetch_companies_and_metadata_by_uuids(
+    session: AsyncSession,
+    company_uuids: list[str],
+) -> Dict[str, Tuple[Company, Optional[CompanyMetadata]]]:
+    """
+    Fetch companies and their metadata by UUIDs in batch.
+
+    Args:
+        session: Database session
+        company_uuids: List of company UUIDs to fetch
+
+    Returns:
+        Dict mapping company UUID to tuple of (Company, CompanyMetadata|None)
+    """
+    if not company_uuids:
+        return {}
+
+    uuid_set = set(company_uuids)
+
+    # Fetch companies and metadata separately, then merge
+    companies = await batch_fetch_companies_by_uuids(session, uuid_set)
+    metadata = await batch_fetch_company_metadata_by_uuids(session, uuid_set)
+
+    combined: Dict[str, Tuple[Company, Optional[CompanyMetadata]]] = {}
+    for uuid, company in companies.items():
+        combined[uuid] = (company, metadata.get(uuid))
+
+    # Ensure we return entries even if only metadata exists (unlikely but safe)
+    for uuid, meta in metadata.items():
+        if uuid not in combined:
+            combined[uuid] = (None, meta)  # type: ignore[assignment]
+
+    return combined
+
+
+async def fetch_contacts_and_metadata_by_uuids(
+    session: AsyncSession,
+    contact_uuids: list[str],
+) -> Dict[str, Tuple[Contact, Optional[ContactMetadata]]]:
+    """
+    Fetch contacts and their metadata by UUIDs in batch.
+
+    Args:
+        session: Database session
+        contact_uuids: List of contact UUIDs to fetch
+
+    Returns:
+        Dict mapping contact UUID to tuple of (Contact, ContactMetadata|None)
+    """
+    if not contact_uuids:
+        return {}
+
+    uuid_set = set(contact_uuids)
+
+    # Fetch contacts and metadata separately, then merge
+    contacts = await batch_fetch_contacts_by_uuids(session, uuid_set)
+    metadata = await batch_fetch_contact_metadata_by_uuids(session, uuid_set)
+
+    combined: Dict[str, Tuple[Contact, Optional[ContactMetadata]]] = {}
+    for uuid, contact in contacts.items():
+        combined[uuid] = (contact, metadata.get(uuid))
+
+    # Ensure we return entries even if only metadata exists (unlikely but safe)
+    for uuid, meta in metadata.items():
+        if uuid not in combined:
+            combined[uuid] = (None, meta)  # type: ignore[assignment]
+
+    return combined
 

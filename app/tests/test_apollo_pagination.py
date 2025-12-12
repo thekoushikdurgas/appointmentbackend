@@ -104,7 +104,6 @@ async def test_apollo_contacts_pagination_using_next_url(async_client, db_sessio
     
     # Extract next URL
     next_url = data1["next"]
-    print(f"\nNext URL: {next_url}")
     
     # Parse the next URL to extract query parameters
     from urllib.parse import urlparse, parse_qs
@@ -119,8 +118,6 @@ async def test_apollo_contacts_pagination_using_next_url(async_client, db_sessio
         request_params["offset"] = int(next_params["offset"][0])
     if "cursor" in next_params:
         request_params["cursor"] = next_params["cursor"][0]
-    
-    print(f"Extracted params: {request_params}")
     
     # Follow the next URL
     response2 = await async_client.post(

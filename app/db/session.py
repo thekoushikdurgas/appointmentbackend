@@ -255,245 +255,26 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     Note: The session is automatically closed by the async context manager.
     We should not explicitly close it in a finally block to avoid race conditions.
     """
-    #region agent log
-    import json, time
-    conn_start = time.perf_counter()
-    with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-        f.write(
-            json.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "initial",
-                    "hypothesisId": "H5-conn",
-                    "location": "session.py:get_db",
-                    "message": "conn_acquisition_start",
-                    "data": {},
-                    "timestamp": int(time.time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    #endregion agent log
     # Use context manager to ensure proper connection pool management
     # The context manager ensures connections are returned to the pool
-    #region agent log
-    session_enter_start = time.perf_counter()
-    with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-        f.write(
-            json.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "initial",
-                    "hypothesisId": "H1-H5",
-                    "location": "session.py:get_db:session_enter",
-                    "message": "session_context_enter",
-                    "data": {},
-                    "timestamp": int(time.time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    #endregion agent log
     async with AsyncSessionLocal() as session:
-        #region agent log
-        session_enter_end = time.perf_counter()
-        with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "initial",
-                        "hypothesisId": "H1-H5",
-                        "location": "session.py:get_db:session_acquired",
-                        "message": "session_context_acquired",
-                        "data": {"elapsed_ms": (session_enter_end - session_enter_start) * 1000},
-                        "timestamp": int(time.time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        #endregion agent log
-        #region agent log
-        conn_end = time.perf_counter()
-        with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "initial",
-                        "hypothesisId": "H5-conn",
-                        "location": "session.py:get_db",
-                        "message": "conn_acquired",
-                        "data": {"elapsed_ms": (conn_end - conn_start) * 1000},
-                        "timestamp": int(time.time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        #endregion agent log
         try:
-            #region agent log
-            with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "initial",
-                            "hypothesisId": "H1,H2",
-                            "location": "session.py:get_db:yield",
-                            "message": "yielding_session",
-                            "data": {},
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-            #endregion agent log
             yield session
-            #region agent log
-            with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "initial",
-                            "hypothesisId": "H1",
-                            "location": "session.py:get_db:commit_start",
-                            "message": "commit_start",
-                            "data": {},
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-            #endregion agent log
             # Commit transaction on successful completion
             await session.commit()
-            #region agent log
-            with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "initial",
-                            "hypothesisId": "H1",
-                            "location": "session.py:get_db:commit_complete",
-                            "message": "commit_complete",
-                            "data": {},
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-            #endregion agent log
         except Exception as exc:
-            #region agent log
-            from fastapi import HTTPException
-            is_http_exception = isinstance(exc, HTTPException)
-            with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "initial",
-                            "hypothesisId": "H2",
-                            "location": "session.py:get_db:exception_caught",
-                            "message": "exception_caught",
-                            "data": {
-                                "exception_type": type(exc).__name__,
-                                "exception_msg": str(exc)[:200],
-                                "is_http_exception": is_http_exception,
-                            },
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-            #endregion agent log
             # Always rollback on exception to ensure session is in clean state
             # This prevents IllegalStateChangeError when session context manager tries to close
             # Even for HTTPException, we need to clean up the transaction state
-            #region agent log
-            with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "initial",
-                            "hypothesisId": "H2",
-                            "location": "session.py:get_db:rollback_start",
-                            "message": "rollback_start",
-                            "data": {"is_http_exception": is_http_exception},
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-            #endregion agent log
             # Rollback transaction on exception to ensure clean state
             # Handle cases where session is already in an invalid/rolled-back state
             try:
                 await session.rollback()
-                #region agent log
-                with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "initial",
-                                "hypothesisId": "H2",
-                                "location": "session.py:get_db:rollback_complete",
-                                "message": "rollback_complete",
-                                "data": {},
-                                "timestamp": int(time.time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-                #endregion agent log
             except Exception as rollback_exc:
                 # Catch all exceptions during rollback to prevent cascading errors
                 # Session might already be in an invalid state
-                #region agent log
-                with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "initial",
-                                "hypothesisId": "H2",
-                                "location": "session.py:get_db:rollback_failed",
-                                "message": "rollback_failed",
-                                "data": {
-                                    "rollback_exception_type": type(rollback_exc).__name__,
-                                    "rollback_exception_msg": str(rollback_exc)[:200],
-                                },
-                                "timestamp": int(time.time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-                #endregion agent log
                 # Don't re-raise rollback errors - the original exception is more important
                 pass
             # Re-raise to propagate the error
             raise
-    #region agent log
-    session_exit_start = time.perf_counter()
-    with open("d:\\code\\ayan\\contact360\\.cursor\\debug.log", "a", encoding="utf-8") as f:
-        f.write(
-            json.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "initial",
-                    "hypothesisId": "H2,H4",
-                    "location": "session.py:get_db:session_exit_start",
-                    "message": "session_exit_start",
-                    "data": {},
-                    "timestamp": int(time.time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    #endregion agent log
 
