@@ -39,7 +39,7 @@ Complete API documentation for contact and company export endpoints, including C
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All export endpoints are under `/api/v3/exports/`
@@ -761,7 +761,7 @@ List all exports for the current user. Returns all exports created by the authen
       "status": "completed",
       "created_at": "2024-12-19T10:30:00Z",
       "expires_at": "2024-12-20T10:30:00Z",
-      "download_url": "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=..."
+      "download_url": "http://34.229.94.175:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=..."
     },
     {
       "export_id": "f4b8c3f5-2222-4f9b-bbbb-123456789abc",
@@ -777,7 +777,7 @@ List all exports for the current user. Returns all exports created by the authen
       "status": "completed",
       "created_at": "2024-12-18T15:20:00Z",
       "expires_at": "2024-12-19T15:20:00Z",
-      "download_url": "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=..."
+      "download_url": "http://34.229.94.175:8000/api/v3/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=..."
     }
   ],
   "total": 2
@@ -927,7 +927,7 @@ The export status field can have the following values:
 **Step 1: Create Contact Export**
 
 ```bash
-curl -X POST "http://54.87.173.234:8000/api/v3/exports/contacts/export" \
+curl -X POST "http://34.229.94.175:8000/api/v3/exports/contacts/export" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -953,7 +953,7 @@ curl -X POST "http://54.87.173.234:8000/api/v3/exports/contacts/export" \
 **Step 2: Poll for Status**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/status" \
+curl -X GET "http://34.229.94.175:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/status" \
   -H "Authorization: Bearer <access_token>"
 ```
 
@@ -980,7 +980,7 @@ curl -X GET "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-12
   "progress_percentage": 100.0,
   "estimated_time": 0,
   "error_message": null,
-  "download_url": "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "download_url": "http://34.229.94.175:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "expires_at": "2024-12-20T10:30:00Z"
 }
 ```
@@ -988,7 +988,7 @@ curl -X GET "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-12
 **Step 3: Download Export**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+curl -X GET "http://34.229.94.175:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: text/csv" \
   -o export.csv
@@ -1001,7 +1001,7 @@ The CSV file will be downloaded to `export.csv`.
 **Step 1: Create Company Export**
 
 ```bash
-curl -X POST "http://54.87.173.234:8000/api/v3/exports/companies/export" \
+curl -X POST "http://34.229.94.175:8000/api/v3/exports/companies/export" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1027,14 +1027,14 @@ curl -X POST "http://54.87.173.234:8000/api/v3/exports/companies/export" \
 **Step 2: Poll for Status**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/status" \
+curl -X GET "http://34.229.94.175:8000/api/v3/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/status" \
   -H "Authorization: Bearer <access_token>"
 ```
 
 **Step 3: Download Export**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+curl -X GET "http://34.229.94.175:8000/api/v3/exports/f4b8c3f5-2222-4f9b-bbbb-123456789abc/download?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: text/csv" \
   -o company_export.csv
@@ -1045,7 +1045,7 @@ curl -X GET "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-2222-4f9b-bbbb-12
 **List All Exports**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v3/exports/" \
+curl -X GET "http://34.229.94.175:8000/api/v3/exports/" \
   -H "Authorization: Bearer <access_token>"
 ```
 
@@ -1064,7 +1064,7 @@ curl -X GET "http://54.87.173.234:8000/api/v3/exports/" \
       "status": "completed",
       "created_at": "2024-12-19T10:30:00Z",
       "expires_at": "2024-12-20T10:30:00Z",
-      "download_url": "http://54.87.173.234:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=..."
+      "download_url": "http://34.229.94.175:8000/api/v3/exports/f4b8c3f5-1111-4f9b-aaaa-123456789abc/download?token=..."
     }
   ],
   "total": 1

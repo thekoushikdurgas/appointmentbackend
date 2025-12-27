@@ -45,7 +45,7 @@ Complete API documentation for user authentication and profile management endpoi
 ## Base URL
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** 
@@ -847,13 +847,13 @@ avatar: [image file]
 
 ```json
 {
-  "avatar_url": "http://54.87.173.234:8000/media/avatars/123e4567-e89b-12d3-a456-426614174000_20240115T120000123456.jpg",
+  "avatar_url": "http://34.229.94.175:8000/media/avatars/123e4567-e89b-12d3-a456-426614174000_20240115T120000123456.jpg",
   "profile": {
     "uuid": "123e4567-e89b-12d3-a456-426614174000",
     "name": "John Doe",
     "email": "user@example.com",
     "role": "FreeUser",
-    "avatar_url": "http://54.87.173.234:8000/media/avatars/123e4567-e89b-12d3-a456-426614174000_20240115T120000123456.jpg",
+    "avatar_url": "http://34.229.94.175:8000/media/avatars/123e4567-e89b-12d3-a456-426614174000_20240115T120000123456.jpg",
     "is_active": true,
     "job_title": "Software Engineer",
     "bio": "Passionate developer",
@@ -1704,7 +1704,7 @@ List Sales Navigator scraping records for the authenticated user. Returns a pagi
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v1/users/sales-navigator/list?limit=50&offset=0" \
+curl -X GET "http://34.229.94.175:8000/api/v1/users/sales-navigator/list?limit=50&offset=0" \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: application/json"
 ```
@@ -1793,4 +1793,4 @@ Returned when the user does not have the required role:
 - Password hashing uses bcrypt with automatic salt generation
 - Password length is limited to 72 characters due to bcrypt's internal limitation
 - FastAPI automatically validates request data using Pydantic schemas, returning 422 status for validation errors
-- The base URL in examples (`http://54.87.173.234:8000`) is environment-specific and should be replaced with your actual API base URL
+- The base URL in examples (`http://34.229.94.175:8000`) is environment-specific and should be replaced with your actual API base URL

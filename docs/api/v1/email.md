@@ -36,7 +36,7 @@ Complete API documentation for email finder operations, including searching for 
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All email finder endpoints are under `/api/v3/email/`
@@ -1542,7 +1542,7 @@ Content-Type: application/json
   "invalid_count": 1,
   "catchall_count": 1,
   "unknown_count": 0,
-  "download_url": "http://54.87.173.234:8000/api/v2/exports/abc123-def456-ghi789/download?token=...",
+  "download_url": "http://34.229.94.175:8000/api/v2/exports/abc123-def456-ghi789/download?token=...",
   "export_id": "abc123-def456-ghi789",
   "expires_at": "2024-12-21T10:30:00Z"
 }

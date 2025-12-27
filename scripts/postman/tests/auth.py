@@ -69,7 +69,9 @@ class AuthHandler:
         
         # If login fails, try to register the user
         try:
-            url = f"{self.base_url}/api/v1/auth/register/"
+            # Normalize base_url (remove trailing slash)
+            base_url = self.base_url.rstrip('/')
+            url = f"{base_url}/api/v1/auth/register/"
             # Generate unique email if using default
             email = self.config.email
             if email == "test@example.com":
@@ -86,6 +88,7 @@ class AuthHandler:
             response = requests.post(
                 url,
                 json=payload,
+                headers={"Origin": "localhost:3000"},
                 timeout=self.config.timeout
             )
             
@@ -106,7 +109,9 @@ class AuthHandler:
             True if login successful, False otherwise
         """
         try:
-            url = f"{self.base_url}/api/v1/auth/login/"
+            # Normalize base_url (remove trailing slash)
+            base_url = self.base_url.rstrip('/')
+            url = f"{base_url}/api/v1/auth/login/"
             payload = {
                 "email": self.config.email,
                 "password": self.config.password,
@@ -116,6 +121,7 @@ class AuthHandler:
             response = requests.post(
                 url,
                 json=payload,
+                headers={"Origin": "localhost:3000"},
                 timeout=self.config.timeout
             )
             
@@ -154,7 +160,9 @@ class AuthHandler:
         self._last_refresh_attempt = current_time
         
         try:
-            url = f"{self.base_url}/api/v1/auth/refresh/"
+            # Normalize base_url (remove trailing slash)
+            base_url = self.base_url.rstrip('/')
+            url = f"{base_url}/api/v1/auth/refresh/"
             payload = {
                 "refresh_token": self.refresh_token
             }
@@ -162,6 +170,7 @@ class AuthHandler:
             response = requests.post(
                 url,
                 json=payload,
+                headers={"Origin": "localhost:3000"},
                 timeout=self.config.timeout
             )
             
@@ -213,7 +222,9 @@ class AuthHandler:
         Returns:
             Dictionary of headers
         """
-        headers = {}
+        headers = {
+            "Origin": "localhost:3000",
+        }
         
         # Use admin token if required and available
         if requires_admin and self._admin_authenticated and self.admin_access_token:
@@ -282,7 +293,9 @@ class AuthHandler:
             return False
         
         try:
-            url = f"{self.base_url}/api/v1/auth/login/"
+            # Normalize base_url (remove trailing slash)
+            base_url = self.base_url.rstrip('/')
+            url = f"{base_url}/api/v1/auth/login/"
             payload = {
                 "email": self.config.admin_email,
                 "password": self.config.admin_password,
@@ -292,6 +305,7 @@ class AuthHandler:
             response = requests.post(
                 url,
                 json=payload,
+                headers={"Origin": "localhost:3000"},
                 timeout=self.config.timeout
             )
             

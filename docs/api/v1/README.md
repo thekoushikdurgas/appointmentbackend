@@ -87,7 +87,7 @@ The v1 documentation folder contains documentation for both legacy v1 endpoints 
 
 ### Base URL
 ```
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 ### Authentication

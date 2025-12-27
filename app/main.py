@@ -1,5 +1,7 @@
 """FastAPI application entry point and middleware configuration."""
 
+import utils.transport
+import utils.session
 import json
 import time
 import traceback
@@ -152,6 +154,15 @@ async def lifespan(app: FastAPI):
             logger.debug("Cache warming completed")
         except Exception as exc:
             log_error("Cache warming failed", exc, "app.main")
+    
+    # Log security configuration
+    if settings.TRUSTED_HOSTS:
+        logger.info(
+            "Trusted hosts configured",
+            extra={"context": {"trusted_hosts": settings.TRUSTED_HOSTS, "count": len(settings.TRUSTED_HOSTS)}}
+        )
+    else:
+        logger.warning("No trusted hosts configured - all hosts will be accepted")
     
     logger.info("Application startup complete")
     

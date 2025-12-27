@@ -24,7 +24,7 @@ Complete API documentation for analytics and performance monitoring endpoints, i
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All analytics endpoints are under `/api/v2/analytics/`
@@ -142,7 +142,7 @@ Submit a performance metric for analytics tracking. This endpoint accepts perfor
 **Example Request:**
 
 ```bash
-curl -X POST "http://54.87.173.234:8000/api/v2/analytics/performance" \
+curl -X POST "http://34.229.94.175:8000/api/v2/analytics/performance" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{

@@ -30,7 +30,7 @@ Complete API documentation for large file upload endpoints using S3 multipart up
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All upload endpoints are under `/api/v3/upload`

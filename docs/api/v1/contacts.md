@@ -28,7 +28,7 @@ Complete API documentation for contact management endpoints using VQL (Vivek Que
 ## Base URL
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All endpoints are under `/api/v3/contacts/`
@@ -121,7 +121,7 @@ Query contacts using VQL (Vivek Query Language). This endpoint replaces the old 
 
 ```json
 {
-  "next": "http://54.87.173.234:8000/api/v3/contacts/query?offset=25",
+  "next": "http://34.229.94.175:8000/api/v3/contacts/query?offset=25",
   "previous": null,
   "results": [
     {

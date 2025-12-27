@@ -21,7 +21,7 @@ All v2 endpoints are under `/api/v2/`
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 ## Authentication

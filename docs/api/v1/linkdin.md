@@ -25,7 +25,7 @@ Complete API documentation for LinkedIn URL-based search operations, including s
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All LinkedIn endpoints are under `/api/v3/linkedin/`

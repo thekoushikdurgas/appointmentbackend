@@ -15625,7 +15625,7 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://127.0.0.1:8000",
+      "value": "http://34.229.94.175",
       "type": "string"
     },
     {

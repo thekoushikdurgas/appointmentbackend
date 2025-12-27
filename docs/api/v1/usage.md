@@ -27,7 +27,7 @@ Complete API documentation for feature usage tracking endpoints, including track
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All usage endpoints are under `/api/v1/usage/`

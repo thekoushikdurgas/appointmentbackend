@@ -52,7 +52,9 @@ class ConnectraAuthHandler:
         Returns:
             Dictionary with X-API-Key header
         """
-        headers = {}
+        headers = {
+            "Origin": "localhost:3000",
+        }
         if self.api_key:
             headers["X-API-Key"] = self.api_key
         return headers
@@ -85,7 +87,7 @@ class ConnectraTestConfig:
         """Initialize Connectra test configuration.
         
         Args:
-            base_url: Connectra API base URL (default: from env or http://127.0.0.1:8000)
+            base_url: Connectra API base URL (default: from env or http://34.229.94.175)
             api_key: Connectra API key for X-API-Key header
             timeout: Request timeout in seconds
             retry_max: Maximum retry attempts
@@ -101,7 +103,7 @@ class ConnectraTestConfig:
         if env_path.exists():
             load_dotenv(env_path)
         
-        self.base_url = base_url or os.getenv("CONNECTRA_BASE_URL", "http://127.0.0.1:8000")
+        self.base_url = base_url or os.getenv("CONNECTRA_BASE_URL", "http://34.229.94.175")
         self.api_key = api_key or os.getenv("CONNECTRA_API_KEY", "3e6b8811-40c2-46e7-8d7c-e7e038e86071")
         
         self.timeout = timeout
@@ -195,9 +197,11 @@ class ConnectraTestExecutor:
                 # Use a company UUID if available, otherwise create one first
                 if not self.company_uuids:
                     # Create a company first to get a UUID
-                    create_url = f"{self.config.base_url}/companies/create"
+                    # Normalize base_url (remove trailing slash)
+                    base_url = self.config.base_url.rstrip('/')
+                    create_url = f"{base_url}/companies/create"
                     create_body = {"name": "Test Company for UUID", "employees_count": 100}
-                    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+                    headers = {"Accept": "application/json", "Content-Type": "application/json", "Origin": "localhost:3000"}
                     headers.update(self.auth_handler.get_auth_headers())
                     try:
                         create_response = self.session.post(create_url, json=create_body, headers=headers, timeout=self.config.timeout)
@@ -223,9 +227,11 @@ class ConnectraTestExecutor:
                 # Use a contact UUID if available, otherwise create one first
                 if not self.contact_uuids:
                     # Create a contact first to get a UUID
-                    create_url = f"{self.config.base_url}/contacts/create"
+                    # Normalize base_url (remove trailing slash)
+                    base_url = self.config.base_url.rstrip('/')
+                    create_url = f"{base_url}/contacts/create"
                     create_body = {"first_name": "Test", "last_name": "User", "email": "test@example.com"}
-                    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+                    headers = {"Accept": "application/json", "Content-Type": "application/json", "Origin": "localhost:3000"}
                     headers.update(self.auth_handler.get_auth_headers())
                     try:
                         create_response = self.session.post(create_url, json=create_body, headers=headers, timeout=self.config.timeout)
@@ -248,15 +254,16 @@ class ConnectraTestExecutor:
                     import uuid as uuid_lib
                     endpoint_path = endpoint_path.replace("{uuid}", str(uuid_lib.uuid4()))
         
-        # Build full URL
-        if endpoint_path.startswith("/"):
-            url = f"{self.config.base_url}{endpoint_path}"
-        else:
-            url = f"{self.config.base_url}/{endpoint_path}"
+        # Build full URL - normalize base_url (remove trailing slash)
+        base_url = self.config.base_url.rstrip('/')
+        if not endpoint_path.startswith("/"):
+            endpoint_path = '/' + endpoint_path
+        url = f"{base_url}{endpoint_path}"
         
         # Prepare headers
         headers = {
             "Accept": "application/json",
+            "Origin": "localhost:3000",
         }
         
         # Add Content-Type for requests with body
@@ -594,7 +601,7 @@ Examples:
         "--base-url",
         type=str,
         default=None,
-        help="Connectra API base URL (default: from env or http://127.0.0.1:8000)"
+        help="Connectra API base URL (default: from env or http://34.229.94.175)"
     )
     parser.add_argument(
         "--api-key",
@@ -646,7 +653,7 @@ Examples:
     # Display header
     console.print(Panel.fit(
         "[bold cyan]Connectra API Test Suite[/bold cyan]\n"
-        f"Base URL: [yellow]{args.base_url or 'http://127.0.0.1:8000'}[/yellow]\n"
+        f"Base URL: [yellow]{args.base_url or 'http://34.229.94.175'}[/yellow]\n"
         f"Mode: [yellow]{args.mode}[/yellow]",
         border_style="cyan"
     ))

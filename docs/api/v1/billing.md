@@ -32,7 +32,7 @@ Complete API documentation for billing, subscription, and usage management endpo
 ## Base URL
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All billing endpoints are under `/api/v1/billing/`

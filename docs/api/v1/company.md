@@ -33,7 +33,7 @@ Complete API documentation for company management endpoints using VQL (Vivek Que
 ## Base URL
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All endpoints are under `/api/v3/companies/`
@@ -129,7 +129,7 @@ Query companies using VQL (Vivek Query Language). This endpoint replaces the old
 
 ```json
 {
-  "next": "http://54.87.173.234:8000/api/v3/companies/query?offset=25",
+  "next": "http://34.229.94.175:8000/api/v3/companies/query?offset=25",
   "previous": null,
   "results": [
     {
@@ -783,7 +783,7 @@ Return a paginated list of contacts for a specific company with optional filteri
 
 ```json
 {
-  "next": "http://54.87.173.234:8000/api/v3/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25&offset=25",
+  "next": "http://34.229.94.175:8000/api/v3/companies/company/abc-123-uuid/contacts/?title=engineer&seniority=senior&limit=25&offset=25",
   "previous": null,
   "results": [
     {
@@ -828,8 +828,8 @@ When using cursor-based pagination (by providing a `cursor` parameter), the URLs
 
 ```json
 {
-  "next": "http://54.87.173.234:8000/api/v3/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjI1fQ==",
-  "previous": "http://54.87.173.234:8000/api/v3/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjB9",
+  "next": "http://34.229.94.175:8000/api/v3/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjI1fQ==",
+  "previous": "http://34.229.94.175:8000/api/v3/companies/company/abc-123-uuid/contacts/?cursor=eyJvZmZzZXQiOjB9",
   "results": [...]
 }
 ```

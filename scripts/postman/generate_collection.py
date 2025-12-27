@@ -1373,7 +1373,7 @@ if __name__ == "__main__" and endpoints:
     },
     "item": [],
     "variable": [
-        {"key": "base_url", "value": "http://127.0.0.1:8000", "type": "string"},
+        {"key": "base_url", "value": "http://34.229.94.175", "type": "string"},
         {"key": "api_v1_prefix", "value": "/api/v1", "type": "string"},
         {"key": "api_v2_prefix", "value": "/api/v2", "type": "string"},
         {"key": "api_v3_prefix", "value": "/api/v3", "type": "string"},

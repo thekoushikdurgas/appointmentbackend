@@ -98,7 +98,7 @@ class ConfigManager:
             # Create default profile from environment
             default_profile = CLIProfile(
                 name="default",
-                base_url=os.getenv("API_BASE_URL", "http://127.0.0.1:8000"),
+                base_url=os.getenv("API_BASE_URL", "http://34.229.94.175/"),
                 email=os.getenv("TEST_EMAIL") or os.getenv("API_TEST_EMAIL"),
                 password=os.getenv("TEST_PASSWORD") or os.getenv("API_TEST_PASSWORD"),
                 access_token=os.getenv("ACCESS_TOKEN"),
