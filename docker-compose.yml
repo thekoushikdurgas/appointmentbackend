@@ -11,7 +11,7 @@ services:
       - POSTGRES_PASS=${POSTGRES_PASS:-postgres}
       - POSTGRES_HOST=${POSTGRES_HOST:-db}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_DB=${POSTGRES_DB:-contact360}
+      - POSTGRES_DB=${POSTGRES_DB:-appointment360}
     volumes:
       - ./app:/app/app
     depends_on:
@@ -22,7 +22,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASS:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-contact360}
+      - POSTGRES_DB=${POSTGRES_DB:-appointment360}
     ports:
       - "5432:5432"
     volumes:

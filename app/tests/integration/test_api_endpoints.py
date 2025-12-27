@@ -229,11 +229,11 @@ def ensure_api_available(
     try:
         response = api_session.get(root_url, timeout=api_timeout)
     except requests.RequestException as exc:  # pragma: no cover - defensive
-        pytest.skip(f"Contact360 API not reachable at {api_base_url}: {exc}")
+        pytest.skip(f"Appointment360 API not reachable at {api_base_url}: {exc}")
     else:
         if response.status_code >= 500:
             pytest.skip(
-                f"Contact360 API returned {response.status_code} for root URL {root_url}"
+                f"Appointment360 API returned {response.status_code} for root URL {root_url}"
             )
 
 

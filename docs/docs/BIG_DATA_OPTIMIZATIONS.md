@@ -1,6 +1,6 @@
 # Big Data Optimizations Guide
 
-This document provides comprehensive information about the big data handling optimizations implemented in the Contact360 FastAPI backend.
+This document provides comprehensive information about the big data handling optimizations implemented in the Appointment360 FastAPI backend.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ This document provides comprehensive information about the big data handling opt
 
 ## Overview
 
-The Contact360 backend is optimized to handle large datasets efficiently through:
+The Appointment360 backend is optimized to handle large datasets efficiently through:
 
 - **Streaming Responses**: Send large datasets in chunks without loading everything into memory
 - **Chunked File Uploads**: Process file uploads in configurable chunks

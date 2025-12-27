@@ -1,4 +1,4 @@
-# Contact360 API Documentation - Comprehensive Summary
+# Appointment360 API Documentation - Comprehensive Summary
 
 ## Overview
 

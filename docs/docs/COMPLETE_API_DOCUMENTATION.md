@@ -49,7 +49,7 @@ Base URL: `/api/v1`
 
 ```json
 {
-  "name": "Contact360 API",
+  "name": "Appointment360 API",
   "version": "0.1.0",
   "docs": "/docs"
 }

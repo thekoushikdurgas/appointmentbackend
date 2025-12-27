@@ -1,6 +1,6 @@
 # API v2 Documentation Index
 
-Complete documentation for Contact360 API v2 endpoints.
+Complete documentation for Appointment360 API v2 endpoints.
 
 ## Overview
 

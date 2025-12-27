@@ -15,9 +15,9 @@ logger = get_logger(__name__)
 class Settings(BaseSettings):
     """Runtime configuration sourced from environment and defaults."""
     # Project
-    PROJECT_NAME: str = "Contact360 API"
+    PROJECT_NAME: str = "Appointment360 API"
     VERSION: str = "0.1.0"
-    DESCRIPTION: str = "Async FastAPI backend for Contact360 - Contact Management System"
+    DESCRIPTION: str = "Async FastAPI backend for Appointment360 - Appointment Management System"
     ENVIRONMENT: str = "development"  # development | staging | production
     DEBUG: bool = True
 
@@ -92,7 +92,8 @@ class Settings(BaseSettings):
     # - Local development (Next.js on port 3000)
     # - Backend API by IP (54.87.173.234)
     # - Frontend EC2 IP (54.144.115.229)
-    # - Production domain (contact360.io)
+    # - New Backend EC2 IP (34.229.94.175)
+    # - Production domain (appointment360.io)
     ALLOWED_ORIGINS: List[AnyHttpUrl] = [
         # Local development
         AnyHttpUrl("http://localhost:3000"),
@@ -101,20 +102,25 @@ class Settings(BaseSettings):
         # Backend API (by IP)
         AnyHttpUrl("http://54.87.173.234"),
         AnyHttpUrl("http://54.87.173.234:8000"),
-        # Frontend EC2 IP (Contact360 frontend host)
+        # Frontend EC2 IP (Appointment360 frontend host)
         AnyHttpUrl("http://54.144.115.229"),
         AnyHttpUrl("http://54.144.115.229:3000"),
         AnyHttpUrl("http://3.95.58.90"),
-        # Production domain (Contact360)
-        AnyHttpUrl("http://contact360.io"),
-        AnyHttpUrl("https://contact360.io"),
-        AnyHttpUrl("http://www.contact360.io"),
-        AnyHttpUrl("https://www.contact360.io"),
+        # New Backend EC2 IP (34.229.94.175)
+        AnyHttpUrl("http://34.229.94.175"),
+        AnyHttpUrl("http://34.229.94.175:8000"),
+        # Production domain (Appointment360)
+        AnyHttpUrl("http://appointment360.io"),
+        AnyHttpUrl("https://appointment360.io"),
+        AnyHttpUrl("http://www.appointment360.io"),
+        AnyHttpUrl("https://www.appointment360.io"),
     ]
     TRUSTED_HOSTS: List[str] = [
         "54.87.173.234",
         "3.95.58.90",
         "54.87.173.234:8000",
+        "34.229.94.175",
+        "34.229.94.175:8000",
         "localhost",
         "127.0.0.1",
         "testserver",
@@ -211,7 +217,7 @@ class Settings(BaseSettings):
     
     # MongoDB Configuration
     MONGODB_URI: str = Field("mongodb://admin:koushik123456@54.164.46.115:27017", alias="MONGODB_URI", description="MongoDB connection URI")
-    MONGODB_DB_NAME: str = Field("contact360", alias="MONGODB_DB_NAME", description="MongoDB database name")
+    MONGODB_DB_NAME: str = Field("appointment360", alias="MONGODB_DB_NAME", description="MongoDB database name")
     
     # In-memory caching configuration (using cachetools)
     CACHE_MAX_SIZE: int = Field(1000, alias="CACHE_MAX_SIZE", description="Maximum number of entries in in-memory cache (LRU eviction)")

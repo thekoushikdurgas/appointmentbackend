@@ -61,7 +61,7 @@ The following frontend files reference the removed endpoint but were **not modif
 The following documentation files reference the removed endpoint but were **not modified**:
 
 1. `docs/api/insert.md` - API documentation for bulk insert
-2. `docs/Contact360 API.postman_collection.json` - Postman collection
+2. `docs/Appointment360 API.postman_collection.json` - Postman collection
 3. `sql/Appointment360/apis/ENDPOINT_MAPPING.md` - SQL endpoint mapping
 
 **Action Required**: Documentation should be updated to reflect endpoint removal.

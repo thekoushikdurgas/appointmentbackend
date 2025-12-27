@@ -49,7 +49,7 @@ if settings.ENABLE_QUERY_COMPRESSION:
     # Enable compression for large result sets
     # asyncpg supports server_min_messages and other connection options
     connect_args["server_settings"] = {
-        "application_name": "contact360_api",
+        "application_name": "appointment360_api",
     }
 
 engine: AsyncEngine = create_async_engine(
@@ -66,7 +66,7 @@ engine: AsyncEngine = create_async_engine(
         "timeout": 5.0,  # 5 second connection timeout
         "command_timeout": 3.0,  # 3 second command timeout
         "server_settings": {
-            "application_name": "contact360_api",
+            "application_name": "appointment360_api",
             "statement_timeout": "2000",  # 2 second SQL statement timeout
         }
     },

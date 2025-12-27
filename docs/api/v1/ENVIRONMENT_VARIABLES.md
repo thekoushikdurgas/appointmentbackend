@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-Complete reference for all environment variables used in the Contact360 backend application.
+Complete reference for all environment variables used in the Appointment360 backend application.
 
 ## Table of Contents
 
@@ -271,7 +271,7 @@ Maximum upload size in bytes.
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:password@localhost:5432/contact360
+DATABASE_URL=postgresql://user:password@localhost:5432/appointment360
 
 # AWS S3
 AWS_ACCESS_KEY_ID=your_access_key_id

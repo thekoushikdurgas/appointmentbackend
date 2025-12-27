@@ -1,12 +1,12 @@
-# Contact360 FastAPI Backend
+# Appointment360 FastAPI Backend
 
-This project is a production-ready FastAPI service that exposes the Contact360 data APIs and a high-throughput CSV import pipeline using FastAPI's BackgroundTasks.
+This project is a production-ready FastAPI service that exposes the Appointment360 data APIs and a high-throughput CSV import pipeline using FastAPI's BackgroundTasks.
 
 ## Features
 
 - FastAPI application structured with clear separation of concerns (API, services, repositories, models)
-- Async SQLAlchemy (`asyncpg`) database layer targeting the Contact360 Postgres schema
-- Comprehensive filtering, search, and aggregation endpoints derived from the Contact360 Postman collection
+- Async SQLAlchemy (`asyncpg`) database layer targeting the Appointment360 Postgres schema
+- Comprehensive filtering, search, and aggregation endpoints derived from the Appointment360 Postman collection
 - Background CSV import processing using FastAPI's BackgroundTasks with task status tracking
 - Docker Compose environment for API and PostgreSQL database
 - Automated testing with `pytest` and async fixtures
@@ -327,4 +327,4 @@ See [Big Data Optimizations Documentation](docs/BIG_DATA_OPTIMIZATIONS.md) for d
 
 ## License
 
-MIT © Contact360
+MIT © Appointment360

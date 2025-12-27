@@ -120,7 +120,7 @@ async def seed_ai_writer_page(repo: MarketingRepository):
                     "flags": ["Generic", "Self-centered", "No context"],
                 },
                 "after": {
-                    "label": "With Contact360",
+                    "label": "With Appointment360",
                     "content": "Hi Sarah,\n\nSaw your post about expanding the sales team — congrats on the Series B!\n\nScaling typically breaks data processes. Since you're using Salesforce, our native integration can help your new reps ramp up 2x faster by auto-filling valid contact info.\n\nWorth a 5 min chat?",
                     "badge": "18% Reply Rate",
                     "flags": ["Funding News", "Tech Stack (Salesforce)", "Hiring intent"],
@@ -149,10 +149,10 @@ async def seed_ai_writer_page(repo: MarketingRepository):
                     "upgrade_message": "Upgrade to Pro to see verified customer testimonials and case studies"
                 },
                 "title": "Trusted by top performing revenue teams",
-                "description": "Join 10,000+ sales professionals who have automated their outreach with Contact360.",
+                "description": "Join 10,000+ sales professionals who have automated their outreach with Appointment360.",
                 "testimonials": [
                     {
-                        "quote": "I was skeptical about AI emails, but Contact360 proved me wrong. The personalization is scary good. I booked 4 demos in my first week.",
+                        "quote": "I was skeptical about AI emails, but Appointment360 proved me wrong. The personalization is scary good. I booked 4 demos in my first week.",
                         "author": "Marcus Chen",
                         "role": "Enterprise SDR",
                         "company": "Adobe",
@@ -213,7 +213,7 @@ async def seed_ai_writer_page(repo: MarketingRepository):
                 "faqs": [
                     {
                         "question": "Does this work in languages other than English?",
-                        "answer": "Yes! Contact360 supports over 25 languages including Spanish, French, German, and Portuguese. It automatically detects the prospect's profile language.",
+                        "answer": "Yes! Appointment360 supports over 25 languages including Spanish, French, German, and Portuguese. It automatically detects the prospect's profile language.",
                     },
                     {
                         "question": "Will I get flagged for spam?",
@@ -235,7 +235,7 @@ async def seed_ai_writer_page(repo: MarketingRepository):
                     "restriction_type": "none"
                 },
                 "title": "Ready to triple your reply rate?",
-                "description": "Join 10,000+ sales professionals using Contact360 to write better emails, faster. Start your 14-day free trial today.",
+                "description": "Join 10,000+ sales professionals using Appointment360 to write better emails, faster. Start your 14-day free trial today.",
                 "cta_text": "Start Writing for Free",
                 "cta_note": "No credit card required",
             },
@@ -509,12 +509,12 @@ async def seed_cfo_email_list_page(repo: MarketingRepository):
                         "role": "VP Sales, CloudPay",
                     },
                     {
-                        "quote": "Targeting CFOs by revenue size changed our outbound game. Contact360's data is unmatched in the industry.",
+                        "quote": "Targeting CFOs by revenue size changed our outbound game. Appointment360's data is unmatched in the industry.",
                         "author": "Elena Rossi",
                         "role": "Growth Director, FinTechX",
                     },
                     {
-                        "quote": "Accurate direct dials for CFOs are usually a myth. Contact360 made it a reality for our team.",
+                        "quote": "Accurate direct dials for CFOs are usually a myth. Appointment360 made it a reality for our team.",
                         "author": "David Kwong",
                         "role": "Sales Ops, Stripe",
                     },
@@ -563,7 +563,7 @@ async def seed_cfo_email_list_page(repo: MarketingRepository):
                     },
                     {
                         "question": "Is the data GDPR and CCPA compliant?",
-                        "answer": "Yes. Contact360 sources data exclusively from public records and legitimate business registries. We adhere to all international data privacy laws, ensuring your outreach remains safe and compliant.",
+                        "answer": "Yes. Appointment360 sources data exclusively from public records and legitimate business registries. We adhere to all international data privacy laws, ensuring your outreach remains safe and compliant.",
                     },
                     {
                         "question": "Can I filter the CFO list by specific company revenue?",
@@ -592,7 +592,7 @@ async def seed_about_page(repo: MarketingRepository):
     data = {
         "page_id": "about",
         "metadata": {
-            "title": "About Contact360",
+            "title": "About Appointment360",
             "description": "We're on a mission to democratize B2B data accuracy.",
             "keywords": ["about", "company", "mission", "B2B", "data"],
             "last_updated": datetime.utcnow(),
@@ -600,9 +600,9 @@ async def seed_about_page(repo: MarketingRepository):
             "version": 1,
         },
         "hero": {
-            "title": "About Contact360",
+            "title": "About Appointment360",
             "subtitle": "We're on a mission to democratize B2B data accuracy.",
-            "description": "Contact360 is dedicated to providing accurate, verified B2B contact data to help businesses grow.",
+            "description": "Appointment360 is dedicated to providing accurate, verified B2B contact data to help businesses grow.",
             "features": [],
             "cta_text": "Join Our Journey",
             "cta_href": "/register",
@@ -630,7 +630,7 @@ async def seed_about_page(repo: MarketingRepository):
             },
             "about_story": {
                 "title": "Our Story",
-                "description": "Founded in 2024, Contact360 started with a simple observation: B2B data was too expensive and too inaccurate. We built a proprietary engine that verifies data in real-time, ensuring you only pay for contacts that actually exist.",
+                "description": "Founded in 2024, Appointment360 started with a simple observation: B2B data was too expensive and too inaccurate. We built a proprietary engine that verifies data in real-time, ensuring you only pay for contacts that actually exist.",
             },
         },
     }
@@ -711,7 +711,7 @@ async def seed_api_docs_page(repo: MarketingRepository):
     data = {
         "page_id": "api-docs",
         "metadata": {
-            "title": "Contact360 API",
+            "title": "Appointment360 API",
             "description": "Integrate our verified data directly into your application.",
             "keywords": ["API", "documentation", "integration", "developer", "REST"],
             "last_updated": datetime.utcnow(),
@@ -719,7 +719,7 @@ async def seed_api_docs_page(repo: MarketingRepository):
             "version": 1,
         },
         "hero": {
-            "title": "Contact360 API",
+            "title": "Appointment360 API",
             "subtitle": "Integrate our verified data directly into your application.",
             "description": "Powerful REST API for accessing verified B2B contact data with sub-200ms response times.",
             "features": [
@@ -734,7 +734,7 @@ async def seed_api_docs_page(repo: MarketingRepository):
         "sections": {
             "api_example": {
                 "title": "Quick Start",
-                "code": """curl -X POST https://api.contact360.com/v1/enrich \\
+                "code": """curl -X POST https://api.appointment360.com/v1/enrich \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -774,7 +774,7 @@ async def seed_integrations_page(repo: MarketingRepository):
         "page_id": "integrations",
         "metadata": {
             "title": "Integrations",
-            "description": "Connect Contact360 with your favorite tools.",
+            "description": "Connect Appointment360 with your favorite tools.",
             "keywords": ["integrations", "CRM", "salesforce", "hubspot", "tools"],
             "last_updated": datetime.utcnow(),
             "status": "published",
@@ -782,8 +782,8 @@ async def seed_integrations_page(repo: MarketingRepository):
         },
         "hero": {
             "title": "Integrations",
-            "subtitle": "Connect Contact360 with your favorite tools.",
-            "description": "Seamlessly integrate Contact360 with your existing workflow and tools.",
+            "subtitle": "Connect Appointment360 with your favorite tools.",
+            "description": "Seamlessly integrate Appointment360 with your existing workflow and tools.",
             "features": [],
             "cta_text": "Get Started",
             "cta_href": "/register",
@@ -865,7 +865,7 @@ async def seed_terms_page(repo: MarketingRepository):
         "page_id": "terms",
         "metadata": {
             "title": "Terms of Service",
-            "description": "Terms and conditions for using Contact360 services.",
+            "description": "Terms and conditions for using Appointment360 services.",
             "keywords": ["terms", "service", "conditions", "legal", "agreement"],
             "last_updated": datetime.utcnow(),
             "status": "published",

@@ -59,7 +59,7 @@ class AISettings(BaseSettings):
     
     # System Instructions
     GEMINI_SYSTEM_INSTRUCTION: str = Field(
-        default="""You are NexusAI, a smart CRM assistant for Contact360. You help users with:
+        default="""You are NexusAI, a smart CRM assistant for Appointment360. You help users with:
 - Finding contacts matching specific criteria (titles, locations, industries, etc.)
 - Searching for leads in specific industries or locations
 - Getting insights about companies

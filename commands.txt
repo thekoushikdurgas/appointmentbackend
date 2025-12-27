@@ -2,7 +2,7 @@
 # BACKEND - FASTAPI COMMANDS REFERENCE
 # ========================================
 #
-# Contact360 FastAPI Backend - Development Commands
+# Appointment360 FastAPI Backend - Development Commands
 # For root-level commands, see: ../commands.txt
 #
 # ========================================
@@ -190,7 +190,7 @@ python scripts/test_apollo_apis.py --token "YOUR_TOKEN"
 python scripts/test_contact_attributes.py --token "YOUR_TOKEN"
 
 # Format Postman collection:
-python -m json.tool "postman/Contact360 API.postman_collection.json"
+python -m json.tool "postman/Appointment360 API.postman_collection.json"
 
 # Test API endpoints with curl:
 curl http://127.0.0.1:8000/health

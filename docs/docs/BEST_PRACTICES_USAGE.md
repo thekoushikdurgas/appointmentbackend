@@ -1,6 +1,6 @@
 # FastAPI Best Practices Usage Guide
 
-This document provides practical examples and usage patterns for the FastAPI best practices implemented in the Contact360 backend.
+This document provides practical examples and usage patterns for the FastAPI best practices implemented in the Appointment360 backend.
 
 ## Table of Contents
 

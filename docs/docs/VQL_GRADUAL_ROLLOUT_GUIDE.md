@@ -283,7 +283,7 @@ WHERE timestamp > NOW() - INTERVAL '1 hour';
 
 2. **Restart Backend Service**
    ```bash
-   systemctl restart contact360-backend
+   systemctl restart appointment360-backend
    # or
    docker-compose restart backend
    ```

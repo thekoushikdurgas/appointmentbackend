@@ -117,7 +117,7 @@ class APITestRecorder:
 
         lines = [
             "=" * 80,
-            "API TEST REPORT - Contact360 Backend",
+            "API TEST REPORT - Appointment360 Backend",
             "=" * 80,
             f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"Base URL: {self.base_url}",

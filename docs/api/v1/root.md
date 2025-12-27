@@ -58,7 +58,7 @@ Get basic API metadata including project name, version, and documentation URL. T
 
 ```json
 {
-  "name": "Contact360",
+  "name": "Appointment360",
   "version": "1.0.0",
   "docs": "/docs"
 }
@@ -199,7 +199,7 @@ curl -X GET "http://54.87.173.234:8000/api/v1/"
 
 # Response:
 # {
-#   "name": "Contact360",
+#   "name": "Appointment360",
 #   "version": "1.0.0",
 #   "docs": "/docs"
 # }

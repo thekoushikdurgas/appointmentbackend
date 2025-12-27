@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Contact360 backend now uses VQL (Vivek Query Language) for flexible, powerful querying of contacts and companies. VQL provides a unified query interface that supports complex filtering, field selection, and related entity population.
+The Appointment360 backend now uses VQL (Vivek Query Language) for flexible, powerful querying of contacts and companies. VQL provides a unified query interface that supports complex filtering, field selection, and related entity population.
 
 ## VQL Query Structure
 

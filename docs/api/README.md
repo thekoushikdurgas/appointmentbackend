@@ -1,6 +1,6 @@
-# Contact360 API Documentation
+# Appointment360 API Documentation
 
-Complete API documentation for the Contact360 backend API, organized by API version.
+Complete API documentation for the Appointment360 backend API, organized by API version.
 
 ## Documentation Structure
 

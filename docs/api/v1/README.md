@@ -1,6 +1,6 @@
 # API v1 Documentation Index
 
-Complete documentation for Contact360 API v1 and v3 endpoints.
+Complete documentation for Appointment360 API v1 and v3 endpoints.
 
 ## Overview
 

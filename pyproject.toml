@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "contact360-backend"
+name = "appointment360-backend"
 version = "0.1.0"
-description = "Async FastAPI backend for Contact360 - Contact Management System"
+description = "Async FastAPI backend for Appointment360 - Appointment Management System"
 readme = "README.md"
 requires-python = ">=3"
 license = { text = "MIT" }
 authors = [
-  { name = "Contact360 Team", email = "engineering@example.com" }
+  { name = "Appointment360 Team", email = "engineering@example.com" }
 ]
 dependencies = [
   "fastapi==0.115.2",

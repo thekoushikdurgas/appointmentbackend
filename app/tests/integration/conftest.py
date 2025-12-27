@@ -17,7 +17,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         action="store",
         default="http://127.0.0.1:8000",
         dest="api_base_url",
-        help="Base URL for hitting the running Contact360 API service.",
+        help="Base URL for hitting the running Appointment360 API service.",
     )
     group.addoption(
         "--api-admin-username",
