@@ -1,0 +1,1509 @@
+{
+	"info": {
+		"_postman_id": "609b0687-d715-4bd6-b578-90d8d539442e",
+		"name": "Truelist.io API documentation",
+		"description": "Welcome to Truelist's api! <br /> To get started, <a href='https://app.truelist.io/settings/api-keys'>generate an api key</a>. You'll use the API key in an `Authorization` header in every request.<br /> <strong>A note about rate limits:</strong>  Each endpoint has a rate limit.  If you exceed the rate limit, you'll get a `429` error.  The rate limit is <strong>10 requests per second</strong>.  This rate limit is specifically for API calls.  The email validation rate limit is different and is based on your plan.\n\n\nContact Support:\n Name: API Support\n Email: hello@truelist.io",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "20572666",
+		"_collection_link": "https://prbal5-1003.postman.co/workspace/priama~c1c1d143-bd8f-4768-b551-66234b878d2b/collection/20572666-609b0687-d715-4bd6-b578-90d8d539442e?action=share&source=collection_link&creator=20572666"
+	},
+	"item": [
+		{
+			"name": "api",
+			"item": [
+				{
+					"name": "v1",
+					"item": [
+						{
+							"name": "verify_inline",
+							"item": [
+								{
+									"name": "Verify a single email address",
+									"request": {
+										"auth": {
+											"type": "apikey",
+											"apikey": [
+												{
+													"key": "key",
+													"value": "Authorization",
+													"type": "string"
+												},
+												{
+													"key": "value",
+													"value": "{{apiKey}}",
+													"type": "string"
+												},
+												{
+													"key": "in",
+													"value": "header",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Accept",
+												"value": "application/json"
+											}
+										],
+										"url": {
+											"raw": "{{baseUrl}}/api/v1/verify_inline?email=thekoushikdurgas@gmail.com",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"api",
+												"v1",
+												"verify_inline"
+											],
+											"query": [
+												{
+													"key": "email",
+													"value": "thekoushikdurgas@gmail.com",
+													"description": "A space-separated list of emails"
+												}
+											]
+										},
+										"description": "Verify up to 3 email addresses.  Verification will happen inline during the api request. \n\n**Note**: If email validation takes over 30 seconds, this request will time out. "
+									},
+									"response": [
+										{
+											"name": "A successful response",
+											"originalRequest": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/verify_inline?email=bob@example.com jon@example.com test@example.com",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"verify_inline"
+													],
+													"query": [
+														{
+															"key": "email",
+															"value": "bob@example.com jon@example.com test@example.com",
+															"description": "A space-separated list of emails"
+														}
+													]
+												}
+											},
+											"status": "OK",
+											"code": 200,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "{\n  \"emails\": [\n    {\n      \"address\": \"QsdJWv@yxLFvfQGhStKuIkKXOeNxeFnoQ.qww\",\n      \"domain\": \"string\",\n      \"canonical\": \"string\",\n      \"mx_record\": \"string\",\n      \"email_state\": \"email_invalid\",\n      \"email_sub_state\": \"is_role\",\n      \"verified_at\": \"2021-01-01T00:00:00Z\"\n    },\n    {\n      \"address\": \"eVzl@d.wjee\",\n      \"domain\": \"string\",\n      \"canonical\": \"string\",\n      \"mx_record\": \"string\",\n      \"email_state\": \"ok\",\n      \"email_sub_state\": \"is_disposable\",\n      \"verified_at\": \"2021-01-01T00:00:00Z\"\n    }\n  ]\n}"
+										},
+										{
+											"name": "User could not be found",
+											"originalRequest": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/verify_inline?email=bob@example.com jon@example.com test@example.com",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"verify_inline"
+													],
+													"query": [
+														{
+															"key": "email",
+															"value": "bob@example.com jon@example.com test@example.com",
+															"description": "A space-separated list of emails"
+														}
+													]
+												}
+											},
+											"status": "Unauthorized",
+											"code": 401,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "{\n  \"error\": \"string\"\n}"
+										},
+										{
+											"name": "Request timed out - communication with the SMTP server took too long.  Your code logic should handle this error and retry the request later.",
+											"originalRequest": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/verify_inline?email=bob@example.com jon@example.com test@example.com",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"verify_inline"
+													],
+													"query": [
+														{
+															"key": "email",
+															"value": "bob@example.com jon@example.com test@example.com",
+															"description": "A space-separated list of emails"
+														}
+													]
+												}
+											},
+											"status": "Request Timeout",
+											"code": 408,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "{\n  \"error\": \"string\"\n}"
+										},
+										{
+											"name": "Rate limit exceeded - you've hit the rate limit for this endpoint.  Your rate limit is dctated by your plan.  Please wait a bit and try again.",
+											"originalRequest": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/verify_inline?email=bob@example.com jon@example.com test@example.com",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"verify_inline"
+													],
+													"query": [
+														{
+															"key": "email",
+															"value": "bob@example.com jon@example.com test@example.com",
+															"description": "A space-separated list of emails"
+														}
+													]
+												}
+											},
+											"status": "Too Many Requests",
+											"code": 429,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "{\n  \"error\": \"string\"\n}"
+										},
+										{
+											"name": "Verify a single email address",
+											"originalRequest": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/verify_inline?email=thekoushikdurgas@gmail.com",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"verify_inline"
+													],
+													"query": [
+														{
+															"key": "email",
+															"value": "thekoushikdurgas@gmail.com",
+															"description": "A space-separated list of emails"
+														}
+													]
+												}
+											},
+											"status": "OK",
+											"code": 200,
+											"_postman_previewlanguage": "",
+											"header": [
+												{
+													"key": "Date",
+													"value": "Mon, 08 Dec 2025 12:13:00 GMT"
+												},
+												{
+													"key": "Content-Type",
+													"value": "application/json; charset=utf-8"
+												},
+												{
+													"key": "Transfer-Encoding",
+													"value": "chunked"
+												},
+												{
+													"key": "Connection",
+													"value": "keep-alive"
+												},
+												{
+													"key": "X-Frame-Options",
+													"value": "SAMEORIGIN"
+												},
+												{
+													"key": "X-XSS-Protection",
+													"value": "0"
+												},
+												{
+													"key": "X-Content-Type-Options",
+													"value": "nosniff"
+												},
+												{
+													"key": "X-Download-Options",
+													"value": "noopen"
+												},
+												{
+													"key": "X-Permitted-Cross-Domain-Policies",
+													"value": "none"
+												},
+												{
+													"key": "Referrer-Policy",
+													"value": "strict-origin-when-cross-origin"
+												},
+												{
+													"key": "ETag",
+													"value": "W/\"003d18fda0cf5e8353240730c5e024ba\""
+												},
+												{
+													"key": "Cache-Control",
+													"value": "max-age=0, private, must-revalidate"
+												},
+												{
+													"key": "X-Request-Id",
+													"value": "dacf62685950eb8c8e82d8e9440e6014"
+												},
+												{
+													"key": "X-Runtime",
+													"value": "0.033945"
+												},
+												{
+													"key": "vary",
+													"value": "Origin"
+												},
+												{
+													"key": "Strict-Transport-Security",
+													"value": "max-age=31536000; includeSubDomains"
+												}
+											],
+											"cookie": [],
+											"body": "{\n    \"emails\": [\n        {\n            \"address\": \"thekoushikdurgas@gmail.com\",\n            \"domain\": \"gmail.com\",\n            \"first_name\": null,\n            \"last_name\": null,\n            \"canonical\": \"thekoushikdurgas\",\n            \"mx_record\": null,\n            \"email_state\": \"ok\",\n            \"email_sub_state\": \"email_ok\",\n            \"verified_at\": \"2025-11-30T14:49:00.866Z\",\n            \"did_you_mean\": null\n        }\n    ]\n}"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "batches",
+							"item": [
+								{
+									"name": "{uuid}",
+									"item": [
+										{
+											"name": "Retrieve a single batch by its UUID.",
+											"request": {
+												"auth": {
+													"type": "apikey",
+													"apikey": [
+														{
+															"key": "key",
+															"value": "Authorization",
+															"type": "string"
+														},
+														{
+															"key": "value",
+															"value": "{{apiKey}}",
+															"type": "string"
+														},
+														{
+															"key": "in",
+															"value": "header",
+															"type": "string"
+														}
+													]
+												},
+												"method": "GET",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/batches/:uuid",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"batches",
+														":uuid"
+													],
+													"variable": [
+														{
+															"key": "uuid",
+															"value": "68c7c438-be01-a265-3826-2f67088daf59",
+															"description": "The UUID of the batch to get"
+														}
+													]
+												}
+											},
+											"response": [
+												{
+													"name": "A successful response",
+													"originalRequest": {
+														"method": "GET",
+														"header": [
+															{
+																"key": "Accept",
+																"value": "application/json"
+															},
+															{
+																"key": "Authorization",
+																"value": "<API Key>",
+																"description": "Added as a part of security scheme: apikey"
+															}
+														],
+														"url": {
+															"raw": "{{baseUrl}}/api/v1/batches/:uuid",
+															"host": [
+																"{{baseUrl}}"
+															],
+															"path": [
+																"api",
+																"v1",
+																"batches",
+																":uuid"
+															],
+															"variable": [
+																{
+																	"key": "uuid",
+																	"value": "68c7c438-be01-a265-3826-2f67088daf59",
+																	"description": "The UUID of the batch to get"
+																}
+															]
+														}
+													},
+													"status": "OK",
+													"code": 200,
+													"_postman_previewlanguage": "json",
+													"header": [
+														{
+															"key": "Content-Type",
+															"value": "application/json"
+														}
+													],
+													"cookie": [],
+													"body": "{\n  \"id\": \"f8c16d1f-f346-e5c4-0210-e8b9c57ca1c9\",\n  \"batch_state\": \"pending\",\n  \"batch_type\": \"user_import api_import integration\",\n  \"email_count\": 4939,\n  \"processed_count\": 7793,\n  \"disposable_count\": 2731,\n  \"role_count\": 8585,\n  \"failed_syntax_check_count\": 2470,\n  \"failed_mx_check_count\": 9423,\n  \"failed_no_mailbox_count\": 6711,\n  \"ok_for_all_count\": 9509,\n  \"unknown_count\": 5579,\n  \"ok_count\": 6373,\n  \"name\": \"string\",\n  \"webhook_url\": \"string\",\n  \"safest_bet_csv_url\": \"string\",\n  \"highest_reach_csv_url\": \"string\",\n  \"only_invalid_csv_url\": \"string\",\n  \"annotated_csv_url\": \"string\"\n}"
+												},
+												{
+													"name": "User could not be found",
+													"originalRequest": {
+														"method": "GET",
+														"header": [
+															{
+																"key": "Accept",
+																"value": "application/json"
+															},
+															{
+																"key": "Authorization",
+																"value": "<API Key>",
+																"description": "Added as a part of security scheme: apikey"
+															}
+														],
+														"url": {
+															"raw": "{{baseUrl}}/api/v1/batches/:uuid",
+															"host": [
+																"{{baseUrl}}"
+															],
+															"path": [
+																"api",
+																"v1",
+																"batches",
+																":uuid"
+															],
+															"variable": [
+																{
+																	"key": "uuid",
+																	"value": "68c7c438-be01-a265-3826-2f67088daf59",
+																	"description": "The UUID of the batch to get"
+																}
+															]
+														}
+													},
+													"status": "Unauthorized",
+													"code": 401,
+													"_postman_previewlanguage": "json",
+													"header": [
+														{
+															"key": "Content-Type",
+															"value": "application/json"
+														}
+													],
+													"cookie": [],
+													"body": "{\n  \"error\": \"string\"\n}"
+												},
+												{
+													"name": "Batch could not be found",
+													"originalRequest": {
+														"method": "GET",
+														"header": [
+															{
+																"key": "Accept",
+																"value": "application/json"
+															},
+															{
+																"key": "Authorization",
+																"value": "<API Key>",
+																"description": "Added as a part of security scheme: apikey"
+															}
+														],
+														"url": {
+															"raw": "{{baseUrl}}/api/v1/batches/:uuid",
+															"host": [
+																"{{baseUrl}}"
+															],
+															"path": [
+																"api",
+																"v1",
+																"batches",
+																":uuid"
+															],
+															"variable": [
+																{
+																	"key": "uuid",
+																	"value": "68c7c438-be01-a265-3826-2f67088daf59",
+																	"description": "The UUID of the batch to get"
+																}
+															]
+														}
+													},
+													"status": "Not Found",
+													"code": 404,
+													"_postman_previewlanguage": "json",
+													"header": [
+														{
+															"key": "Content-Type",
+															"value": "application/json"
+														}
+													],
+													"cookie": [],
+													"body": "{\n  \"error\": \"string\"\n}"
+												}
+											]
+										},
+										{
+											"name": "Delete a batch by its UUID.",
+											"request": {
+												"auth": {
+													"type": "apikey",
+													"apikey": [
+														{
+															"key": "key",
+															"value": "Authorization",
+															"type": "string"
+														},
+														{
+															"key": "value",
+															"value": "{{apiKey}}",
+															"type": "string"
+														},
+														{
+															"key": "in",
+															"value": "header",
+															"type": "string"
+														}
+													]
+												},
+												"method": "DELETE",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/batches/:uuid",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"batches",
+														":uuid"
+													],
+													"variable": [
+														{
+															"key": "uuid",
+															"value": "68c7c438-be01-a265-3826-2f67088daf59",
+															"description": "The UUID of the batch to get"
+														}
+													]
+												}
+											},
+											"response": [
+												{
+													"name": "A successful response",
+													"originalRequest": {
+														"method": "DELETE",
+														"header": [
+															{
+																"key": "Accept",
+																"value": "application/json"
+															},
+															{
+																"key": "Authorization",
+																"value": "<API Key>",
+																"description": "Added as a part of security scheme: apikey"
+															}
+														],
+														"url": {
+															"raw": "{{baseUrl}}/api/v1/batches/:uuid",
+															"host": [
+																"{{baseUrl}}"
+															],
+															"path": [
+																"api",
+																"v1",
+																"batches",
+																":uuid"
+															],
+															"variable": [
+																{
+																	"key": "uuid",
+																	"value": "68c7c438-be01-a265-3826-2f67088daf59",
+																	"description": "The UUID of the batch to get"
+																}
+															]
+														}
+													},
+													"status": "OK",
+													"code": 200,
+													"_postman_previewlanguage": "json",
+													"header": [
+														{
+															"key": "Content-Type",
+															"value": "application/json"
+														}
+													],
+													"cookie": [],
+													"body": "{\n  \"id\": \"f8c16d1f-f346-e5c4-0210-e8b9c57ca1c9\",\n  \"batch_state\": \"pending\",\n  \"batch_type\": \"user_import api_import integration\",\n  \"email_count\": 4939,\n  \"processed_count\": 7793,\n  \"disposable_count\": 2731,\n  \"role_count\": 8585,\n  \"failed_syntax_check_count\": 2470,\n  \"failed_mx_check_count\": 9423,\n  \"failed_no_mailbox_count\": 6711,\n  \"ok_for_all_count\": 9509,\n  \"unknown_count\": 5579,\n  \"ok_count\": 6373,\n  \"name\": \"string\",\n  \"webhook_url\": \"string\",\n  \"safest_bet_csv_url\": \"string\",\n  \"highest_reach_csv_url\": \"string\",\n  \"only_invalid_csv_url\": \"string\",\n  \"annotated_csv_url\": \"string\"\n}"
+												},
+												{
+													"name": "User could not be found",
+													"originalRequest": {
+														"method": "DELETE",
+														"header": [
+															{
+																"key": "Accept",
+																"value": "application/json"
+															},
+															{
+																"key": "Authorization",
+																"value": "<API Key>",
+																"description": "Added as a part of security scheme: apikey"
+															}
+														],
+														"url": {
+															"raw": "{{baseUrl}}/api/v1/batches/:uuid",
+															"host": [
+																"{{baseUrl}}"
+															],
+															"path": [
+																"api",
+																"v1",
+																"batches",
+																":uuid"
+															],
+															"variable": [
+																{
+																	"key": "uuid",
+																	"value": "68c7c438-be01-a265-3826-2f67088daf59",
+																	"description": "The UUID of the batch to get"
+																}
+															]
+														}
+													},
+													"status": "Unauthorized",
+													"code": 401,
+													"_postman_previewlanguage": "json",
+													"header": [
+														{
+															"key": "Content-Type",
+															"value": "application/json"
+														}
+													],
+													"cookie": [],
+													"body": "{\n  \"error\": \"string\"\n}"
+												},
+												{
+													"name": "Batch could not be found",
+													"originalRequest": {
+														"method": "DELETE",
+														"header": [
+															{
+																"key": "Accept",
+																"value": "application/json"
+															},
+															{
+																"key": "Authorization",
+																"value": "<API Key>",
+																"description": "Added as a part of security scheme: apikey"
+															}
+														],
+														"url": {
+															"raw": "{{baseUrl}}/api/v1/batches/:uuid",
+															"host": [
+																"{{baseUrl}}"
+															],
+															"path": [
+																"api",
+																"v1",
+																"batches",
+																":uuid"
+															],
+															"variable": [
+																{
+																	"key": "uuid",
+																	"value": "68c7c438-be01-a265-3826-2f67088daf59",
+																	"description": "The UUID of the batch to get"
+																}
+															]
+														}
+													},
+													"status": "Not Found",
+													"code": 404,
+													"_postman_previewlanguage": "json",
+													"header": [
+														{
+															"key": "Content-Type",
+															"value": "application/json"
+														}
+													],
+													"cookie": [],
+													"body": "{\n  \"error\": \"string\"\n}"
+												},
+												{
+													"name": "Batch could not be deleted - only completed batches can be deleted",
+													"originalRequest": {
+														"method": "DELETE",
+														"header": [
+															{
+																"key": "Accept",
+																"value": "application/json"
+															},
+															{
+																"key": "Authorization",
+																"value": "<API Key>",
+																"description": "Added as a part of security scheme: apikey"
+															}
+														],
+														"url": {
+															"raw": "{{baseUrl}}/api/v1/batches/:uuid",
+															"host": [
+																"{{baseUrl}}"
+															],
+															"path": [
+																"api",
+																"v1",
+																"batches",
+																":uuid"
+															],
+															"variable": [
+																{
+																	"key": "uuid",
+																	"value": "68c7c438-be01-a265-3826-2f67088daf59",
+																	"description": "The UUID of the batch to get"
+																}
+															]
+														}
+													},
+													"status": "Unprocessable Entity (WebDAV) (RFC 4918)",
+													"code": 422,
+													"_postman_previewlanguage": "json",
+													"header": [
+														{
+															"key": "Content-Type",
+															"value": "application/json"
+														}
+													],
+													"cookie": [],
+													"body": "{\n  \"error\": \"string\"\n}"
+												}
+											]
+										}
+									]
+								},
+								{
+									"name": "Verify a list of emails",
+									"request": {
+										"auth": {
+											"type": "apikey",
+											"apikey": [
+												{
+													"key": "key",
+													"value": "Authorization",
+													"type": "string"
+												},
+												{
+													"key": "value",
+													"value": "{{apiKey}}",
+													"type": "string"
+												},
+												{
+													"key": "in",
+													"value": "header",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "multipart/form-data"
+											},
+											{
+												"key": "Accept",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "formdata",
+											"formdata": [
+												{
+													"key": "file",
+													"description": "The CSV / XLSX file to upload",
+													"type": "file",
+													"src": []
+												},
+												{
+													"key": "uuid",
+													"value": "3fc5c4a5-5003-f9f3-1b7e-8ac266591883",
+													"description": "Supply a UUID if you want the batch to have this UUID.  Otherwise, a random UUID will be generated.",
+													"type": "text"
+												},
+												{
+													"key": "webhook_url",
+													"value": "string",
+													"description": "Supply a webhook_url when creating a batch.  Truelist will call the url when the batch has completed.",
+													"type": "text"
+												},
+												{
+													"key": "validation_strategy",
+													"value": "accurate",
+													"description": "The validation strategy to use for the batch.  Defaults to `accurate`.  Using `fast` will skip our internal backoff/retry logic and deeper validation strategy checks.  This is useful for when you want to validate a large number of emails quickly, but it may result in more false positives.",
+													"type": "text"
+												}
+											]
+										},
+										"url": {
+											"raw": "{{baseUrl}}/api/v1/batches",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"api",
+												"v1",
+												"batches"
+											]
+										},
+										"description": "Upload a list of emails to verify.  You can either of the following (but not both):\n - A `data` parameter that represents a json array of email data.  Should be in the format of `[['email@email.com'], ['email2@email.com']]`.  Each row can also contain arbitrary data, which is useful for supplying external ids or other identifying information.  This data will be returned in the annotated csv result files.  However, one element in the row array must be an email address.  Needs at least 2 rows of data to be valid.\n - A binary file upload via the `file` parameter documented below.\n\nNote that batches are processed in the background.  To check on the status of a list, you have a couple of options:\n - Poll the status of your batch's progress by `GET`ing the batch you created by its uuid.\n - Supply a `webhook_url` when creating the batch.  Truelist will makd a POST request to the url you supplied when the batch is completed.  When we call your url, we'll supply the `batch_id` in the body of the request.\nAlso note that counts are not updated until the batch is completed. "
+									},
+									"response": [
+										{
+											"name": "A successful response",
+											"originalRequest": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "Content-Type",
+														"value": "multipart/form-data"
+													},
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"body": {
+													"mode": "formdata",
+													"formdata": [
+														{
+															"key": "file",
+															"description": "The CSV / XLSX file to upload",
+															"type": "file",
+															"src": []
+														},
+														{
+															"key": "uuid",
+															"value": "3fc5c4a5-5003-f9f3-1b7e-8ac266591883",
+															"description": "Supply a UUID if you want the batch to have this UUID.  Otherwise, a random UUID will be generated.",
+															"type": "text"
+														},
+														{
+															"key": "webhook_url",
+															"value": "string",
+															"description": "Supply a webhook_url when creating a batch.  Truelist will call the url when the batch has completed.",
+															"type": "text"
+														},
+														{
+															"key": "validation_strategy",
+															"value": "accurate",
+															"description": "The validation strategy to use for the batch.  Defaults to `accurate`.  Using `fast` will skip our internal backoff/retry logic and deeper validation strategy checks.  This is useful for when you want to validate a large number of emails quickly, but it may result in more false positives.",
+															"type": "text"
+														}
+													]
+												},
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/batches",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"batches"
+													]
+												}
+											},
+											"status": "OK",
+											"code": 200,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "{\n  \"id\": \"f8c16d1f-f346-e5c4-0210-e8b9c57ca1c9\",\n  \"batch_state\": \"pending\",\n  \"batch_type\": \"user_import api_import integration\",\n  \"email_count\": 4939,\n  \"processed_count\": 7793,\n  \"disposable_count\": 2731,\n  \"role_count\": 8585,\n  \"failed_syntax_check_count\": 2470,\n  \"failed_mx_check_count\": 9423,\n  \"failed_no_mailbox_count\": 6711,\n  \"ok_for_all_count\": 9509,\n  \"unknown_count\": 5579,\n  \"ok_count\": 6373,\n  \"name\": \"string\",\n  \"webhook_url\": \"string\",\n  \"safest_bet_csv_url\": \"string\",\n  \"highest_reach_csv_url\": \"string\",\n  \"only_invalid_csv_url\": \"string\",\n  \"annotated_csv_url\": \"string\"\n}"
+										},
+										{
+											"name": "User could not be found",
+											"originalRequest": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "Content-Type",
+														"value": "multipart/form-data"
+													},
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"body": {
+													"mode": "formdata",
+													"formdata": [
+														{
+															"key": "file",
+															"description": "The CSV / XLSX file to upload",
+															"type": "file",
+															"src": []
+														},
+														{
+															"key": "uuid",
+															"value": "3fc5c4a5-5003-f9f3-1b7e-8ac266591883",
+															"description": "Supply a UUID if you want the batch to have this UUID.  Otherwise, a random UUID will be generated.",
+															"type": "text"
+														},
+														{
+															"key": "webhook_url",
+															"value": "string",
+															"description": "Supply a webhook_url when creating a batch.  Truelist will call the url when the batch has completed.",
+															"type": "text"
+														},
+														{
+															"key": "validation_strategy",
+															"value": "accurate",
+															"description": "The validation strategy to use for the batch.  Defaults to `accurate`.  Using `fast` will skip our internal backoff/retry logic and deeper validation strategy checks.  This is useful for when you want to validate a large number of emails quickly, but it may result in more false positives.",
+															"type": "text"
+														}
+													]
+												},
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/batches",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"batches"
+													]
+												}
+											},
+											"status": "Unauthorized",
+											"code": 401,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "{\n  \"error\": \"string\"\n}"
+										}
+									]
+								},
+								{
+									"name": "Retrieve all batches for your account.",
+									"request": {
+										"auth": {
+											"type": "apikey",
+											"apikey": [
+												{
+													"key": "key",
+													"value": "Authorization",
+													"type": "string"
+												},
+												{
+													"key": "value",
+													"value": "{{apiKey}}",
+													"type": "string"
+												},
+												{
+													"key": "in",
+													"value": "header",
+													"type": "string"
+												}
+											]
+										},
+										"method": "GET",
+										"header": [
+											{
+												"key": "Accept",
+												"value": "application/json"
+											}
+										],
+										"url": {
+											"raw": "{{baseUrl}}/api/v1/batches",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"api",
+												"v1",
+												"batches"
+											]
+										}
+									},
+									"response": [
+										{
+											"name": "A successful response",
+											"originalRequest": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/batches",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"batches"
+													]
+												}
+											},
+											"status": "OK",
+											"code": 200,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "[\n  {\n    \"id\": \"8dc67ba7-0839-555f-68be-35527ca2dfd8\",\n    \"batch_state\": \"processing\",\n    \"batch_type\": \"user_import api_import integration\",\n    \"email_count\": 7840,\n    \"processed_count\": 9823,\n    \"disposable_count\": 3198,\n    \"role_count\": 8991,\n    \"failed_syntax_check_count\": 4235,\n    \"failed_mx_check_count\": 2857,\n    \"failed_no_mailbox_count\": 5054,\n    \"ok_for_all_count\": 9325,\n    \"unknown_count\": 4790,\n    \"ok_count\": 8352,\n    \"name\": \"string\",\n    \"webhook_url\": \"string\",\n    \"safest_bet_csv_url\": \"string\",\n    \"highest_reach_csv_url\": \"string\",\n    \"only_invalid_csv_url\": \"string\",\n    \"annotated_csv_url\": \"string\"\n  },\n  {\n    \"id\": \"5aa26e99-3f4f-29e4-ba67-bb6bdae03790\",\n    \"batch_state\": \"completed\",\n    \"batch_type\": \"user_import api_import integration\",\n    \"email_count\": 8374,\n    \"processed_count\": 3446,\n    \"disposable_count\": 6730,\n    \"role_count\": 965,\n    \"failed_syntax_check_count\": 829,\n    \"failed_mx_check_count\": 8125,\n    \"failed_no_mailbox_count\": 4886,\n    \"ok_for_all_count\": 517,\n    \"unknown_count\": 821,\n    \"ok_count\": 4828,\n    \"name\": \"string\",\n    \"webhook_url\": \"string\",\n    \"safest_bet_csv_url\": \"string\",\n    \"highest_reach_csv_url\": \"string\",\n    \"only_invalid_csv_url\": \"string\",\n    \"annotated_csv_url\": \"string\"\n  }\n]"
+										},
+										{
+											"name": "User could not be found",
+											"originalRequest": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/batches",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"batches"
+													]
+												}
+											},
+											"status": "Unauthorized",
+											"code": 401,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "{\n  \"error\": \"string\"\n}"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "email_addresses",
+							"item": [
+								{
+									"name": "Retrieve email validation results",
+									"request": {
+										"auth": {
+											"type": "apikey",
+											"apikey": [
+												{
+													"key": "key",
+													"value": "Authorization",
+													"type": "string"
+												},
+												{
+													"key": "value",
+													"value": "{{apiKey}}",
+													"type": "string"
+												},
+												{
+													"key": "in",
+													"value": "header",
+													"type": "string"
+												}
+											]
+										},
+										"method": "GET",
+										"header": [
+											{
+												"key": "Accept",
+												"value": "application/json"
+											}
+										],
+										"url": {
+											"raw": "{{baseUrl}}/api/v1/email_addresses",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"api",
+												"v1",
+												"email_addresses"
+											],
+											"variable": [
+												{
+													"key": "batch_uuid",
+													"value": "68c7c438-be01-a265-3826-2f67088daf59",
+													"description": "The UUID of the batch to get emails from"
+												},
+												{
+													"key": "email_state",
+													"value": "risky",
+													"description": "Get emails with a particular email_state"
+												},
+												{
+													"key": "email_sub_state",
+													"value": "is_disposable",
+													"description": "Get emails with a particular email_sub_state"
+												},
+												{
+													"key": "email_address",
+													"value": "tBZfr@bJnfBWNiiuuxwEhMGCSMPXTVuqXh.sxd",
+													"description": "Search for a particular email address"
+												},
+												{
+													"key": "page",
+													"value": "5209",
+													"description": "The page number to retrieve.  If not specified, the first page will be returned."
+												},
+												{
+													"key": "per_page",
+													"value": "5209",
+													"description": "The number of emails to return per page.  If not specified, 25 will be returned.  The maximum is 100."
+												}
+											]
+										}
+									},
+									"response": [
+										{
+											"name": "A successful response",
+											"originalRequest": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/email_addresses",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"email_addresses"
+													],
+													"variable": [
+														{
+															"key": "batch_uuid",
+															"value": "68c7c438-be01-a265-3826-2f67088daf59",
+															"description": "The UUID of the batch to get emails from"
+														},
+														{
+															"key": "email_state",
+															"value": "risky",
+															"description": "Get emails with a particular email_state"
+														},
+														{
+															"key": "email_sub_state",
+															"value": "is_disposable",
+															"description": "Get emails with a particular email_sub_state"
+														},
+														{
+															"key": "email_address",
+															"value": "tBZfr@bJnfBWNiiuuxwEhMGCSMPXTVuqXh.sxd",
+															"description": "Search for a particular email address"
+														},
+														{
+															"key": "page",
+															"value": "5209",
+															"description": "The page number to retrieve.  If not specified, the first page will be returned."
+														},
+														{
+															"key": "per_page",
+															"value": "5209",
+															"description": "The number of emails to return per page.  If not specified, 25 will be returned.  The maximum is 100."
+														}
+													]
+												}
+											},
+											"status": "OK",
+											"code": 200,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "{\n  \"email_addresses\": [\n    {\n      \"address\": \"He707wBlZ2f@cpgkcAzFhCcEKMETsJVUZI.pdt\",\n      \"domain\": \"string\",\n      \"canonical\": \"string\",\n      \"mx_record\": \"string\",\n      \"email_state\": \"accept_all\",\n      \"email_sub_state\": \"failed_greylisted\",\n      \"verified_at\": \"2021-01-01T00:00:00Z\"\n    },\n    {\n      \"address\": \"PBUR@vsregWANBdG.yi\",\n      \"domain\": \"string\",\n      \"canonical\": \"string\",\n      \"mx_record\": \"string\",\n      \"email_state\": \"accept_all\",\n      \"email_sub_state\": \"failed_no_mailbox\",\n      \"verified_at\": \"2021-01-01T00:00:00Z\"\n    }\n  ]\n}"
+										},
+										{
+											"name": "User could not be found",
+											"originalRequest": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "Accept",
+														"value": "application/json"
+													},
+													{
+														"key": "Authorization",
+														"value": "<API Key>",
+														"description": "Added as a part of security scheme: apikey"
+													}
+												],
+												"url": {
+													"raw": "{{baseUrl}}/api/v1/email_addresses",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"api",
+														"v1",
+														"email_addresses"
+													],
+													"variable": [
+														{
+															"key": "batch_uuid",
+															"value": "68c7c438-be01-a265-3826-2f67088daf59",
+															"description": "The UUID of the batch to get emails from"
+														},
+														{
+															"key": "email_state",
+															"value": "risky",
+															"description": "Get emails with a particular email_state"
+														},
+														{
+															"key": "email_sub_state",
+															"value": "is_disposable",
+															"description": "Get emails with a particular email_sub_state"
+														},
+														{
+															"key": "email_address",
+															"value": "tBZfr@bJnfBWNiiuuxwEhMGCSMPXTVuqXh.sxd",
+															"description": "Search for a particular email address"
+														},
+														{
+															"key": "page",
+															"value": "5209",
+															"description": "The page number to retrieve.  If not specified, the first page will be returned."
+														},
+														{
+															"key": "per_page",
+															"value": "5209",
+															"description": "The number of emails to return per page.  If not specified, 25 will be returned.  The maximum is 100."
+														}
+													]
+												}
+											},
+											"status": "Unauthorized",
+											"code": 401,
+											"_postman_previewlanguage": "json",
+											"header": [
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												}
+											],
+											"cookie": [],
+											"body": "{\n  \"error\": \"string\"\n}"
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "me",
+			"item": [
+				{
+					"name": "Get information about the logged in user",
+					"request": {
+						"auth": {
+							"type": "apikey",
+							"apikey": [
+								{
+									"key": "key",
+									"value": "Authorization",
+									"type": "string"
+								},
+								{
+									"key": "value",
+									"value": "{{apiKey}}",
+									"type": "string"
+								},
+								{
+									"key": "in",
+									"value": "header",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"me"
+							]
+						},
+						"description": "Shows all information about the currently logged in user."
+					},
+					"response": [
+						{
+							"name": "A successful response",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "<API Key>",
+										"description": "Added as a part of security scheme: apikey"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/me",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"me"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"email\": \"yjAg8dkoKDtIqx@WfOqwgASTuYG.vb\",\n  \"name\": \"string\",\n  \"uuid\": \"abbc485e-5da4-5b1d-e634-ce7db1760340\",\n  \"errors\": [\n    \"string\",\n    \"string\"\n  ],\n  \"last_login_at\": \"1977-10-15T12:19:02.690Z\",\n  \"time_zone\": \"string\",\n  \"token\": \"string\",\n  \"api_keys\": [\n    {\n      \"active\": false,\n      \"name\": \"string\",\n      \"last_used_at\": \"1997-05-05T22:36:49.486Z\",\n      \"created_at\": \"2018-04-24T11:59:48.920Z\"\n    },\n    {\n      \"active\": false,\n      \"name\": \"string\",\n      \"last_used_at\": \"2016-12-17T22:00:55.639Z\",\n      \"created_at\": \"1961-02-16T08:47:41.318Z\"\n    }\n  ]\n}"
+						},
+						{
+							"name": "User could not be found via token",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "<API Key>",
+										"description": "Added as a part of security scheme: apikey"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/me",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"me"
+									]
+								}
+							},
+							"status": "Unauthorized",
+							"code": 401,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"error\": \"string\"\n}"
+						}
+					]
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://api.truelist.io"
+		}
+	]
+}

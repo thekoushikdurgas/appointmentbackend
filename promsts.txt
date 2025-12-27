@@ -1,0 +1,286 @@
+# ========================================
+# BACKEND - FASTAPI PROMPTS REFERENCE
+# ========================================
+#
+# Backend-specific development prompts for FastAPI, PostgreSQL, and Celery
+# For general prompts, see: ../promsts.txt
+#
+# ========================================
+# API DEVELOPMENT PROMPTS
+# ========================================
+#
+# Create a new API endpoint following the existing patterns in app/api/v1 or app/api/v2
+#
+# Add a new filter parameter to the contacts endpoint that supports multi-value input
+#
+#
+# Add pagination support to a new endpoint using the cursor-based pagination utilities
+#
+# Create a new API version (v3) following the versioning structure in app/api
+#
+# Add authentication and authorization to a new endpoint using the existing dependency patterns
+#
+# Implement rate limiting for API endpoints
+#
+# Add request/response logging middleware for specific endpoints
+#
+# Create API documentation for a new endpoint with proper OpenAPI tags and descriptions
+#
+# ========================================
+# DATABASE PROMPTS
+# ========================================
+#
+# Create a new SQLAlchemy model following the existing patterns in app/models
+#
+# Add a new database migration for schema changes
+#
+# Create a new repository class following the AsyncRepository pattern in app/repositories
+#
+# Optimize a database query by adding proper indexes
+#
+# Add a new database relationship between existing models
+#
+# Create a database view or materialized view for complex queries
+#
+# Implement database connection pooling optimization
+#
+# Add database transaction handling for multi-step operations
+#
+# Create SQL documentation file for a new endpoint following the pattern in sql/apis
+#
+# Generate SQL code for inserting User Profiles and contacts
+#
+# ========================================
+# SERVICE LAYER PROMPTS
+# ========================================
+#
+# Create a new service class following the patterns in app/services
+#
+# Add business logic validation to an existing service
+#
+# Implement caching strategy for a service method
+#
+# Add error handling and retry logic to a service that calls external APIs
+#
+# Create a service that orchestrates multiple repository calls
+#
+# Add data transformation logic to a service following existing patterns
+#
+# ========================================
+# APOLLO.IO INTEGRATION PROMPTS
+# ========================================
+#
+# Add support for a new Apollo.io URL parameter in the Apollo integration service
+#
+# Implement caching for Apollo.io API responses
+#
+# Add error handling and retry logic for Apollo.io API calls
+#
+# Create a new Apollo.io endpoint mapping following existing patterns
+#
+# Optimize Apollo.io parameter parsing and mapping logic
+#
+# Add logging for Apollo.io API requests and responses
+#
+#
+# ========================================
+# CELERY BACKGROUND TASKS PROMPTS
+# ========================================
+#
+# Create a new Celery task following the patterns in app/tasks
+#
+# Add task retry logic with exponential backoff
+#
+# Implement task result tracking and status updates
+#
+# Add task progress reporting for long-running operations
+#
+# Create a scheduled task using Celery beat
+#
+# Add error handling and notification for failed tasks
+#
+# Implement task prioritization and queue management
+#
+# ========================================
+# TESTING PROMPTS
+# ========================================
+#
+# Create unit tests for a new service class
+#
+# Add integration tests for a new API endpoint
+#
+#
+# Add tests for Celery tasks
+#
+# Implement test fixtures for database setup and teardown
+#
+# Create mock data generators for testing
+#
+# Add performance tests for critical endpoints
+#
+# ========================================
+# CODE QUALITY PROMPTS
+# ========================================
+#
+# Refactor a function to follow the single responsibility principle
+#
+# Add type hints to a module that's missing them
+#
+# Remove all console.log statements and replace with proper logging
+#
+# Add docstrings to all functions and classes in a module
+#
+# Fix all mypy type checking errors in a module
+#
+# Refactor duplicate code into a reusable utility function
+#
+# Add error handling to a function that's missing it
+#
+# ========================================
+# DEPLOYMENT PROMPTS
+# ========================================
+#
+# Create a Dockerfile optimization for production deployment
+#
+# Add health check endpoints for container orchestration
+#
+# Implement graceful shutdown handling for the FastAPI application
+#
+# Add monitoring and metrics collection endpoints
+#
+# Create deployment scripts for production environment
+#
+# Add environment-specific configuration management
+#
+# Implement database migration strategy for production deployments
+#
+# ========================================
+# PERFORMANCE OPTIMIZATION PROMPTS
+# ========================================
+#
+# Optimize a slow database query by adding indexes or rewriting the query
+#
+# Implement query result caching for frequently accessed data
+#
+# Add database connection pooling optimization
+#
+# Optimize API response serialization
+#
+# Implement async/await patterns where synchronous code exists
+#
+# Add response compression for large API responses
+#
+# Optimize Celery task execution time
+#
+# ========================================
+# SECURITY PROMPTS
+# ========================================
+#
+# Add input validation and sanitization to an endpoint
+#
+# Implement rate limiting for authentication endpoints
+#
+# Add security headers to API responses
+#
+# Implement API key rotation mechanism
+#
+# Add audit logging for sensitive operations
+#
+# Implement data encryption for sensitive fields
+#
+# Add CORS configuration for production environment
+#
+# ========================================
+# LOGGING AND MONITORING PROMPTS
+# ========================================
+#
+# Add structured logging to a service class
+#
+# Implement request/response logging middleware
+#
+# Add error tracking and alerting for production
+#
+# Create logging configuration for different environments
+#
+# Add performance metrics collection
+#
+# Implement log aggregation and analysis
+#
+# ========================================
+# DATA IMPORT/EXPORT PROMPTS
+# ========================================
+#
+# Create a new data import task for a different file format
+#
+# Add validation and error handling to import tasks
+#
+# Implement progress reporting for large imports
+#
+# Create export functionality for contacts or companies
+#
+# Add support for incremental imports
+#
+# Implement data transformation during import
+#
+# ========================================
+# API DOCUMENTATION PROMPTS
+# ========================================
+#
+# Update API documentation for a modified endpoint
+#
+# Add example requests and responses to OpenAPI schema
+#
+# Create Postman collection updates for new endpoints
+#
+# Add API versioning documentation
+#
+# Create developer guide for API usage
+#
+# ========================================
+# GENERAL DEVELOPMENT PROMPTS
+# ========================================
+#
+# Learn, understand, and analyze the codebase deeply, then break tasks into smaller tasks
+#
+# Review the project structure and create a plan for implementing a new feature
+#
+# Refactor code to follow the existing architectural patterns
+#
+# Add comprehensive error handling to a module
+#
+# Create unit tests with high coverage for a module
+#
+# Document a complex algorithm or business logic
+#
+# ========================================
+# NOTES
+# ========================================
+#
+# - All prompts should be analyzed deeply before implementation
+# - Break complex tasks into smaller, manageable tasks
+# - Follow existing code patterns and conventions
+# - Write tests for new functionality
+# - Update documentation when adding new features
+# - Consider performance implications of changes
+# - Maintain backward compatibility when possible
+
+
+
+
+/v3/s3/files - > create a new endpoint to list all csv files in the S3 bucket
+/v3/s3/files/{file_id} - > create a new endpoint to get a csv file from the S3 bucket
+/v3/s3/files/{file_id}/?limit={limit}&offset={offset} - > create a new endpoint to get a csv file data from the S3 bucket with pagination
+/v3/cleanup/contact/single/{uuid} - > create a new endpoint to cleanup a single contact and contact_metadata tables from the database
+/v3/cleanup/contact/batch/ - > create a new endpoint to cleanup a batch of contacts and contact_metadata tables from the database
+/v3/cleanup/company/single/{uuid} - > create a new endpoint to cleanup a single company and company_metadata tables from the database
+/v3/cleanup/company/batch/ - > create a new endpoint to cleanup a batch of companies and company_metadata tables from the database
+/v3/email_pattern/contact/{uuid} - > create a new endpoint to get a email pattern for a single contact
+/v3/email_pattern/contact/batch/ - > create a new endpoint to get a email pattern for a batch of contact
+/v3/analysis/contact/{uuid} - > create a new endpoint to get a analysis for a single contact
+/v3/analysis/contact/batch/ - > create a new endpoint to get a analysis for a batch of contact
+/v3/analysis/company/{uuid} - > create a new endpoint to get a analysis for a single company
+/v3/analysis/company/batch/ - > create a new endpoint to get a analysis for a batch of company
+/v3/validation/contact/{uuid} - > create a new endpoint to get a validation for a single contact
+/v3/validation/contact/batch/ - > create a new endpoint to get a validation for a batch of contact
+/v3/validation/company/{uuid} - > create a new endpoint to get a validation for a single company
+/v3/validation/company/batch/ - > create a new endpoint to get a validation for a batch of company

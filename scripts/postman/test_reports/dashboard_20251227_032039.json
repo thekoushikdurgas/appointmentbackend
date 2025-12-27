@@ -1,0 +1,622 @@
+{
+  "overview": {
+    "total_tests": 243,
+    "passed": 164,
+    "failed": 13,
+    "skipped": 66,
+    "success_rate": 67.48971193415639,
+    "duration_seconds": 269.4832534790039
+  },
+  "trends": {
+    "response_time_trend": [],
+    "failure_rate_by_time": [],
+    "endpoint_stability": {
+      "GET /health": {
+        "stability_score": 100.0,
+        "avg_response_time": 11.501550674438477,
+        "total_tests": 1
+      },
+      "GET /health/db": {
+        "stability_score": 100.0,
+        "avg_response_time": 10.026693344116211,
+        "total_tests": 1
+      },
+      "GET /favicon.ico": {
+        "stability_score": 100.0,
+        "avg_response_time": 11.604070663452148,
+        "total_tests": 1
+      },
+      "GET /api/v1/": {
+        "stability_score": 100.0,
+        "avg_response_time": 11.034250259399414,
+        "total_tests": 1
+      },
+      "GET /api/v1/health/": {
+        "stability_score": 100.0,
+        "avg_response_time": 8.81195068359375,
+        "total_tests": 1
+      },
+      "GET /api/v1/health/vql": {
+        "stability_score": 100.0,
+        "avg_response_time": 3926.344633102417,
+        "total_tests": 1
+      },
+      "GET /api/v1/health/vql/stats": {
+        "stability_score": 100.0,
+        "avg_response_time": 29.715776443481445,
+        "total_tests": 1
+      },
+      "POST /api/v1/auth/register": {
+        "stability_score": 75.0,
+        "avg_response_time": 932.87593126297,
+        "total_tests": 8
+      },
+      "POST /api/v1/auth/register/": {
+        "stability_score": 75.0,
+        "avg_response_time": 508.18949937820435,
+        "total_tests": 8
+      },
+      "POST /api/v1/auth/login/": {
+        "stability_score": 100.0,
+        "avg_response_time": 1289.6649360656738,
+        "total_tests": 5
+      },
+      "POST /api/v1/auth/logout/": {
+        "stability_score": 100.0,
+        "avg_response_time": 954.3612003326416,
+        "total_tests": 3
+      },
+      "GET /api/v1/auth/session/": {
+        "stability_score": 100.0,
+        "avg_response_time": 24.276256561279297,
+        "total_tests": 1
+      },
+      "GET /api/v1/auth/user-info/": {
+        "stability_score": 100.0,
+        "avg_response_time": 2707.439184188843,
+        "total_tests": 1
+      },
+      "POST /api/v1/auth/refresh/": {
+        "stability_score": 100.0,
+        "avg_response_time": 580.6601047515869,
+        "total_tests": 3
+      },
+      "GET /api/v1/users/profile/": {
+        "stability_score": 100.0,
+        "avg_response_time": 1982.0585250854492,
+        "total_tests": 1
+      },
+      "PUT /api/v1/users/profile/": {
+        "stability_score": 100.0,
+        "avg_response_time": 743.790864944458,
+        "total_tests": 9
+      },
+      "POST /api/v1/users/profile/avatar/": {
+        "stability_score": 14.285714285714285,
+        "avg_response_time": 9375.17353466579,
+        "total_tests": 7
+      },
+      "POST /api/v1/users/promote-to-super-admin/": {
+        "stability_score": 100.0,
+        "avg_response_time": 1698.340892791748,
+        "total_tests": 1
+      },
+      "GET /api/v1/users/sales-navigator/list": {
+        "stability_score": 100.0,
+        "avg_response_time": 2547.4843978881836,
+        "total_tests": 1
+      },
+      "GET /api/v1/billing/": {
+        "stability_score": 100.0,
+        "avg_response_time": 1696.1510181427002,
+        "total_tests": 1
+      },
+      "GET /api/v1/billing/plans/": {
+        "stability_score": 100.0,
+        "avg_response_time": 14.051675796508789,
+        "total_tests": 1
+      },
+      "GET /api/v1/billing/addons/": {
+        "stability_score": 100.0,
+        "avg_response_time": 1976.8552780151367,
+        "total_tests": 1
+      },
+      "POST /api/v1/billing/subscribe/": {
+        "stability_score": 100.0,
+        "avg_response_time": 41.97287559509277,
+        "total_tests": 1
+      },
+      "POST /api/v1/billing/addon/": {
+        "stability_score": 100.0,
+        "avg_response_time": 10.076045989990234,
+        "total_tests": 1
+      },
+      "POST /api/v1/billing/cancel/": {
+        "stability_score": 100.0,
+        "avg_response_time": 1696.7597007751465,
+        "total_tests": 1
+      },
+      "GET /api/v1/billing/invoices/": {
+        "stability_score": 100.0,
+        "avg_response_time": 1696.124792098999,
+        "total_tests": 1
+      },
+      "POST /api/v1/billing/admin/plans/{tier}/periods/": {
+        "stability_score": 100.0,
+        "avg_response_time": 1697.5913047790527,
+        "total_tests": 1
+      },
+      "GET /api/v1/usage/current/": {
+        "stability_score": 100.0,
+        "avg_response_time": 3148.0352878570557,
+        "total_tests": 1
+      },
+      "POST /api/v1/usage/track/": {
+        "stability_score": 100.0,
+        "avg_response_time": 670.8768095288958,
+        "total_tests": 7
+      },
+      "GET /api/v2/ai-chats/": {
+        "stability_score": 100.0,
+        "avg_response_time": 2739.4185066223145,
+        "total_tests": 1
+      },
+      "POST /api/v2/ai-chats/": {
+        "stability_score": 100.0,
+        "avg_response_time": 2544.8925495147705,
+        "total_tests": 1
+      },
+      "GET /api/v2/ai-chats/{chat_id}/": {
+        "stability_score": 100.0,
+        "avg_response_time": 2541.090488433838,
+        "total_tests": 1
+      },
+      "POST /api/v2/ai-chats/{chat_id}/message": {
+        "stability_score": 100.0,
+        "avg_response_time": 14.117002487182617,
+        "total_tests": 1
+      },
+      "POST /api/v2/ai-chats/{chat_id}/message/stream": {
+        "stability_score": 100.0,
+        "avg_response_time": 14.09459114074707,
+        "total_tests": 1
+      },
+      "POST /api/v2/gemini/email/analyze": {
+        "stability_score": 100.0,
+        "avg_response_time": 11.196374893188477,
+        "total_tests": 1
+      },
+      "POST /api/v2/gemini/parse-filters": {
+        "stability_score": 100.0,
+        "avg_response_time": 13.585567474365234,
+        "total_tests": 1
+      },
+      "POST /api/v2/analytics/performance": {
+        "stability_score": 100.0,
+        "avg_response_time": 13.041496276855469,
+        "total_tests": 1
+      },
+      "POST /api/v3/contacts/query": {
+        "stability_score": 100.0,
+        "avg_response_time": 2108.871857325236,
+        "total_tests": 6
+      },
+      "POST /api/v3/contacts/count": {
+        "stability_score": 100.0,
+        "avg_response_time": 2138.171990712484,
+        "total_tests": 6
+      },
+      "GET /api/v3/contacts/filters": {
+        "stability_score": 100.0,
+        "avg_response_time": 1890.3095722198486,
+        "total_tests": 1
+      },
+      "POST /api/v3/contacts/filters/data": {
+        "stability_score": 100.0,
+        "avg_response_time": 16.10875129699707,
+        "total_tests": 1
+      },
+      "GET /api/v3/contacts/{contact_uuid}/": {
+        "stability_score": 100.0,
+        "avg_response_time": 2455.577611923218,
+        "total_tests": 1
+      },
+      "POST /api/v3/companies/query": {
+        "stability_score": 100.0,
+        "avg_response_time": 2481.6658973693848,
+        "total_tests": 5
+      },
+      "POST /api/v3/companies/count": {
+        "stability_score": 100.0,
+        "avg_response_time": 2131.276750564575,
+        "total_tests": 5
+      },
+      "GET /api/v3/companies/filters": {
+        "stability_score": 100.0,
+        "avg_response_time": 2108.994483947754,
+        "total_tests": 1
+      },
+      "POST /api/v3/companies/filters/data": {
+        "stability_score": 100.0,
+        "avg_response_time": 17.041683197021484,
+        "total_tests": 1
+      },
+      "GET /api/v3/companies/{company_uuid}/": {
+        "stability_score": 100.0,
+        "avg_response_time": 2445.939779281616,
+        "total_tests": 1
+      },
+      "GET /api/v3/companies/company/{company_uuid}/contacts/": {
+        "stability_score": 100.0,
+        "avg_response_time": 3127.8774738311768,
+        "total_tests": 1
+      },
+      "GET /api/v3/companies/company/{company_uuid}/contacts/count/": {
+        "stability_score": 100.0,
+        "avg_response_time": 2113.4603023529053,
+        "total_tests": 1
+      },
+      "GET /api/v3/companies/company/{company_uuid}/contacts/filters": {
+        "stability_score": 100.0,
+        "avg_response_time": 2964.5330905914307,
+        "total_tests": 1
+      },
+      "POST /api/v3/companies/company/{company_uuid}/contacts/filters/data": {
+        "stability_score": 100.0,
+        "avg_response_time": 18.860816955566406,
+        "total_tests": 1
+      },
+      "GET /api/v3/email/finder/": {
+        "stability_score": 100.0,
+        "avg_response_time": 6040.050506591797,
+        "total_tests": 1
+      },
+      "POST /api/v3/email/bulk/verifier/": {
+        "stability_score": 100.0,
+        "avg_response_time": 621.1297512054443,
+        "total_tests": 7
+      },
+      "POST /api/v3/email/single/verifier/": {
+        "stability_score": 88.88888888888889,
+        "avg_response_time": 249.17517768012152,
+        "total_tests": 9
+      },
+      "POST /api/v3/email/verifier/": {
+        "stability_score": 92.85714285714286,
+        "avg_response_time": 510.9873669488089,
+        "total_tests": 14
+      },
+      "POST /api/v3/email/verifier/single/": {
+        "stability_score": 91.66666666666666,
+        "avg_response_time": 753.1113227208456,
+        "total_tests": 12
+      },
+      "GET /api/v3/email/bulk/download/valid/test-slug-123/": {
+        "stability_score": 100.0,
+        "avg_response_time": 3555.877685546875,
+        "total_tests": 1
+      },
+      "POST /api/v3/exports/contacts/export": {
+        "stability_score": 100.0,
+        "avg_response_time": 58.08877944946289,
+        "total_tests": 1
+      },
+      "GET /api/v3/exports/{export_id}/status": {
+        "stability_score": 100.0,
+        "avg_response_time": 2880.0511360168457,
+        "total_tests": 1
+      },
+      "POST /api/v3/exports/companies/export": {
+        "stability_score": 100.0,
+        "avg_response_time": 24.236202239990234,
+        "total_tests": 1
+      },
+      "POST /api/v3/exports/contacts/export/chunked": {
+        "stability_score": 100.0,
+        "avg_response_time": 25.666475296020508,
+        "total_tests": 1
+      },
+      "GET /api/v3/exports/": {
+        "stability_score": 100.0,
+        "avg_response_time": 2057.823896408081,
+        "total_tests": 1
+      },
+      "GET /api/v3/activities/": {
+        "stability_score": 100.0,
+        "avg_response_time": 3198.880195617676,
+        "total_tests": 1
+      },
+      "GET /api/v3/activities/stats/": {
+        "stability_score": 100.0,
+        "avg_response_time": 4027.2629261016846,
+        "total_tests": 1
+      },
+      "GET /api/v3/s3/files": {
+        "stability_score": 100.0,
+        "avg_response_time": 4779.107093811035,
+        "total_tests": 1
+      },
+      "GET /api/v3/s3/files/{file_id}": {
+        "stability_score": 100.0,
+        "avg_response_time": 6586.734294891357,
+        "total_tests": 1
+      },
+      "POST /api/v3/sales-navigator/scrape": {
+        "stability_score": 100.0,
+        "avg_response_time": 27.65926718711853,
+        "total_tests": 8
+      },
+      "GET /api/v4/marketing/{page_id}": {
+        "stability_score": 100.0,
+        "avg_response_time": 4365.209579467773,
+        "total_tests": 1
+      },
+      "GET /api/v4/marketing/": {
+        "stability_score": 100.0,
+        "avg_response_time": 867.9261207580566,
+        "total_tests": 1
+      },
+      "GET /api/v4/admin/marketing/{page_id}": {
+        "stability_score": 100.0,
+        "avg_response_time": 2274.505376815796,
+        "total_tests": 1
+      },
+      "GET /api/v4/dashboard-pages/{page_id}": {
+        "stability_score": 100.0,
+        "avg_response_time": 2262.4011039733887,
+        "total_tests": 1
+      },
+      "GET /api/v4/dashboard-pages/": {
+        "stability_score": 100.0,
+        "avg_response_time": 5095.728635787964,
+        "total_tests": 1
+      }
+    }
+  },
+  "category_breakdown": {
+    "Global": {
+      "total": 4,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 1,
+      "success_rate": 75.0
+    },
+    "Root": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Health": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Authentication": {
+      "total": 29,
+      "passed": 25,
+      "failed": 4,
+      "skipped": 0,
+      "success_rate": 86.20689655172413
+    },
+    "User Profile": {
+      "total": 20,
+      "passed": 13,
+      "failed": 6,
+      "skipped": 1,
+      "success_rate": 65.0
+    },
+    "Super Admin Users": {
+      "total": 11,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 11,
+      "success_rate": 0.0
+    },
+    "Billing": {
+      "total": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Super Admin Billing": {
+      "total": 7,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 6,
+      "success_rate": 14.285714285714285
+    },
+    "Usage": {
+      "total": 12,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 4,
+      "success_rate": 66.66666666666666
+    },
+    "AI Chat": {
+      "total": 6,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 1,
+      "success_rate": 83.33333333333334
+    },
+    "Gemini AI": {
+      "total": 3,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 1,
+      "success_rate": 66.66666666666666
+    },
+    "Analytics": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Contacts": {
+      "total": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Companies": {
+      "total": 17,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Email": {
+      "total": 61,
+      "passed": 41,
+      "failed": 3,
+      "skipped": 17,
+      "success_rate": 67.21311475409836
+    },
+    "Export": {
+      "total": 6,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 1,
+      "success_rate": 83.33333333333334
+    },
+    "LinkedIn": {
+      "total": 5,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 5,
+      "success_rate": 0.0
+    },
+    "Activities": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "S3": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Sales Navigator": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Marketing": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Admin Marketing": {
+      "total": 15,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 14,
+      "success_rate": 6.666666666666667
+    },
+    "Dashboard Pages": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "success_rate": 100.0
+    },
+    "Admin Dashboard Pages": {
+      "total": 4,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 4,
+      "success_rate": 0.0
+    }
+  },
+  "performance_metrics": {
+    "avg_response_time_ms": 1521.1538015785864,
+    "median_response_time_ms": 58.08877944946289,
+    "p95_response_time_ms": 7260.828495025635,
+    "p99_response_time_ms": 9671.82993888855,
+    "slowest_endpoints": [
+      {
+        "endpoint": "POST /api/v1/users/profile/avatar/",
+        "avg_response_time_ms": 9375.17353466579,
+        "max_response_time_ms": 11491.966724395752,
+        "test_count": 7
+      },
+      {
+        "endpoint": "GET /api/v3/s3/files/{file_id}",
+        "avg_response_time_ms": 6586.734294891357,
+        "max_response_time_ms": 6586.734294891357,
+        "test_count": 1
+      },
+      {
+        "endpoint": "GET /api/v3/email/finder/",
+        "avg_response_time_ms": 6040.050506591797,
+        "max_response_time_ms": 6040.050506591797,
+        "test_count": 1
+      },
+      {
+        "endpoint": "GET /api/v4/dashboard-pages/",
+        "avg_response_time_ms": 5095.728635787964,
+        "max_response_time_ms": 5095.728635787964,
+        "test_count": 1
+      },
+      {
+        "endpoint": "GET /api/v3/s3/files",
+        "avg_response_time_ms": 4779.107093811035,
+        "max_response_time_ms": 4779.107093811035,
+        "test_count": 1
+      },
+      {
+        "endpoint": "GET /api/v4/marketing/{page_id}",
+        "avg_response_time_ms": 4365.209579467773,
+        "max_response_time_ms": 4365.209579467773,
+        "test_count": 1
+      },
+      {
+        "endpoint": "GET /api/v3/activities/stats/",
+        "avg_response_time_ms": 4027.2629261016846,
+        "max_response_time_ms": 4027.2629261016846,
+        "test_count": 1
+      },
+      {
+        "endpoint": "GET /api/v1/health/vql",
+        "avg_response_time_ms": 3926.344633102417,
+        "max_response_time_ms": 3926.344633102417,
+        "test_count": 1
+      },
+      {
+        "endpoint": "GET /api/v3/email/bulk/download/valid/test-slug-123/",
+        "avg_response_time_ms": 3555.877685546875,
+        "max_response_time_ms": 3555.877685546875,
+        "test_count": 1
+      },
+      {
+        "endpoint": "GET /api/v3/activities/",
+        "avg_response_time_ms": 3198.880195617676,
+        "max_response_time_ms": 3198.880195617676,
+        "test_count": 1
+      }
+    ]
+  },
+  "health_score": {
+    "score": 91.9774011299435,
+    "status": "excellent",
+    "factors": [
+      "Test failures: 7.3%",
+      "Performance issues: 12 slow endpoints"
+    ]
+  }
+}

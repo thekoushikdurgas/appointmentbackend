@@ -1,0 +1,17 @@
+[Unit]
+Description=Gunicorn service for Contact360 API
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/contact360-backend
+EnvironmentFile=/home/ubuntu/contact360-backend/.env
+ExecStart=/home/ubuntu/contact360-backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+RuntimeDirectory=contact360-api
+RuntimeDirectoryMode=0755
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

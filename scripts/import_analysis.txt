@@ -1,0 +1,266 @@
+
+================================================================================
+Import Analysis Summary
+================================================================================
+Total files analyzed: 196
+Files with imports to move: 18
+Total imports to move: 43
+================================================================================
+
+Files with imports to move:
+--------------------------------------------------------------------------------
+
+app\api\v1\endpoints\users.py
+  Total imports: 19
+  Imports to move: 2
+  Imports in functions: 2
+  Imports in classes: 0
+  Details:
+    Line 136: import json
+      Location: function_body (module::async_function:upload_avatar)
+      Reason: Inside function - should move to top
+    Line 137: import time
+      Location: function_body (module::async_function:upload_avatar)
+      Reason: Inside function - should move to top
+
+app\api\v2\endpoints\ai_chat_websocket.py
+  Total imports: 11
+  Imports to move: 1
+  Imports in functions: 1
+  Imports in classes: 0
+  Details:
+    Line 76: from app.db.session.AsyncSessionLocal
+      Location: function_body (module::async_function:websocket_chat_endpoint)
+      Reason: Inside function - should move to top
+
+app\api\v3\endpoints\companies.py
+  Total imports: 25
+  Imports to move: 1
+  Imports in functions: 1
+  Imports in classes: 0
+  Details:
+    Line 60: from app.utils.pagination_cache.build_pagination_links, build_list_meta
+      Location: function_body (module::async_function:query_companies)
+      Reason: Inside function - should move to top
+
+app\api\v3\endpoints\contacts.py
+  Total imports: 24
+  Imports to move: 1
+  Imports in functions: 1
+  Imports in classes: 0
+  Details:
+    Line 57: from app.utils.pagination_cache.build_pagination_links, build_list_meta
+      Location: function_body (module::async_function:query_contacts)
+      Reason: Inside function - should move to top
+
+app\api\v4\endpoints\dashboard_pages.py
+  Total imports: 8
+  Imports to move: 1
+  Imports in functions: 1
+  Imports in classes: 0
+  Details:
+    Line 63: from app.utils.access_control.has_role_access
+      Location: function_body (module::async_function:list_dashboard_pages)
+      Reason: Inside function - should move to top
+
+app\clients\connectra_client.py
+  Total imports: 17
+  Imports to move: 8
+  Imports in functions: 0
+  Imports in classes: 8
+  Details:
+    Line 106: import json
+      Location: method_body (module::class:ConnectraClient::async_function:_ensure_client)
+      Reason: Inside method - should move to top
+    Line 107: import time
+      Location: method_body (module::class:ConnectraClient::async_function:_ensure_client)
+      Reason: Inside method - should move to top
+    Line 164: import json
+      Location: method_body (module::class:ConnectraClient::async_function:_make_request)
+      Reason: Inside method - should move to top
+    Line 165: import time
+      Location: method_body (module::class:ConnectraClient::async_function:_make_request)
+      Reason: Inside method - should move to top
+    Line 362: import json
+      Location: method_body (module::class:ConnectraClient::async_function:count_companies)
+      Reason: Inside method - should move to top
+    Line 363: import time
+      Location: method_body (module::class:ConnectraClient::async_function:count_companies)
+      Reason: Inside method - should move to top
+    Line 448: import json
+      Location: method_body (module::class:ConnectraClient::async_function:get_filters)
+      Reason: Inside method - should move to top
+    Line 449: import time
+      Location: method_body (module::class:ConnectraClient::async_function:get_filters)
+      Reason: Inside method - should move to top
+
+app\core\middleware.py
+  Total imports: 9
+  Imports to move: 1
+  Imports in functions: 0
+  Imports in classes: 1
+  Details:
+    Line 116: from app.utils.logger.log_performance_issue
+      Location: method_body (module::class:TimingMiddleware::async_function:dispatch)
+      Reason: Inside method - should move to top
+
+app\db\session.py
+  Total imports: 15
+  Imports to move: 2
+  Imports in functions: 2
+  Imports in classes: 0
+  Details:
+    Line 37: from urllib.parse.parse_qs
+      Location: function_body (module::function:enhance_database_url)
+      Reason: Inside function - should move to top
+    Line 317: import time
+      Location: function_body (module::async_function:get_db)
+      Reason: Inside function - should move to top
+
+app\main.py
+  Total imports: 27
+  Imports to move: 3
+  Imports in functions: 3
+  Imports in classes: 0
+  Details:
+    Line 253: import json
+      Location: function_body (module::async_function:validation_exception_handler)
+      Reason: Inside function - should move to top
+    Line 443: from app.db.session.check_pool_health
+      Location: function_body (module::async_function:database_health_check)
+      Reason: Inside function - should move to top
+    Line 485: from fastapi.HTTPException
+      Location: function_body (module::async_function:catch_all_get_handler)
+      Reason: Inside function - should move to top
+
+app\repositories\user.py
+  Total imports: 23
+  Imports to move: 12
+  Imports in functions: 0
+  Imports in classes: 12
+  Details:
+    Line 42: import time
+      Location: method_body (module::class:UserRepository::async_function:get_by_uuid)
+      Reason: Inside method - should move to top
+    Line 121: import time
+      Location: method_body (module::class:UserRepository::async_function:get_by_email)
+      Reason: Inside method - should move to top
+    Line 179: import time
+      Location: method_body (module::class:UserRepository::async_function:create_user)
+      Reason: Inside method - should move to top
+    Line 219: import time
+      Location: method_body (module::class:UserRepository::async_function:update_user)
+      Reason: Inside method - should move to top
+    Line 267: import time
+      Location: method_body (module::class:UserRepository::async_function:list_all_users)
+      Reason: Inside method - should move to top
+    Line 312: import time
+      Location: method_body (module::class:UserRepository::async_function:delete_user)
+      Reason: Inside method - should move to top
+    Line 360: import time
+      Location: method_body (module::class:UserProfileRepository::async_function:get_by_user_id)
+      Reason: Inside method - should move to top
+    Line 395: import time
+      Location: method_body (module::class:UserProfileRepository::async_function:create_profile)
+      Reason: Inside method - should move to top
+    Line 431: import time
+      Location: method_body (module::class:UserProfileRepository::async_function:update_profile)
+      Reason: Inside method - should move to top
+    Line 528: import time
+      Location: method_body (module::class:UserHistoryRepository::async_function:create_history)
+      Reason: Inside method - should move to top
+    Line 664: import time
+      Location: method_body (module::class:UserActivityRepository::async_function:create_activity)
+      Reason: Inside method - should move to top
+    Line 720: import time
+      Location: method_body (module::class:UserActivityRepository::async_function:update_activity)
+      Reason: Inside method - should move to top
+
+app\services\gemini_service.py
+  Total imports: 6
+  Imports to move: 1
+  Imports in functions: 0
+  Imports in classes: 1
+  Details:
+    Line 199: import re
+      Location: method_body (module::class:GeminiService::function:_fallback_parse_filters)
+      Reason: Inside method - should move to top
+
+app\services\sales_navigator_service.py
+  Total imports: 20
+  Imports to move: 2
+  Imports in functions: 2
+  Imports in classes: 0
+  Details:
+    Line 1244: from app.clients.connectra_client.ConnectraClient
+      Location: function_body (module::async_function:upsert_contact_with_metadata)
+      Reason: Inside function - should move to top
+    Line 1472: from app.clients.connectra_client.ConnectraClient
+      Location: function_body (module::async_function:save_profiles_to_database)
+      Reason: Inside function - should move to top
+
+app\tasks\email_verifier_tasks.py
+  Total imports: 8
+  Imports to move: 1
+  Imports in functions: 1
+  Imports in classes: 0
+  Details:
+    Line 127: import asyncio
+      Location: function_body (module::async_function:verify_emails)
+      Reason: Inside function - should move to top
+
+app\tests\test_apollo_pagination.py
+  Total imports: 4
+  Imports to move: 2
+  Imports in functions: 2
+  Imports in classes: 0
+  Details:
+    Line 110: from urllib.parse.parse_qs, urlparse
+      Location: function_body (module::async_function:test_apollo_contacts_pagination_using_next_url)
+      Reason: Inside function - should move to top
+    Line 154: from app.utils.cursor.encode_offset_cursor
+      Location: function_body (module::async_function:test_apollo_contacts_cursor_pagination)
+      Reason: Inside function - should move to top
+
+app\tests\test_catchall_handler.py
+  Total imports: 5
+  Imports to move: 2
+  Imports in functions: 2
+  Imports in classes: 0
+  Details:
+    Line 24: import app.utils.catchall_handler
+      Location: function_body (module::async_function:test_handle_catchall_email_icypeas_success)
+      Reason: Inside function - should move to top
+    Line 43: import app.utils.catchall_handler
+      Location: function_body (module::async_function:test_handle_catchall_email_icypeas_failure)
+      Reason: Inside function - should move to top
+
+app\tests\test_truelist_service.py
+  Total imports: 5
+  Imports to move: 1
+  Imports in functions: 1
+  Imports in classes: 0
+  Details:
+    Line 41: import app.services.truelist_service
+      Location: function_body (module::async_function:test_truelist_verify_emails_chunks_by_51)
+      Reason: Inside function - should move to top
+
+app\utils\background_tasks.py
+  Total imports: 11
+  Imports to move: 1
+  Imports in functions: 1
+  Imports in classes: 0
+  Details:
+    Line 787: from app.db.session.get_db
+      Location: function_body (module::async_function:background_task_with_db_session)
+      Reason: Inside function - should move to top
+
+app\utils\cache_helpers.py
+  Total imports: 6
+  Imports to move: 1
+  Imports in functions: 1
+  Imports in classes: 0
+  Details:
+    Line 125: from app.core.config.get_settings
+      Location: function_body (module::function:get_app_config_cached)
+      Reason: Inside function - should move to top

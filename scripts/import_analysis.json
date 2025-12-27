@@ -1,0 +1,755 @@
+{
+  "summary": {
+    "total_files": 196,
+    "files_with_issues": 18,
+    "total_imports_to_move": 43,
+    "total_errors": 0
+  },
+  "files": [
+    {
+      "file_path": "app\\api\\v1\\endpoints\\users.py",
+      "total_imports": 19,
+      "imports_at_top": 17,
+      "imports_to_move": 2,
+      "imports_in_functions": 2,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 136,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:upload_avatar",
+          "import_type": "import",
+          "module": "json",
+          "names": [],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "        )\n    \n    # #region agent log\n    import json\n    import time\n    try:\n        with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:"
+        },
+        {
+          "line": 137,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:upload_avatar",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "    \n    # #region agent log\n    import json\n    import time\n    try:\n        with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:\n            f.write(json.dumps({"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\api\\v2\\endpoints\\ai_chat_websocket.py",
+      "total_imports": 11,
+      "imports_at_top": 10,
+      "imports_to_move": 1,
+      "imports_in_functions": 1,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 76,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:websocket_chat_endpoint",
+          "import_type": "from",
+          "module": "app.db.session",
+          "names": [
+            "AsyncSessionLocal"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "        return\n    \n    # Verify chat ownership\n    from app.db.session import AsyncSessionLocal\n    \n    async with AsyncSessionLocal() as session:\n        chat = await service.repository.get_by_uuid_and_user_uuid(session, chat_id, user.uuid)"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\api\\v3\\endpoints\\companies.py",
+      "total_imports": 25,
+      "imports_at_top": 24,
+      "imports_to_move": 1,
+      "imports_in_functions": 1,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 60,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:query_companies",
+          "import_type": "from",
+          "module": "app.utils.pagination_cache",
+          "names": [
+            "build_pagination_links",
+            "build_list_meta"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "    results = await service.query_with_vql(session, vql_query)\n    \n    # Build pagination links\n    from app.utils.pagination_cache import build_pagination_links, build_list_meta\n    \n    request_url = str(request.url)\n    limit = vql_query.limit"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\api\\v3\\endpoints\\contacts.py",
+      "total_imports": 24,
+      "imports_at_top": 23,
+      "imports_to_move": 1,
+      "imports_in_functions": 1,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 57,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:query_contacts",
+          "import_type": "from",
+          "module": "app.utils.pagination_cache",
+          "names": [
+            "build_pagination_links",
+            "build_list_meta"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "    results = await service.query_with_vql(session, vql_query)\n    \n    # Build pagination links\n    from app.utils.pagination_cache import build_pagination_links, build_list_meta\n    \n    request_url = str(request.url)\n    limit = vql_query.limit"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\api\\v4\\endpoints\\dashboard_pages.py",
+      "total_imports": 8,
+      "imports_at_top": 7,
+      "imports_to_move": 1,
+      "imports_in_functions": 1,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 63,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:list_dashboard_pages",
+          "import_type": "from",
+          "module": "app.utils.access_control",
+          "names": [
+            "has_role_access"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "    result = await service.list_pages()\n    \n    # Filter pages based on access control\n    from app.utils.access_control import has_role_access\n    \n    filtered_pages = []\n    for page in result.pages:"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\clients\\connectra_client.py",
+      "total_imports": 17,
+      "imports_at_top": 9,
+      "imports_to_move": 8,
+      "imports_in_functions": 0,
+      "imports_in_classes": 8,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 106,
+          "column": 12,
+          "location": "method_body",
+          "scope": "module::class:ConnectraClient::async_function:_ensure_client",
+          "import_type": "import",
+          "module": "json",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        \"\"\"Ensure HTTP client is initialized.\"\"\"\n        if self._client is None:\n            # #region agent log\n            import json\n            import time\n            try:\n                with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:"
+        },
+        {
+          "line": 107,
+          "column": 12,
+          "location": "method_body",
+          "scope": "module::class:ConnectraClient::async_function:_ensure_client",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        if self._client is None:\n            # #region agent log\n            import json\n            import time\n            try:\n                with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:\n                    f.write(json.dumps({\"id\": \"log_client_init\", \"timestamp\": int(time.time() * 1000), \"location\": \"connectra_client.py:69\", \"message\": \"Initializing httpx client\", \"data\": {\"base_url\": self.base_url, \"has_api_key\": bool(self.api_key)}, \"sessionId\": \"debug-session\", \"runId\": \"run1\", \"hypothesisId\": \"C\"}) + \"\\n\")"
+        },
+        {
+          "line": 164,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:ConnectraClient::async_function:_make_request",
+          "import_type": "import",
+          "module": "json",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "            ConnectraClientError: If request fails\n        \"\"\"\n        # #region agent log\n        import json\n        import time\n        try:\n            with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:"
+        },
+        {
+          "line": 165,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:ConnectraClient::async_function:_make_request",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        \"\"\"\n        # #region agent log\n        import json\n        import time\n        try:\n            with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:\n                f.write(json.dumps({\"id\": \"log_make_request_entry\", \"timestamp\": int(time.time() * 1000), \"location\": \"connectra_client.py:113\", \"message\": \"_make_request called\", \"data\": {\"method\": method, \"endpoint\": endpoint, \"base_url\": self.base_url, \"full_url\": f\"{self.base_url}{endpoint}\"}, \"sessionId\": \"debug-session\", \"runId\": \"run1\", \"hypothesisId\": \"B\"}) + \"\\n\")"
+        },
+        {
+          "line": 362,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:ConnectraClient::async_function:count_companies",
+          "import_type": "import",
+          "module": "json",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "            Total count of matching companies\n        \"\"\"\n        # #region agent log\n        import json\n        import time\n        try:\n            with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:"
+        },
+        {
+          "line": 363,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:ConnectraClient::async_function:count_companies",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        \"\"\"\n        # #region agent log\n        import json\n        import time\n        try:\n            with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:\n                f.write(json.dumps({\"id\": \"log_count_companies_entry\", \"timestamp\": int(time.time() * 1000), \"location\": \"connectra_client.py:186\", \"message\": \"count_companies called\", \"data\": {}, \"sessionId\": \"debug-session\", \"runId\": \"run1\", \"hypothesisId\": \"A\"}) + \"\\n\")"
+        },
+        {
+          "line": 448,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:ConnectraClient::async_function:get_filters",
+          "import_type": "import",
+          "module": "json",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        service_plural = \"companies\" if service == \"company\" else \"contacts\"\n        response_data = await self._make_request(\"GET\", f\"/{service_plural}/filters\")\n        # #region agent log\n        import json\n        import time\n        try:\n            with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:"
+        },
+        {
+          "line": 449,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:ConnectraClient::async_function:get_filters",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        response_data = await self._make_request(\"GET\", f\"/{service_plural}/filters\")\n        # #region agent log\n        import json\n        import time\n        try:\n            with open(r\"d:\\code\\ayan\\contact360\\.cursor\\debug.log\", \"a\", encoding=\"utf-8\") as f:\n                f.write(json.dumps({"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\core\\middleware.py",
+      "total_imports": 9,
+      "imports_at_top": 8,
+      "imports_to_move": 1,
+      "imports_in_functions": 0,
+      "imports_in_classes": 1,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 116,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:TimingMiddleware::async_function:dispatch",
+          "import_type": "from",
+          "module": "app.utils.logger",
+          "names": [
+            "log_performance_issue"
+          ],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "\n    async def dispatch(self, request: Request, call_next: Callable) -> Response:\n        \"\"\"Measure request processing duration and add to response headers.\"\"\"\n        from app.utils.logger import log_performance_issue\n        \n        start_time = time.perf_counter()\n        "
+        }
+      ]
+    },
+    {
+      "file_path": "app\\db\\session.py",
+      "total_imports": 15,
+      "imports_at_top": 13,
+      "imports_to_move": 2,
+      "imports_in_functions": 2,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 37,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::function:enhance_database_url",
+          "import_type": "from",
+          "module": "urllib.parse",
+          "names": [
+            "parse_qs"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "        return url\n    \n    parsed = urlparse(url)\n    from urllib.parse import parse_qs\n    query_params = parse_qs(parsed.query)\n    \n    # Add compression parameters for asyncpg"
+        },
+        {
+          "line": 317,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:get_db",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "    Note: The session is automatically closed by the async context manager.\n    We should not explicitly close it in a finally block to avoid race conditions.\n    \"\"\"\n    import time\n    start_time = time.time()\n    \n    # Use context manager to ensure proper connection pool management"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\main.py",
+      "total_imports": 27,
+      "imports_at_top": 24,
+      "imports_to_move": 3,
+      "imports_in_functions": 3,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 253,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:validation_exception_handler",
+          "import_type": "import",
+          "module": "json",
+          "names": [],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "    request: Request, exc: RequestValidationError\n) -> JSONResponse:\n    \"\"\"Handle Pydantic validation errors with detailed logging.\"\"\"\n    import json\n    \n    request_id = request.headers.get(\"X-Request-Id\")\n    "
+        },
+        {
+          "line": 443,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:database_health_check",
+          "import_type": "from",
+          "module": "app.db.session",
+          "names": [
+            "check_pool_health"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "@app.get(\"/health/db\", tags=[\"Health\"])\nasync def database_health_check():\n    \"\"\"Database connection pool health check endpoint.\"\"\"\n    from app.db.session import check_pool_health\n    \n    health = check_pool_health()\n    return health"
+        },
+        {
+          "line": 485,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:catch_all_get_handler",
+          "import_type": "from",
+          "module": "fastapi",
+          "names": [
+            "HTTPException"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "            \"docs\": settings.DOCS_URL or \"/docs\",\n        })\n    # For other unmatched paths, let FastAPI return 404 naturally\n    from fastapi import HTTPException\n    raise HTTPException(status_code=404, detail=\"Not Found\")\n"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\repositories\\user.py",
+      "total_imports": 23,
+      "imports_at_top": 11,
+      "imports_to_move": 12,
+      "imports_in_functions": 0,
+      "imports_in_classes": 12,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 42,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserRepository::async_function:get_by_uuid",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        Optimized query with timeout handling to prevent database hangs.\n        Uses ORM query which properly attaches objects to the session.\n        \"\"\"\n        import time\n        start_time = time.time()\n        \n        # Use ORM query which properly handles session attachment"
+        },
+        {
+          "line": 121,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserRepository::async_function:get_by_email",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        Optimized to load only necessary scalar columns and skip relationships to\n        avoid unnecessary joins/lazy loads during authentication.\n        \"\"\"\n        import time\n        start_time = time.time()\n        try:\n            stmt: Select[tuple[User]] = ("
+        },
+        {
+          "line": 179,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserRepository::async_function:create_user",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        name: Optional[str] = None,\n    ) -> User:\n        \"\"\"Create a new user.\"\"\"\n        import time\n        start_time = time.time()\n        try:\n            user = User("
+        },
+        {
+          "line": 219,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserRepository::async_function:update_user",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        **kwargs\n    ) -> User:\n        \"\"\"Update user fields.\"\"\"\n        import time\n        start_time = time.time()\n        try:\n            updated_fields = list(kwargs.keys())"
+        },
+        {
+          "line": 267,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserRepository::async_function:list_all_users",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        offset: int = 0,\n    ) -> tuple[list[User], int]:\n        \"\"\"List all users with pagination.\"\"\"\n        import time\n        start_time = time.time()\n        try:\n            # Get total count"
+        },
+        {
+          "line": 312,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserRepository::async_function:delete_user",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        user: User,\n    ) -> None:\n        \"\"\"Delete a user (cascade will delete profile).\"\"\"\n        import time\n        start_time = time.time()\n        user_uuid = user.uuid if user else None\n        try:"
+        },
+        {
+          "line": 360,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserProfileRepository::async_function:get_by_user_id",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        This method is frequently called and can be slow. Logging is added\n        to track performance issues.\n        \"\"\"\n        import time\n        start_time = time.time()\n        try:\n            stmt: Select[tuple[UserProfile]] = select(self.model).where(self.model.user_id == user_id)"
+        },
+        {
+          "line": 395,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserProfileRepository::async_function:create_profile",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        **kwargs\n    ) -> UserProfile:\n        \"\"\"Create a new user profile.\"\"\"\n        import time\n        start_time = time.time()\n        try:\n            profile = UserProfile(user_id=user_id, **kwargs)"
+        },
+        {
+          "line": 431,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserProfileRepository::async_function:update_profile",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        **kwargs\n    ) -> UserProfile:\n        \"\"\"Update profile fields.\"\"\"\n        import time\n        start_time = time.time()\n        try:\n            updated_fields = [key for key, value in kwargs.items() if value is not None]"
+        },
+        {
+          "line": 528,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserHistoryRepository::async_function:create_history",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        if not is_valid_uuid(user_id):\n            raise ValueError(f\"user_id must be a valid UUID format, got: {user_id}\")\n        \n        import time\n        start_time = time.time()\n        try:\n            history = UserHistory("
+        },
+        {
+          "line": 664,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserActivityRepository::async_function:create_activity",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        if not is_valid_uuid(user_id):\n            raise ValueError(f\"user_id must be a valid UUID format, got: {user_id}\")\n        \n        import time\n        start_time = time.time()\n        try:\n            activity = UserActivity("
+        },
+        {
+          "line": 720,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:UserActivityRepository::async_function:update_activity",
+          "import_type": "import",
+          "module": "time",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "        **kwargs\n    ) -> UserActivity:\n        \"\"\"Update activity fields (used for updating export activities when they complete).\"\"\"\n        import time\n        start_time = time.time()\n        try:\n            updated_fields = [key for key, value in kwargs.items() if value is not None]"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\services\\gemini_service.py",
+      "total_imports": 6,
+      "imports_at_top": 5,
+      "imports_to_move": 1,
+      "imports_in_functions": 0,
+      "imports_in_classes": 1,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 199,
+          "column": 8,
+          "location": "method_body",
+          "scope": "module::class:GeminiService::function:_fallback_parse_filters",
+          "import_type": "import",
+          "module": "re",
+          "names": [],
+          "alias": null,
+          "reason": "Inside method - should move to top",
+          "code_context": "            result[\"industry\"] = result.get(\"industry\", []) + [\"Finance\"]\n        \n        # Employee count\n        import re\n        employee_match = re.search(r'(\\d+)', query)\n        if employee_match:\n            num = int(employee_match.group(1))"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\services\\sales_navigator_service.py",
+      "total_imports": 20,
+      "imports_at_top": 18,
+      "imports_to_move": 2,
+      "imports_in_functions": 2,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 1244,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:upsert_contact_with_metadata",
+          "import_type": "from",
+          "module": "app.clients.connectra_client",
+          "names": [
+            "ConnectraClient"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "    contact_uuid = generate_contact_uuid(linkedin_url, email)\n    \n    # Check if contact exists using Connectra\n    from app.clients.connectra_client import ConnectraClient\n    existing_contact = None\n    try:\n        async with ConnectraClient() as client:"
+        },
+        {
+          "line": 1472,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:save_profiles_to_database",
+          "import_type": "from",
+          "module": "app.clients.connectra_client",
+          "names": [
+            "ConnectraClient"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "            }\n        }\n    \"\"\"\n    from app.clients.connectra_client import ConnectraClient\n    \n    summary = {\n        'total_profiles': len(profiles),"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\tasks\\email_verifier_tasks.py",
+      "total_imports": 8,
+      "imports_at_top": 7,
+      "imports_to_move": 1,
+      "imports_in_functions": 1,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 127,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:verify_emails",
+          "import_type": "import",
+          "module": "asyncio",
+          "names": [],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "        domain: Email domain\n        email_count: Number of emails to process per batch (default: 1000)\n    \"\"\"\n    import asyncio\n    \n    start_time = time.time()\n    "
+        }
+      ]
+    },
+    {
+      "file_path": "app\\tests\\test_apollo_pagination.py",
+      "total_imports": 4,
+      "imports_at_top": 2,
+      "imports_to_move": 2,
+      "imports_in_functions": 2,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 110,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:test_apollo_contacts_pagination_using_next_url",
+          "import_type": "from",
+          "module": "urllib.parse",
+          "names": [
+            "parse_qs",
+            "urlparse"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "    next_url = data1[\"next\"]\n    \n    # Parse the next URL to extract query parameters\n    from urllib.parse import parse_qs, urlparse\n    parsed_next = urlparse(next_url)\n    next_params = parse_qs(parsed_next.query)\n    "
+        },
+        {
+          "line": 154,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:test_apollo_contacts_cursor_pagination",
+          "import_type": "from",
+          "module": "app.utils.cursor",
+          "names": [
+            "encode_offset_cursor"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "@pytest.mark.asyncio\nasync def test_apollo_contacts_cursor_pagination(async_client, db_session):\n    \"\"\"Test cursor-based pagination for Apollo contacts.\"\"\"\n    from app.utils.cursor import encode_offset_cursor\n    \n    # Create 12 test contacts\n    for i in range(12):"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\tests\\test_catchall_handler.py",
+      "total_imports": 5,
+      "imports_at_top": 3,
+      "imports_to_move": 2,
+      "imports_in_functions": 2,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 24,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:test_handle_catchall_email_icypeas_success",
+          "import_type": "import",
+          "module": "app.utils.catchall_handler",
+          "names": [],
+          "alias": "module",
+          "reason": "Inside function - should move to top",
+          "code_context": "@pytest.mark.asyncio\nasync def test_handle_catchall_email_icypeas_success(monkeypatch):\n    # Patch IcyPeasService used inside handle_catchall_email\n    import app.utils.catchall_handler as module\n\n    monkeypatch.setattr(module, \"IcyPeasService\", lambda: DummyIcyPeasServiceSuccess(\"icypeas@example.com\", \"ultra_sure\"))\n"
+        },
+        {
+          "line": 43,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:test_handle_catchall_email_icypeas_failure",
+          "import_type": "import",
+          "module": "app.utils.catchall_handler",
+          "names": [],
+          "alias": "module",
+          "reason": "Inside function - should move to top",
+          "code_context": "\n@pytest.mark.asyncio\nasync def test_handle_catchall_email_icypeas_failure(monkeypatch):\n    import app.utils.catchall_handler as module\n\n    monkeypatch.setattr(module, \"IcyPeasService\", lambda: DummyIcyPeasServiceFailure())\n"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\tests\\test_truelist_service.py",
+      "total_imports": 5,
+      "imports_at_top": 4,
+      "imports_to_move": 1,
+      "imports_in_functions": 1,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 41,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:test_truelist_verify_emails_chunks_by_51",
+          "import_type": "import",
+          "module": "app.services.truelist_service",
+          "names": [],
+          "alias": "truelist_module",
+          "reason": "Inside function - should move to top",
+          "code_context": "            return DummyResponse()\n\n    # Patch httpx.AsyncClient used inside TruelistService\n    import app.services.truelist_service as truelist_module\n\n    monkeypatch.setattr(truelist_module.httpx, \"AsyncClient\", lambda timeout=30.0: DummyClient())\n"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\utils\\background_tasks.py",
+      "total_imports": 11,
+      "imports_at_top": 10,
+      "imports_to_move": 1,
+      "imports_in_functions": 1,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 787,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::async_function:background_task_with_db_session",
+          "import_type": "from",
+          "module": "app.db.session",
+          "names": [
+            "get_db"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "            user_id=123\n        )\n    \"\"\"\n    from app.db.session import get_db\n    \n    if db_session_factory is None:\n        db_session_factory = get_db"
+        }
+      ]
+    },
+    {
+      "file_path": "app\\utils\\cache_helpers.py",
+      "total_imports": 6,
+      "imports_at_top": 5,
+      "imports_to_move": 1,
+      "imports_in_functions": 1,
+      "imports_in_classes": 0,
+      "errors": [],
+      "imports_to_move_details": [
+        {
+          "line": 125,
+          "column": 4,
+          "location": "function_body",
+          "scope": "module::function:get_app_config_cached",
+          "import_type": "from",
+          "module": "app.core.config",
+          "names": [
+            "get_settings"
+          ],
+          "alias": null,
+          "reason": "Inside function - should move to top",
+          "code_context": "    This is called once per process and cached for the lifetime of the process.\n    Perfect use case for @lru_cache() since config rarely changes.\n    \"\"\"\n    from app.core.config import get_settings\n    \n    settings = get_settings()\n    return {"
+        }
+      ]
+    }
+  ]
+}

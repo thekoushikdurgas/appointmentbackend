@@ -1,0 +1,41 @@
+# Production dependencies
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+pydantic
+pydantic-settings
+python-jose[cryptography]
+bcrypt
+python-multipart
+aiofiles
+python-dotenv
+tenacity
+httpx
+orjson
+email-validator
+boto3>=1.40.70
+aioboto3>=7.0.0
+botocore>=1.40.70,<1.40.71
+beautifulsoup4
+lxml
+urllib3
+google-generativeai
+cachetools>=5.3.0
+motor>=3.3.0
+pymongo>=4.6.0
+
+# Optional dependencies for enhanced features
+# Redis for distributed caching (optional - only needed if ENABLE_REDIS_CACHE=True)
+# redis>=5.0.0
+
+# Development dependencies (optional)
+# Uncomment the following lines for development:
+pytest
+pytest-asyncio
+pytest-cov
+ruff
+mypy
+black
+ipython
+

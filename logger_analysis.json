@@ -1,0 +1,712 @@
+{
+  "summary": {
+    "total_files": 196,
+    "files_with_logger": 32,
+    "files_needing_logger": 117,
+    "files_with_errors": 0
+  },
+  "files_needing_logger": [
+    {
+      "file_path": "app\\api\\deps.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v1\\api.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v1\\endpoints\\billing.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v1\\endpoints\\health.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v1\\endpoints\\usage.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v2\\api.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v2\\endpoints\\ai_chat_websocket.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v2\\endpoints\\ai_chats.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v2\\endpoints\\gemini.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v2\\endpoints\\usage.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v3\\api.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v3\\endpoints\\activities.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v3\\endpoints\\companies.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v3\\endpoints\\contacts.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v3\\endpoints\\linkedin.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v3\\endpoints\\s3.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v3\\endpoints\\sales_navigator.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v3\\endpoints\\upload.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v4\\api.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v4\\endpoints\\admin_dashboard_pages.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v4\\endpoints\\admin_marketing.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v4\\endpoints\\dashboard_pages.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\api\\v4\\endpoints\\marketing.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\clients\\mongodb.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\ai_config.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\config.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\constants.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\exceptions.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\security.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\vql\\company_contact_converter.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\vql\\field_mapper.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\vql\\operators.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\vql\\parser.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\vql\\query_builder.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\core\\vql\\structures.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\db\\base.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\db\\types.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\models\\ai_chat.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\models\\billing.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\models\\companies.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\models\\contacts.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\models\\email_patterns.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\models\\exports.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\models\\token_blacklist.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\models\\user.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\models\\user_scraping.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\repositories\\ai_chat.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\repositories\\billing.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\repositories\\dashboard_repository.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\repositories\\email_finder.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\repositories\\email_patterns.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\repositories\\linkedin.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\repositories\\marketing_repository.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\repositories\\token_blacklist.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\repositories\\user_scraping.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\ai_chat.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\billing.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\common.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\companies.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\contacts.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\dashboard.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\email.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\exports.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\filters.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\linkedin.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\marketing.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\metadata.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\sales_navigator.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\usage.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\user.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\user_scraping.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\v3\\s3.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\v3\\upload.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\schemas\\vql.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\access_control_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\activity_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\ai_chat_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\base.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\dashboard_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\data_pipeline_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\gemini_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\icypeas_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\marketing_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\s3_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\truelist_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\upload_session_manager.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\usage_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\services\\websocket_manager.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\access_control.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\background_tasks.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\cache_helpers.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\cache_service.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\catchall_handler.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\company_name_utils.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\cursor.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\domain.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\email_generator.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\exists_subquery_detector.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\file_uploads.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\hydration.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\industry_mapping.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\keyword_utils.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\normalization.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\pagination.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\pagination_cache.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\parallel_processing.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\query.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\query_batch.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\query_cache.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\query_monitor.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\sales_navigator_utils.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\signed_url.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\streaming_queries.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\streaming_responses.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\text_normalization.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\title_utils.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    },
+    {
+      "file_path": "app\\utils\\validation.py",
+      "imports_logging": false,
+      "uses_logger_utils": false,
+      "errors": []
+    }
+  ]
+}

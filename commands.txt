@@ -1,0 +1,322 @@
+# ========================================
+# BACKEND - FASTAPI COMMANDS REFERENCE
+# ========================================
+#
+# Contact360 FastAPI Backend - Development Commands
+# For root-level commands, see: ../commands.txt
+#
+# ========================================
+# QUICK START
+# ========================================
+#
+# 1. Environment Setup:
+#    python -m venv venv
+#    venv\Scripts\activate          # Windows
+#    source venv/bin/activate       # Linux/Mac
+#    pip install --upgrade pip setuptools wheel
+#    pip install -r requirements.txt
+#    pip install -e ".[dev]"
+#
+# 2. Environment Configuration:
+#    copy .env.example .env         # Windows
+#    cp .env.example .env           # Linux/Mac
+#    # Edit .env with your configuration
+#
+# 3. Start Services:
+#    uvicorn app.main:app --reload
+#
+# ========================================
+# ENVIRONMENT SETUP
+# ========================================
+#
+# Create virtual environment:
+python -m venv venv
+
+# Activate virtual environment:
+venv\Scripts\activate              # Windows
+source venv/bin/activate            # Linux/Mac
+
+# Upgrade pip and install dependencies:
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+pip install -e ".[dev]"            # Install with dev dependencies
+
+# Copy environment template:
+copy .env.example .env              # Windows
+cp .env.example .env               # Linux/Mac
+
+# ========================================
+# DEVELOPMENT
+# ========================================
+#
+# Start API server (development):
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn app.main:app --reload
+
+# Start API server (production):
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+# Start with custom config:
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > test.txt
+
+# ========================================
+# BACKGROUND TASKS
+# ========================================
+#
+# Background tasks run automatically with the API server using FastAPI's BackgroundTasks.
+# No separate worker process is required.
+#
+# Task status can be tracked via the application logs or database records
+# for long-running tasks (imports, exports).
+
+# ========================================
+# TESTING
+# ========================================
+#
+# Run all tests:
+pytest
+python -m pytest
+
+# Run tests with coverage:
+pytest --cov=app --cov-report=term-missing
+pytest --cov=app --cov-report=html
+
+# Run specific test file:
+pytest app/tests/test_contacts.py -vv
+pytest app/tests/integration/test_api_endpoints.py -vv
+
+# Run integration tests:
+pytest app/tests/integration/test_api_endpoints.py --api-base-url http://0.0.0.0:8000
+pytest app/tests/integration/test_api_endpoints.py --api-base-url http://0.0.0.0:8000 --api-admin-username admin --api-admin-password secret
+
+# Run tests with output to file:
+python -m pytest > test_results.txt
+
+# Run tests with specific markers:
+pytest -m "not slow"
+pytest -m "integration"
+
+# ========================================
+# CODE QUALITY
+# ========================================
+#
+# Linting with Ruff:
+ruff check app
+ruff check app --fix
+ruff format app
+
+# Type checking with mypy:
+mypy app
+mypy app --strict
+
+# Format with Black (if installed):
+black app
+black app --check
+
+# Clean Python cache files (Windows):
+python -Bc "import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]"
+python -Bc "import pathlib; [p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')]"
+
+# Clean Python cache files (Linux/Mac):
+find . -type d -name __pycache__ -exec rm -r {} +
+find . -type f -name "*.pyc" -delete
+find . -type f -name "*.pyo" -delete
+
+# ========================================
+# DATABASE
+# ========================================
+#
+# Check database connectivity:
+psql "postgresql://$POSTGRES_USER:$POSTGRES_PASS@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB" -c '\dt'
+
+# Connect to database:
+psql "postgresql://$POSTGRES_USER:$POSTGRES_PASS@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB"
+
+# List all tables:
+psql "postgresql://$POSTGRES_USER:$POSTGRES_PASS@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB" -c '\dt'
+
+# Run SQL scripts:
+cd ../sql
+python sql_runner.py
+
+# Database migrations (if Alembic is used):
+# alembic upgrade head
+# alembic revision --autogenerate -m "description"
+# alembic downgrade -1
+
+# ========================================
+# DATA IMPORT/EXPORT
+# ========================================
+#
+# Run data import:
+python -m app.tasks.import_tasks --help
+python -m app.tasks.import_tasks run --file data/data.csv
+
+# Clean database:
+# NOTE: scripts/data dependencies have been removed
+# python -m scripts.data.clean_database
+
+# ========================================
+# DOCKER
+# ========================================
+#
+# Build and start services:
+docker compose up --build
+docker compose up -d --build              # Detached mode
+
+# View logs:
+docker compose logs -f api
+docker compose logs -f                    # All services
+
+# Stop services:
+docker compose down
+docker compose down -v                    # Remove volumes
+
+# Restart specific service:
+docker compose restart api
+
+# Execute command in container:
+docker compose exec api bash
+
+# ========================================
+# API TESTING
+# ========================================
+#
+# Test Apollo APIs:
+python scripts/test_apollo_apis.py --token "YOUR_TOKEN"
+
+# Test contact attributes:
+python scripts/test_contact_attributes.py --token "YOUR_TOKEN"
+
+# Format Postman collection:
+python -m json.tool "postman/Contact360 API.postman_collection.json"
+
+# Test API endpoints with curl:
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/api/v1/ -H "Authorization: Bearer YOUR_TOKEN"
+
+# ========================================
+# LOGGING
+# ========================================
+#
+# View application logs:
+tail -f logs/app.log                      # Linux/Mac
+type logs\app.log                          # Windows (view)
+Get-Content logs\app.log -Wait             # Windows (tail)
+
+# View background task logs:
+# Background tasks are logged in the main application log file
+
+# ========================================
+# DEPLOYMENT
+# ========================================
+#
+# Production server with Gunicorn:
+gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+
+# Systemd service management:
+sudo systemctl restart appointmentbackend-api.service
+sudo systemctl status appointmentbackend-api.service
+sudo systemctl stop appointmentbackend-api.service
+sudo journalctl -u appointmentbackend-api.service -f
+
+# ========================================
+# QUICK REFERENCE
+# ========================================
+#
+# Application Entrypoints:
+# - API:        uvicorn app.main:app
+#
+# Service URLs:
+# - Docs:       http://127.0.0.1:8000/docs
+# - ReDoc:      http://127.0.0.1:8000/redoc
+# - Health:     http://127.0.0.1:8000/health
+# - API v1:     http://127.0.0.1:8000/api/v1
+# - API v2:     http://127.0.0.1:8000/api/v2
+#
+# Project Structure:
+# - app/api          # FastAPI routers (v1, v2)
+# - app/core         # Settings, logging, middleware
+# - app/db           # Database session & base model setup
+# - app/models       # SQLAlchemy models
+# - app/repositories # Query layer
+# - app/services     # Domain/business logic
+# - app/tasks        # Background task modules
+# - app/tests        # Pytest suite
+# - app/utils        # Utility functions
+# - scripts/         # Helper shell scripts
+# - docker-compose.yml / Dockerfile
+#
+# Common Workflow:
+# 1. Activate virtualenv (venv\Scripts\activate)
+# 2. Export environment variables (see .env.example)
+# 3. Run uvicorn locally
+# 4. Execute pytest before pushing
+# 5. Run ruff check and format
+# 6. Deploy via git pull + systemctl restart appointmentbackend-api.service
+#
+# ========================================
+# TROUBLESHOOTING
+# ========================================
+#
+# API won't start:
+# - Check Python version: python --version (should be 3.11+)
+# - Verify virtual environment is activated
+# - Check .env file exists and has correct values
+# - Verify all dependencies installed: pip list
+#
+# Database connection issues:
+# - Verify PostgreSQL is running
+# - Check connection string in .env
+# - Test connection: psql command above
+# - Check network/firewall settings
+#
+# Background task issues:
+# - Check application logs for task execution errors
+# - Verify database connection for tasks that require database access
+# - Monitor memory usage for long-running tasks
+#
+# Import errors:
+# - Ensure virtual environment is activated
+# - Reinstall dependencies: pip install -r requirements.txt
+# - Check PYTHONPATH if needed
+#
+# Test failures:
+# - Check database connection for integration tests
+# - Verify test data setup
+# - Run with -vv for verbose output
+# - Check test coverage report
+#
+# ========================================
+# ENVIRONMENT VARIABLES
+# ========================================
+#
+# Required variables (see .env.example):
+# - DATABASE_URL or individual POSTGRES_* variables
+# - SECRET_KEY (for JWT tokens)
+# - API keys for external services (Apollo, etc.)
+#
+# ========================================
+# NOTES
+# ========================================
+#
+# - Windows users: Use backslashes (\) in paths
+# - Linux/Mac users: Use forward slashes (/) in paths
+# - Always activate virtual environment before running commands
+# - Check logs/app.log for application logs
+# - Use --reload flag only in development
+# - For production, use Gunicorn with multiple workers
+
+
+git init
+git remote add origin https://github.com/thekoushikdurgas/appointmentbackend.git
+git branch -M main
+git add .
+git commit -m "backend deployment v1"
+git push -u origin main
+
+
+
+
+git pull origin main

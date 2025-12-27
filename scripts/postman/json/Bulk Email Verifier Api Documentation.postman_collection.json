@@ -1,0 +1,836 @@
+{
+	"info": {
+		"_postman_id": "7fd57580-81eb-42ff-8cd5-6537dd5a7fcb",
+		"name": "Bulk Email Verifier Api Documentation",
+		"description": "Following are the endpoints that you can use to validate single email or validate a csv or txt file containing emails",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "20572666",
+		"_collection_link": "https://prbal5-1003.postman.co/workspace/priama~c1c1d143-bd8f-4768-b551-66234b878d2b/collection/20572666-7fd57580-81eb-42ff-8cd5-6537dd5a7fcb?action=share&source=collection_link&creator=20572666"
+	},
+	"item": [
+		{
+			"name": "Login",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"email\":\"{{email}}\",\r\n    \"password\":\"{{password}}\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/token/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"token",
+						""
+					]
+				},
+				"description": "The login credentials for your account are synchronized, requiring the same email address and password utilized during the registration process"
+			},
+			"response": [
+				{
+					"name": "Login",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"email\":\"{{email}}\",\r\n    \"password\":\"{{password}}\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/token/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"token",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json",
+							"name": "Content-Type",
+							"description": "",
+							"type": "text"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"refresh\": \"Refresh Token\",\n    \"access\": \"Access Token\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Single Email Verification",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"email\":\"test@test.com\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/email/verify/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"email",
+						"verify",
+						""
+					]
+				},
+				"description": "If you wish to verify a single email address in real-time, we recommend utilizing this API designated for this purpose."
+			},
+			"response": [
+				{
+					"name": "Single Email Verification",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"email\":\"test@test.com\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/email/verify/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"email",
+								"verify",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json",
+							"name": "Content-Type",
+							"description": "",
+							"type": "text"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"email\": \"support@bulkmailverifier.com\",\n    \"error\": false,\n    \"status\": \"valid\",\n    \"sub_status\": \"None\",\n    \"Disposable\": \"False\",\n    \"syntax\": \"True\",\n    \"domain\": \"bulkmailverifier.com\",\n    \"catch_all\": \"False\",\n    \"user\": \"support\",\n    \"mx\": \"mx.zoho.com.\",\n    \"time\": \"2022-06-22 19:10:50.281550\"\n}"
+				}
+			]
+		},
+		{
+			"name": "File Upload & Processing",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "email_file",
+							"type": "file",
+							"src": []
+						}
+					]
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/file/upload/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"file",
+						"upload",
+						""
+					]
+				},
+				"description": "Our API facilitates the verification of email addresses via binary files in either **TXT** or **CSV** format. Each file can accommodate up to 100,000 email entries. Upon processing, the API returns the slug associated with the list and the total count of valid emails found within the file.\n\nThe 'slug' serves as a unique identifier for accessing information about a specific file. It is generated uniquely for each uploaded file and can be used to retrieve relevant information from the api."
+			},
+			"response": [
+				{
+					"name": "File Upload & Processing",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "email_file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/file/upload/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"file",
+								"upload",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json",
+							"name": "Content-Type",
+							"description": "",
+							"type": "text"
+						}
+					],
+					"cookie": [],
+					"body": "{\r\n    \"status\": \"success\",                  \r\n    \"slug\": \"UniqueSlug\",                    \r\n    \"number_of_emails\": 123\r\n}"
+				}
+			]
+		},
+		{
+			"name": "Start List Verification",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": []
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/file/verify/slug/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"file",
+						"verify",
+						"slug",
+						""
+					]
+				},
+				"description": "After uploading a file, the verification process doesn't commence automatically. To initiate the verification, you may utilize this API endpoint. It will first validate the available credits and then trigger the verification process. The URL includes the slug associated with the file for which you intend to commence the email verification.\n\nThe 'slug' parameter remains consistent with the identifier received upon uploading the file."
+			},
+			"response": [
+				{
+					"name": "Start List Verification",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": []
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/file/verify/slug/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"file",
+								"verify",
+								"slug",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json",
+							"name": "Content-Type",
+							"description": "",
+							"type": "text"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"status\": \"success\",\n    \"File Status\": \"Verifying\",\n    \"slug\": \"slug\",\n    \"message\": \"File is being verified\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Get List Status",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": []
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/file/status/slug/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"file",
+						"status",
+						"slug",
+						""
+					]
+				},
+				"description": "Utilize this API endpoint to retrieve the status of the verification process. Upon querying, it returns the status, which will be 'Verifying' if the process is still ongoing or 'Completed' once the verification is finished. Additionally, it provides the total number of emails, the count of verified emails, and the percentage of validated emails."
+			},
+			"response": [
+				{
+					"name": "Get List Status",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": []
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/file/status/slug/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"file",
+								"status",
+								"slug",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json",
+							"name": "Content-Type",
+							"description": "",
+							"type": "text"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"status\": \"Verifying\",\n    \"total_verified\": \"10620\",\n    \"total_emails\": \"11101\",\n    \"percetnage\": \"95\",\n    \"retry\": \"0\",\n    \"slug\": \"slug\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Delete List",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": []
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/file/delete/slug/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"file",
+						"delete",
+						"slug",
+						""
+					]
+				},
+				"description": "This API endpoint facilitates the deletion of an email list. However, it's important to note that lists currently undergoing verification cannot be deleted. Furthermore, once the verification process has commenced, your credits are deducted."
+			},
+			"response": [
+				{
+					"name": "Delete List",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": []
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/file/delete/slug/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"file",
+								"delete",
+								"slug",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json",
+							"name": "Content-Type",
+							"description": "",
+							"type": "text"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"status\": \"success\",\n    \"message\": \"Deleted\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Get List Result",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": []
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/file/result/tldnq4f9ii/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"file",
+						"result",
+						"tldnq4f9ii",
+						""
+					]
+				},
+				"description": "When requesting the results of an email list, the API responds with a URL linking to the file containing the outcomes. This file can be downloaded as a CSV format, providing access to the verification results.\n\n\"valid_email_file\" contains valid emails.\n\n\"invalid_email_file\" contains invalid emails.\n\n\"catchall_email_file\" contains catch all emails\n\n\"unknown_email_file\" contains catch all emails."
+			},
+			"response": [
+				{
+					"name": "Get List Result",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": []
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/file/result/slug/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"file",
+								"result",
+								"slug",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json",
+							"name": "Content-Type",
+							"description": "",
+							"type": "text"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"status\": \"Completed\",\n    \"valid_email_file\": \"file_url\",\n    \"invalid_email_file\": \"file_url\",\n    \"catchall_email_file\": \"file_url\",\n    \"unknown_email_file\": \"file_url\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Download Result File",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": []
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/download/[valid or invalid or c-all or unknown]/slug/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"download",
+						"[valid or invalid or c-all or unknown]",
+						"slug",
+						""
+					]
+				},
+				"description": "When requesting the results of an email list, the API responds with a **csv** file containing the result."
+			},
+			"response": [
+				{
+					"name": "Download Result File",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": []
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/download/[valid or invalid or c-all or unknown]/slug/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"download",
+								"[valid or invalid or c-all or unknown]",
+								"slug",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "Text",
+					"header": null,
+					"cookie": [],
+					"body": "email,result\r\ntest@test.com,valid"
+				}
+			]
+		},
+		{
+			"name": "Check Available Email Credits",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": []
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/check/credits/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"check",
+						"credits",
+						""
+					]
+				},
+				"description": "Check your account credits"
+			},
+			"response": [
+				{
+					"name": "Check Available Email Credits",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": []
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/check/credits/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"check",
+								"credits",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "Text",
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		},
+		{
+			"name": "Get All Lists",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{access_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": []
+				},
+				"url": {
+					"raw": "https://app.bulkmailverifier.com/api/lists/",
+					"protocol": "https",
+					"host": [
+						"app",
+						"bulkmailverifier",
+						"com"
+					],
+					"path": [
+						"api",
+						"lists",
+						""
+					]
+				},
+				"description": "Get all the list uploaded by you."
+			},
+			"response": [
+				{
+					"name": "Get All Lists",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": []
+						},
+						"url": {
+							"raw": "https://app.bulkmailverifier.com/api/lists/",
+							"protocol": "https",
+							"host": [
+								"app",
+								"bulkmailverifier",
+								"com"
+							],
+							"path": [
+								"api",
+								"lists",
+								""
+							]
+						}
+					},
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json",
+							"name": "Content-Type",
+							"description": "",
+							"type": "text"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"lists\": [\n        {\n            \"slug\": \"slug\",\n            \"status\": \"Completed\",\n            \"total_emails\": 25,\n            \"total_verified\": 25,\n            \"retry\": 0,\n            \"valid_emails\": 11,\n            \"invalid_emails\": 4,\n            \"catchall_emails\": 8,\n            \"unknown_emails\": 0\n        }\n    ]\n}"
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "email",
+			"value": "mr.ayansaha@gmail.com"
+		},
+		{
+			"key": "password",
+			"value": "Bangalore@2020"
+		},
+		{
+			"key": "access_token",
+			"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzY0MTM2ODYzLCJpYXQiOjE3NjQwNTA0NjMsImp0aSI6IjQ0N2FkYmVhNDA4MTQxZDk5MGI0M2ZmMjYxZWZlZDg4IiwidXNlcl9pZCI6IjIzMDcifQ.uSwZb-GAArG74wXEsebWnawoiYd4Y1bLYbrf5gIpsxs",
+			"type": "default"
+		}
+	]
+}
