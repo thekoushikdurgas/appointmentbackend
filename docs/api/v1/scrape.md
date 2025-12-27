@@ -26,7 +26,7 @@ Complete API documentation for Sales Navigator HTML scraping endpoint that extra
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All Sales Navigator endpoints are under `/api/v3/sales-navigator/`
@@ -83,7 +83,7 @@ Scrape Sales Navigator HTML content and extract all profile data into a structur
 
 ```bash
 # Basic request (without saving to database)
-curl -X POST "http://127.0.0.1:8000/api/v3/sales-navigator/scrape" \
+curl -X POST "http://34.229.94.175/api/v3/sales-navigator/scrape" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -91,7 +91,7 @@ curl -X POST "http://127.0.0.1:8000/api/v3/sales-navigator/scrape" \
   }'
 
 # Request with save=true (persists profiles to database)
-curl -X POST "http://127.0.0.1:8000/api/v3/sales-navigator/scrape" \
+curl -X POST "http://34.229.94.175/api/v3/sales-navigator/scrape" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -540,7 +540,7 @@ List Sales Navigator scraping metadata records for the authenticated user. Retur
 **Example Request:**
 
 ```bash
-curl -X GET "http://127.0.0.1:8000/api/v1/users/sales-navigator/list?limit=50&offset=0" \
+curl -X GET "http://34.229.94.175/api/v1/users/sales-navigator/list?limit=50&offset=0" \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: application/json"
 ```

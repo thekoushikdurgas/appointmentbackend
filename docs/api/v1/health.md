@@ -25,7 +25,7 @@ Complete API documentation for health check and monitoring endpoints, including 
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All health check endpoints are under `/api/v1/health/`
@@ -131,7 +131,7 @@ Check the health and status of the VQL/Connectra service. This endpoint verifies
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v1/health/vql" \
+curl -X GET "http://34.229.94.175:8000/api/v1/health/vql" \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: application/json"
 ```
@@ -198,7 +198,7 @@ Get VQL query statistics and metrics. This endpoint provides information about V
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v1/health/vql/stats" \
+curl -X GET "http://34.229.94.175:8000/api/v1/health/vql/stats" \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: application/json"
 ```
@@ -272,7 +272,7 @@ Set up automated health checks to monitor Connectra availability:
 ```bash
 # Check health every minute
 while true; do
-  response=$(curl -X GET "http://54.87.173.234:8000/api/v1/health/vql" \
+  response=$(curl -X GET "http://34.229.94.175:8000/api/v1/health/vql" \
     -H "Authorization: Bearer <access_token>")
   
   status=$(echo $response | jq -r '.connectra_status')

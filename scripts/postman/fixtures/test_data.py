@@ -59,7 +59,9 @@ class TestDataFixtures:
             Chat ID string or None if creation failed
         """
         try:
-            url = f"{self.base_url}/api/v2/ai-chats/"
+            # Normalize base_url (remove trailing slash)
+            base_url = self.base_url.rstrip('/')
+            url = f"{base_url}/api/v2/ai-chats/"
             headers = self.auth_handler.get_auth_headers("v2", "POST", "/api/v2/ai-chats/")
             
             # Create chat with minimal data

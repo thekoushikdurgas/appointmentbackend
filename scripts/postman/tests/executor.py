@@ -125,8 +125,11 @@ class TestExecutor:
         if self.seeder:
             endpoint_path = self.seeder.replace_placeholders(endpoint_path)
         
-        # Build URL
-        url = f"{self.config.base_url}{endpoint_path}"
+        # Build URL - normalize base_url (remove trailing slash) and ensure endpoint starts with /
+        base_url = self.config.base_url.rstrip('/')
+        if not endpoint_path.startswith('/'):
+            endpoint_path = '/' + endpoint_path
+        url = f"{base_url}{endpoint_path}"
         
         # Prepare headers (pass requires_admin and requires_auth flags)
         headers = self._prepare_headers(method, api_version, endpoint_path, requires_admin, requires_auth)
@@ -334,6 +337,7 @@ class TestExecutor:
         """
         headers = {
             "Accept": "application/json",
+            "Origin": "localhost:3000",
         }
         
         # Add Content-Type for requests with body

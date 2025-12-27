@@ -32,7 +32,7 @@ Complete API documentation for dashboard page endpoints, including authenticated
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All dashboard page endpoints are under `/api/v4/dashboard-pages/` or `/api/v4/admin/dashboard-pages/`
@@ -147,7 +147,7 @@ Get a dashboard page by page_id with access control. Requires authentication. Re
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v4/dashboard-pages/finder" \
+curl -X GET "http://34.229.94.175:8000/api/v4/dashboard-pages/finder" \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: application/json"
 ```
@@ -218,7 +218,7 @@ List all dashboard pages. Requires authentication. Returns pages filtered by use
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v4/dashboard-pages/" \
+curl -X GET "http://34.229.94.175:8000/api/v4/dashboard-pages/" \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: application/json"
 ```
@@ -274,7 +274,7 @@ Same structure as public list endpoint, but includes all pages without role-base
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v1/admin/dashboard-pages/" \
+curl -X GET "http://34.229.94.175:8000/api/v1/admin/dashboard-pages/" \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: application/json"
 ```
@@ -332,7 +332,7 @@ Same structure as public get endpoint, but returns full page data without access
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v1/admin/dashboard-pages/finder" \
+curl -X GET "http://34.229.94.175:8000/api/v1/admin/dashboard-pages/finder" \
   -H "Authorization: Bearer <access_token>" \
   -H "Accept: application/json"
 ```
@@ -414,7 +414,7 @@ Returns the created DashboardPageResponse object.
 **Example Request:**
 
 ```bash
-curl -X POST "http://54.87.173.234:8000/api/v1/admin/dashboard-pages/" \
+curl -X POST "http://34.229.94.175:8000/api/v1/admin/dashboard-pages/" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -507,7 +507,7 @@ Returns the updated DashboardPageResponse object.
 **Example Request:**
 
 ```bash
-curl -X PUT "http://54.87.173.234:8000/api/v1/admin/dashboard-pages/finder" \
+curl -X PUT "http://34.229.94.175:8000/api/v1/admin/dashboard-pages/finder" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -569,7 +569,7 @@ No response body.
 **Example Request:**
 
 ```bash
-curl -X DELETE "http://54.87.173.234:8000/api/v1/admin/dashboard-pages/finder" \
+curl -X DELETE "http://34.229.94.175:8000/api/v1/admin/dashboard-pages/finder" \
   -H "Authorization: Bearer <access_token>"
 ```
 

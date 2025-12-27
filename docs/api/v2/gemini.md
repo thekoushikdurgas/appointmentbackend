@@ -26,7 +26,7 @@ Complete API documentation for Gemini AI-powered endpoints, including email risk
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All Gemini AI endpoints are under `/api/v2/gemini/`
@@ -138,7 +138,7 @@ Analyze an email address for potential risk factors using Gemini AI. This endpoi
 **Example Request:**
 
 ```bash
-curl -X POST "http://54.87.173.234:8000/api/v2/gemini/email/analyze" \
+curl -X POST "http://34.229.94.175:8000/api/v2/gemini/email/analyze" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -233,7 +233,7 @@ Generate an AI-powered company summary using Gemini AI. This endpoint creates a 
 **Example Request:**
 
 ```bash
-curl -X POST "http://54.87.173.234:8000/api/v2/gemini/company/summary" \
+curl -X POST "http://34.229.94.175:8000/api/v2/gemini/company/summary" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -337,7 +337,7 @@ Parse a natural language query into structured contact filter parameters using G
 **Example Request:**
 
 ```bash
-curl -X POST "http://54.87.173.234:8000/api/v2/gemini/parse-filters" \
+curl -X POST "http://34.229.94.175:8000/api/v2/gemini/parse-filters" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{

@@ -28,7 +28,7 @@ Complete API documentation for user activity tracking endpoints, including viewi
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All activity endpoints are under `/api/v3/activities/`

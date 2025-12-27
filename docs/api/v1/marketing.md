@@ -33,7 +33,7 @@ Complete API documentation for marketing page endpoints, including public access
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All marketing page endpoints are under `/api/v4/marketing/` or `/api/v4/admin/marketing/`
@@ -140,10 +140,10 @@ This error occurs when:
 
 ```bash
 # Public access (no authentication)
-curl -X GET "http://54.87.173.234:8000/api/v4/marketing/example-page"
+curl -X GET "http://34.229.94.175:8000/api/v4/marketing/example-page"
 
 # Authenticated access
-curl -X GET "http://54.87.173.234:8000/api/v4/marketing/example-page" \
+curl -X GET "http://34.229.94.175:8000/api/v4/marketing/example-page" \
   -H "Authorization: Bearer <access_token>"
 ```
 
@@ -211,7 +211,7 @@ List all published marketing pages. This endpoint only returns published pages. 
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v4/marketing/"
+curl -X GET "http://34.229.94.175:8000/api/v4/marketing/"
 ```
 
 **Notes:**
@@ -270,7 +270,7 @@ Same structure as public list endpoint, but may include drafts and deleted pages
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v4/admin/marketing/?include_drafts=true&include_deleted=false" \
+curl -X GET "http://34.229.94.175:8000/api/v4/admin/marketing/?include_drafts=true&include_deleted=false" \
   -H "Authorization: Bearer <access_token>"
 ```
 
@@ -327,7 +327,7 @@ Same structure as public get endpoint, but may return pages with any status (pub
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v4/admin/marketing/example-page" \
+curl -X GET "http://34.229.94.175:8000/api/v4/admin/marketing/example-page" \
   -H "Authorization: Bearer <access_token>"
 ```
 
@@ -416,7 +416,7 @@ Returns the created MarketingPageResponse object.
 **Example Request:**
 
 ```bash
-curl -X POST "http://54.87.173.234:8000/api/v4/admin/marketing/" \
+curl -X POST "http://34.229.94.175:8000/api/v4/admin/marketing/" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -510,7 +510,7 @@ Returns the updated MarketingPageResponse object.
 **Example Request:**
 
 ```bash
-curl -X PUT "http://54.87.173.234:8000/api/v4/admin/marketing/example-page" \
+curl -X PUT "http://34.229.94.175:8000/api/v4/admin/marketing/example-page" \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -577,11 +577,11 @@ No response body.
 
 ```bash
 # Soft delete (default)
-curl -X DELETE "http://54.87.173.234:8000/api/v4/admin/marketing/example-page" \
+curl -X DELETE "http://34.229.94.175:8000/api/v4/admin/marketing/example-page" \
   -H "Authorization: Bearer <access_token>"
 
 # Hard delete (permanent)
-curl -X DELETE "http://54.87.173.234:8000/api/v4/admin/marketing/example-page?hard_delete=true" \
+curl -X DELETE "http://34.229.94.175:8000/api/v4/admin/marketing/example-page?hard_delete=true" \
   -H "Authorization: Bearer <access_token>"
 ```
 
@@ -638,7 +638,7 @@ Returns the published MarketingPageResponse object with status set to 'published
 **Example Request:**
 
 ```bash
-curl -X POST "http://54.87.173.234:8000/api/v4/admin/marketing/example-page/publish" \
+curl -X POST "http://34.229.94.175:8000/api/v4/admin/marketing/example-page/publish" \
   -H "Authorization: Bearer <access_token>"
 ```
 

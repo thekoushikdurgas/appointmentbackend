@@ -53,8 +53,15 @@ sudo apt upgrade -y
 ### Step 3: Install Prerequisites
 
 ```bash
+# Install software-properties-common (needed for adding PPAs)
+sudo apt install -y software-properties-common
+
+# Add deadsnakes PPA for Python 3.11 (Ubuntu 22.04 doesn't include it by default)
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt update
+
 # Install Python 3.11 and build tools
-sudo apt install -y python3.11 python3.11-venv python3-pip build-essential
+sudo apt install -y python3.11 python3.11-venv python3.11-dev python3-pip build-essential
 
 # Install PostgreSQL client libraries
 sudo apt install -y libpq-dev
@@ -64,13 +71,18 @@ sudo apt install -y nginx
 
 # Install Git
 sudo apt install -y git
+
+# Verify Python 3.11 installation
+python3.11 --version
 ```
+
+**Note**: If you prefer to use the default Python 3.10 (which comes with Ubuntu 22.04), you can skip the deadsnakes PPA step and use `python3` instead of `python3.11` throughout the guide. However, the application requires Python 3.11+ according to the README.
 
 ### Step 4: Clone Repository
 
 ```bash
 cd /home/ubuntu
-git clone <your-repository-url> appointment360
+git clone https://github.com/thekoushikdurgas/appointmentbackend.git appointment360
 cd appointment360
 ```
 
@@ -82,8 +94,18 @@ cd appointment360
 
 ```bash
 cd /home/ubuntu/appointment360
+
+# Create virtual environment with Python 3.11
 python3.11 -m venv venv
+
+# If python3.11 is not available, check what Python versions are installed:
+# ls /usr/bin/python3*
+
+# Activate virtual environment
 source venv/bin/activate
+
+# Verify Python version in virtual environment
+python --version
 ```
 
 ### Step 2: Install Dependencies
@@ -272,6 +294,26 @@ tail -f logs/app.log
 ```
 
 ## Troubleshooting
+
+### Python 3.11 Not Found
+
+**Error**: `E: Unable to locate package python3.11`
+
+**Solution**: Ubuntu 22.04 LTS doesn't include Python 3.11 in default repositories. Install it from the deadsnakes PPA:
+
+```bash
+# Install software-properties-common
+sudo apt install -y software-properties-common
+
+# Add deadsnakes PPA
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt update
+
+# Install Python 3.11
+sudo apt install -y python3.11 python3.11-venv python3.11-dev
+```
+
+**Alternative**: If you prefer to use Python 3.10 (default on Ubuntu 22.04), you can use `python3` instead of `python3.11` throughout the deployment. However, the application officially requires Python 3.11+.
 
 ### Service Won't Start
 

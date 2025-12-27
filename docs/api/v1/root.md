@@ -25,7 +25,7 @@ Complete API documentation for root endpoints that expose API metadata and basic
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** Root endpoints are under `/api/v1/`
@@ -77,7 +77,7 @@ Get basic API metadata including project name, version, and documentation URL. T
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v1/"
+curl -X GET "http://34.229.94.175:8000/api/v1/"
 ```
 
 **Notes:**
@@ -124,7 +124,7 @@ Get basic API health status. This endpoint returns a lightweight health payload 
 **Example Request:**
 
 ```bash
-curl -X GET "http://54.87.173.234:8000/api/v1/health/"
+curl -X GET "http://34.229.94.175:8000/api/v1/health/"
 ```
 
 **Notes:**
@@ -195,7 +195,7 @@ Use the root endpoint for service discovery:
 
 ```bash
 # Get API information
-curl -X GET "http://54.87.173.234:8000/api/v1/"
+curl -X GET "http://34.229.94.175:8000/api/v1/"
 
 # Response:
 # {
@@ -212,7 +212,7 @@ Set up automated health monitoring:
 ```bash
 # Check health every 30 seconds
 while true; do
-  response=$(curl -X GET "http://54.87.173.234:8000/api/v1/health/")
+  response=$(curl -X GET "http://34.229.94.175:8000/api/v1/health/")
   
   status=$(echo $response | jq -r '.status')
   

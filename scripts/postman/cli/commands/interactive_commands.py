@@ -37,7 +37,8 @@ def repl(
     session = requests.Session()
     headers = {
         "Accept": "application/json",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Origin": "localhost:3000"
     }
     
     # Add auth if available
@@ -105,6 +106,10 @@ def _handle_get(command: str, base_url: str, session: requests.Session, headers:
         return
     
     endpoint = parts[1].strip()
+    # Normalize base_url (remove trailing slash) and ensure endpoint starts with /
+    base_url = base_url.rstrip('/')
+    if not endpoint.startswith('/'):
+        endpoint = '/' + endpoint
     url = f"{base_url}{endpoint}"
     
     try:
@@ -122,7 +127,8 @@ def _handle_post(command: str, base_url: str, session: requests.Session, headers
         return
     
     endpoint = parts[1].strip()
-    url = f"{base_url}{endpoint}"
+    # Normalize base_url (remove trailing slash)
+    base_url = base_url.rstrip('/')
     
     # Try to parse JSON body if provided
     json_data = None
@@ -131,7 +137,13 @@ def _handle_post(command: str, base_url: str, session: requests.Session, headers
         json_start = endpoint.find("{")
         endpoint_path = endpoint[:json_start].strip()
         json_str = endpoint[json_start:].strip()
+        if not endpoint_path.startswith('/'):
+            endpoint_path = '/' + endpoint_path
         url = f"{base_url}{endpoint_path}"
+    else:
+        if not endpoint.startswith('/'):
+            endpoint = '/' + endpoint
+        url = f"{base_url}{endpoint}"
         
         try:
             import json
@@ -154,7 +166,8 @@ def _handle_put(command: str, base_url: str, session: requests.Session, headers:
         return
     
     endpoint = parts[1].strip()
-    url = f"{base_url}{endpoint}"
+    # Normalize base_url (remove trailing slash)
+    base_url = base_url.rstrip('/')
     
     # Similar JSON parsing as POST
     json_data = None
@@ -162,7 +175,13 @@ def _handle_put(command: str, base_url: str, session: requests.Session, headers:
         json_start = endpoint.find("{")
         endpoint_path = endpoint[:json_start].strip()
         json_str = endpoint[json_start:].strip()
+        if not endpoint_path.startswith('/'):
+            endpoint_path = '/' + endpoint_path
         url = f"{base_url}{endpoint_path}"
+    else:
+        if not endpoint.startswith('/'):
+            endpoint = '/' + endpoint
+        url = f"{base_url}{endpoint}"
         
         try:
             import json
@@ -185,6 +204,10 @@ def _handle_delete(command: str, base_url: str, session: requests.Session, heade
         return
     
     endpoint = parts[1].strip()
+    # Normalize base_url (remove trailing slash) and ensure endpoint starts with /
+    base_url = base_url.rstrip('/')
+    if not endpoint.startswith('/'):
+        endpoint = '/' + endpoint
     url = f"{base_url}{endpoint}"
     
     try:
@@ -202,7 +225,9 @@ def _handle_auth(profile, headers: dict):
     
     try:
         import requests
-        url = f"{profile.base_url}/api/v1/auth/login/"
+        # Normalize base_url (remove trailing slash if present)
+        base_url = profile.base_url.rstrip('/')
+        url = f"{base_url}/api/v1/auth/login/"
         payload = {
             "email": profile.email,
             "password": profile.password,

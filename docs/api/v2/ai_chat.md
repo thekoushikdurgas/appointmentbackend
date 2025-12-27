@@ -34,7 +34,7 @@ Complete API documentation for AI chat conversation endpoints, including listing
 For production, use:
 
 ```txt
-http://54.87.173.234:8000
+http://34.229.94.175:8000
 ```
 
 **API Version:** All AI chat endpoints are under `/api/v2/ai-chats/`
@@ -112,7 +112,7 @@ Get a list of all AI chat conversations for the current user with pagination.
 ```json
 {
   "count": 10,
-  "next": "http://54.87.173.234:8000/api/v2/ai-chats/?limit=25&offset=25",
+  "next": "http://34.229.94.175:8000/api/v2/ai-chats/?limit=25&offset=25",
   "previous": null,
   "results": [
     {
@@ -883,7 +883,7 @@ Establish a WebSocket connection for real-time bidirectional chat with streaming
 **Connection URL:**
 
 ```
-ws://54.87.173.234:8000/api/v2/ai-chats/ws/{chat_id}?token=<jwt_token>
+ws://34.229.94.175:8000/api/v2/ai-chats/ws/{chat_id}?token=<jwt_token>
 ```
 
 **Authentication:**
@@ -984,7 +984,7 @@ ws://54.87.173.234:8000/api/v2/ai-chats/ws/{chat_id}?token=<jwt_token>
 ```javascript
 const chatId = '123e4567-e89b-12d3-a456-426614174000';
 const token = 'your_jwt_token';
-const ws = new WebSocket(`ws://54.87.173.234:8000/api/v2/ai-chats/ws/${chatId}?token=${token}`);
+const ws = new WebSocket(`ws://34.229.94.175:8000/api/v2/ai-chats/ws/${chatId}?token=${token}`);
 
 ws.onopen = () => {
   console.log('WebSocket connected');
@@ -1314,7 +1314,7 @@ Accept: text/event-stream
 ### 7. Connect via WebSocket
 
 ```javascript
-const ws = new WebSocket('ws://54.87.173.234:8000/api/v2/ai-chats/ws/{chat_id}?token=<jwt_token>');
+const ws = new WebSocket('ws://34.229.94.175:8000/api/v2/ai-chats/ws/{chat_id}?token=<jwt_token>');
 
 ws.onopen = () => {
   ws.send(JSON.stringify({

@@ -47,7 +47,7 @@ Examples:
         "--base-url",
         type=str,
         default=None,
-        help="API base URL (default: from env or http://127.0.0.1:8000)"
+        help="API base URL (default: from env or http://34.229.94.175)"
     )
     parser.add_argument(
         "--category",

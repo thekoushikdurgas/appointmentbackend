@@ -44,9 +44,19 @@ sudo apt update
 sudo apt upgrade -y
 
 print_status "Installing prerequisites..."
+
+# Add deadsnakes PPA for Python 3.11 (Ubuntu 22.04 doesn't include it by default)
+print_status "Adding deadsnakes PPA for Python 3.11..."
+sudo apt install -y software-properties-common
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt update
+
+# Install Python 3.11 and related packages
+print_status "Installing Python 3.11..."
 sudo apt install -y \
     python3.11 \
     python3.11-venv \
+    python3.11-dev \
     python3-pip \
     build-essential \
     libpq-dev \
@@ -79,6 +89,15 @@ cd "$APP_DIR"
 if [ ! -d "venv" ]; then
     print_status "Creating Python virtual environment..."
     python3.11 -m venv venv
+    if [ $? -ne 0 ]; then
+        print_error "Failed to create virtual environment with python3.11"
+        print_warning "Trying with default python3..."
+        python3 -m venv venv
+        if [ $? -ne 0 ]; then
+            print_error "Failed to create virtual environment"
+            exit 1
+        fi
+    fi
 else
     print_status "Virtual environment already exists."
 fi

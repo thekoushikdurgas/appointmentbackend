@@ -389,7 +389,7 @@ The CLI also supports environment variables:
   "profiles": {
     "default": {
       "name": "default",
-      "base_url": "http://127.0.0.1:8000",
+      "base_url": "http://34.229.94.175",
       "email": "test@example.com",
       "password": "testpass123",
       "timeout": 30,

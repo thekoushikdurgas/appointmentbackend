@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     # CORS
     # Allowed origins for browser-based clients (frontend applications)
     # - Local development (Next.js on port 3000)
-    # - Backend API by IP (54.87.173.234)
+    # - Backend API by IP (34.229.94.175)
     # - Frontend EC2 IP (54.144.115.229)
     # - New Backend EC2 IP (34.229.94.175)
     # - Production domain (appointment360.io)
@@ -100,8 +100,8 @@ class Settings(BaseSettings):
         AnyHttpUrl("http://127.0.0.1:3000"),
         AnyHttpUrl("http://127.0.0.1:8000"),
         # Backend API (by IP)
-        AnyHttpUrl("http://54.87.173.234"),
-        AnyHttpUrl("http://54.87.173.234:8000"),
+        AnyHttpUrl("http://34.229.94.175"),
+        AnyHttpUrl("http://34.229.94.175:8000"),
         # Frontend EC2 IP (Appointment360 frontend host)
         AnyHttpUrl("http://54.144.115.229"),
         AnyHttpUrl("http://54.144.115.229:3000"),
@@ -116,9 +116,9 @@ class Settings(BaseSettings):
         AnyHttpUrl("https://www.appointment360.io"),
     ]
     TRUSTED_HOSTS: List[str] = [
-        "54.87.173.234",
+        "34.229.94.175",
         "3.95.58.90",
-        "54.87.173.234:8000",
+        "34.229.94.175:8000",
         "34.229.94.175",
         "34.229.94.175:8000",
         "localhost",

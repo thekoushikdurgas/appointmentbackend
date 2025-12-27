@@ -158,7 +158,7 @@ Add the following configuration:[^10][^2][^1]
 ```nginx
 server {
     listen 80;
-    server_name 54.87.173.234;
+    server_name 34.229.94.175;
 
     location / {
         proxy_pass http://127.0.0.1:8000;

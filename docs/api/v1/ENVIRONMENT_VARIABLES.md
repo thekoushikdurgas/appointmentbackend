@@ -216,7 +216,7 @@ Base URL for generating full avatar URLs and other absolute URLs.
 
 **Example:**
 ```bash
-BASE_URL=http://54.87.173.234:8000
+BASE_URL=http://34.229.94.175:8000
 ```
 
 ### `USE_PROXY_HEADERS`

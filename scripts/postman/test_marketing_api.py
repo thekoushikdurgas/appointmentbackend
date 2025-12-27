@@ -48,7 +48,7 @@ Examples:
         "--base-url",
         type=str,
         default=None,
-        help="API base URL (default: from env or http://127.0.0.1:8000)"
+        help="API base URL (default: from env or http://34.229.94.175)"
     )
     parser.add_argument(
         "--mode",
@@ -88,7 +88,7 @@ Examples:
     # Display header
     console.print(Panel.fit(
         "[bold cyan]Marketing API Test Suite[/bold cyan]\n"
-        f"Base URL: [yellow]{args.base_url or 'http://127.0.0.1:8000'}[/yellow]\n"
+        f"Base URL: [yellow]{args.base_url or 'http://34.229.94.175'}[/yellow]\n"
         f"Mode: [yellow]{args.mode}[/yellow]\n"
         "[dim]Note: Public endpoints don't require authentication[/dim]\n"
         "[dim]Admin endpoints require Admin/SuperAdmin role[/dim]",
@@ -328,7 +328,7 @@ Examples:
         "--base-url",
         type=str,
         default=None,
-        help="API base URL (default: from env or http://127.0.0.1:8000)"
+        help="API base URL (default: from env or http://34.229.94.175)"
     )
     parser.add_argument(
         "--mode",
@@ -368,7 +368,7 @@ Examples:
     # Display header
     console.print(Panel.fit(
         "[bold cyan]Marketing API Test Suite[/bold cyan]\n"
-        f"Base URL: [yellow]{args.base_url or 'http://127.0.0.1:8000'}[/yellow]\n"
+        f"Base URL: [yellow]{args.base_url or 'http://34.229.94.175'}[/yellow]\n"
         f"Mode: [yellow]{args.mode}[/yellow]\n"
         "[dim]Note: Public endpoints don't require authentication[/dim]\n"
         "[dim]Admin endpoints require Admin/SuperAdmin role[/dim]",
@@ -608,7 +608,7 @@ Examples:
         "--base-url",
         type=str,
         default=None,
-        help="API base URL (default: from env or http://127.0.0.1:8000)"
+        help="API base URL (default: from env or http://34.229.94.175)"
     )
     parser.add_argument(
         "--mode",
@@ -648,7 +648,7 @@ Examples:
     # Display header
     console.print(Panel.fit(
         "[bold cyan]Marketing API Test Suite[/bold cyan]\n"
-        f"Base URL: [yellow]{args.base_url or 'http://127.0.0.1:8000'}[/yellow]\n"
+        f"Base URL: [yellow]{args.base_url or 'http://34.229.94.175'}[/yellow]\n"
         f"Mode: [yellow]{args.mode}[/yellow]\n"
         "[dim]Note: Public endpoints don't require authentication[/dim]\n"
         "[dim]Admin endpoints require Admin/SuperAdmin role[/dim]",
@@ -888,7 +888,7 @@ Examples:
         "--base-url",
         type=str,
         default=None,
-        help="API base URL (default: from env or http://127.0.0.1:8000)"
+        help="API base URL (default: from env or http://34.229.94.175)"
     )
     parser.add_argument(
         "--mode",
@@ -928,7 +928,7 @@ Examples:
     # Display header
     console.print(Panel.fit(
         "[bold cyan]Marketing API Test Suite[/bold cyan]\n"
-        f"Base URL: [yellow]{args.base_url or 'http://127.0.0.1:8000'}[/yellow]\n"
+        f"Base URL: [yellow]{args.base_url or 'http://34.229.94.175'}[/yellow]\n"
         f"Mode: [yellow]{args.mode}[/yellow]\n"
         "[dim]Note: Public endpoints don't require authentication[/dim]\n"
         "[dim]Admin endpoints require Admin/SuperAdmin role[/dim]",

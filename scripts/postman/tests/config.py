@@ -36,7 +36,7 @@ class TestConfig:
         """Initialize test configuration.
         
         Args:
-            base_url: API base URL (default: from env or http://127.0.0.1:8000)
+            base_url: API base URL (default: from env or http://34.229.94.175)
             email: Login email for real authentication (default: from env or DEFAULT_TEST_EMAIL)
             password: Login password for real authentication (default: from env or DEFAULT_TEST_PASSWORD)
             access_token: Pre-configured access token (fallback)
@@ -49,7 +49,7 @@ class TestConfig:
             output_dir: Output directory for reports
             auto_create_test_user: Automatically create test user if credentials don't exist
         """
-        self.base_url = base_url or os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+        self.base_url = base_url or os.getenv("API_BASE_URL", "http://34.229.94.175/")
         
         # Priority: parameter > environment variable > default
         self.email = email or os.getenv("TEST_EMAIL") or os.getenv("API_TEST_EMAIL") or DEFAULT_TEST_EMAIL
